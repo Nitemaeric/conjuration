@@ -7,8 +7,6 @@ module Conjuration
     attr_accessor :target_x, :target_y, :target_zoom
     attr_accessor :speed, :zoom_speed
 
-    delegate :outputs, :grid, to: :game
-
     # camera = Camera.new(outputs[:scene])
     def initialize(scene, name: "", x: 0, y: 0, w: grid.w, h: grid.h, zoom: 1, speed: 1_000_000, zoom_speed: 0.1, source_w: nil, source_h: nil)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, zoom: zoom, speed: speed, zoom_speed: zoom_speed, source_w: source_w || w, source_h: source_h || h)
@@ -61,7 +59,7 @@ module Conjuration
         path: "scene_#{scene.name}"
       }
 
-      # Render camera viewport to screen
+      # Render camera viewport to screen viewport
       game.outputs.primitives << [
         {
           x: x,
