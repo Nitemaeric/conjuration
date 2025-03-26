@@ -1,1 +1,14 @@
 .DS_Store
+
+demo/dragonruby
+demo/dragonruby.exe
+demo/dragonruby-publish
+demo/dragonruby-publish.exe
+demo/dragonruby-bind
+demo/dragonruby-bind.exe
+demo/tmp/
+demo/builds/
+demo/logs/
+demo/samples/
+demo/docs/
+demo/.dragonruby/

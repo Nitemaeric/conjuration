@@ -40,8 +40,8 @@ module Conjuration
     end
 
     def perform_update
-      update if respond_to?(:update)
       super
+      update if respond_to?(:update)
     end
 
     def perform_render
