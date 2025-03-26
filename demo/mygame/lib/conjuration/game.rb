@@ -16,6 +16,10 @@ module Conjuration
       perform_render
     end
 
+    def debug?
+      debug
+    end
+
     private
 
     def perform_setup
@@ -24,19 +28,18 @@ module Conjuration
     end
 
     def perform_input
-      input if respond_to?(:input)
       super
+      input if respond_to?(:input)
     end
 
     def perform_update
-      update if respond_to?(:update)
       super
+      update if respond_to?(:update)
     end
 
     def perform_render
-      render if respond_to?(:render)
       super
-      # outputs.debug << gtk.framerate_diagnostics_primitives
+      render if respond_to?(:render)
     end
   end
 end
