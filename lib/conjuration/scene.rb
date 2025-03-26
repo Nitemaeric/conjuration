@@ -2,13 +2,13 @@ module Conjuration
   class Scene < Node
     include CameraManagement
 
-    attr_accessor :key, :config, :w, :h
+    attr_accessor :name, :config, :w, :h
 
     delegate :inputs, :grid, :layout, :geometry, :gtk, :audio, to: :game
 
-    def initialize(key, **config)
+    def initialize(name, **config)
       super(
-        key: key,
+        name: name,
         config: config,
         w: grid.w,
         h: grid.h
@@ -16,11 +16,11 @@ module Conjuration
     end
 
     def state
-      game.state[key.to_sym]
+      game.state[name.to_sym]
     end
 
     def outputs
-      game.outputs[:scene]
+      game.outputs["scene_#{name}"]
     end
 
     def debug_inspect
@@ -40,8 +40,8 @@ module Conjuration
     end
 
     def perform_update
-      update if respond_to?(:update)
       super
+      update if respond_to?(:update)
     end
 
     def perform_render

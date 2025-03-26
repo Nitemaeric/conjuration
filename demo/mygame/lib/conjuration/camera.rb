@@ -58,7 +58,7 @@ module Conjuration
         source_y: (focus_y - (h / 2) / zoom).clamp(0, outputs[:scene].h - h),
         source_w: source_w / zoom,
         source_h: source_h / zoom,
-        path: :scene
+        path: "scene_#{scene.name}"
       }
 
       # Render camera viewport to screen
