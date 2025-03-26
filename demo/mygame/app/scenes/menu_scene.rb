@@ -1,5 +1,6 @@
 require_relative "basic_camera_scene"
 require_relative "multiple_cameras_scene"
+require_relative "ui_scene"
 
 class MenuScene < Conjuration::Scene
   attr_accessor :buttons
@@ -13,11 +14,15 @@ class MenuScene < Conjuration::Scene
     self.buttons = [
       {
         text: "Basic Camera",
-        action: -> { game.current_scene = BasicCameraScene.new(:basic_camera); game.current_scene.perform_setup }
+        action: -> { change_scene(to: BasicCameraScene.new(:basic_camera)) }
       },
       {
         text: "Multiple Cameras",
-        action: -> { game.current_scene = MultipleCamerasScene.new(:multiple_cameras); game.current_scene.perform_setup }
+        action: -> { change_scene(to: MultipleCamerasScene.new(:multiple_cameras)) }
+      },
+      {
+        text: "UI",
+        action: -> { change_scene(to: UIScene.new(:ui)) }
       },
       {
         text: "Exit",

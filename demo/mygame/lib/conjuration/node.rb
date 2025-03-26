@@ -28,8 +28,8 @@ module Conjuration
     class << self
       def delegate(*method_names, to:)
         method_names.each do |name|
-          define_method(name) do
-            send(to).send(name)
+          define_method(name) do |*args|
+            send(to).send(name, *args)
           end
         end
       end
