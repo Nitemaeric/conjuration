@@ -31,8 +31,7 @@ module Conjuration
 
     def perform_setup
       setup if respond_to?(:setup)
-      outputs.width = w
-      outputs.height = h
+      outputs.width, outputs.height = w, h
     end
 
     def perform_input

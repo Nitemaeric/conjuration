@@ -1,5 +1,17 @@
 module Conjuration
   class Node
+    class << self
+      def delegate(*method_names, to:)
+        method_names.each do |name|
+          define_method(name) do |*args|
+            send(to).send(name, *args)
+          end
+        end
+      end
+    end
+
+    delegate :grid, :gtk, :debug?, to: :game
+
     def initialize(**attributes)
       merge!(**attributes)
     end
@@ -22,16 +34,6 @@ module Conjuration
       { x: x, y: y, w: w, h: h }.tap do |rect|
         rect[:anchor_x] = anchor_x if respond_to?(:anchor_x)
         rect[:anchor_y] = anchor_y if respond_to?(:anchor_y)
-      end
-    end
-
-    class << self
-      def delegate(*method_names, to:)
-        method_names.each do |name|
-          define_method(name) do
-            send(to).send(name)
-          end
-        end
       end
     end
   end
