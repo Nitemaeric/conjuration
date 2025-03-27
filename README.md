@@ -10,25 +10,30 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
 
 ## Features
 
-- Gameloop conventions
-  - Order of operations
-- Scene Management
-  - Scene transitions
-- Camera Management
-  - Zooming
-  - Panning
-  - Following
-  - Multiple Cameras
-  - Minimaps
-  - Camera shake
-  - Impact frames (Hit stops)
-- UI & HUD Management
-- Input Management
-  - Default key mapping
-  - User remapping
-- Debugging tools
-  - Debug layers
-  - Scene / Camera debug overlay
+- [x] Gameloop conventions
+  - [x] Order of operations
+    - [x] Setup (Run once when the scene is loaded)
+    - [x] Input (Handle user input logic)
+    - [x] Update (Handle game logic)
+    - [x] Render (Draw things to the scene / camera (HUD, UI))
+- [x] Scene Management
+  - [ ] Scene transitions
+- [ ] Camera Management
+  - [x] Look at
+  - [ ] Zooming
+  - [ ] Panning
+  - [ ] Following
+  - [x] Multiple cameras
+  - [ ] Minimaps
+  - [ ] Camera shake
+  - [ ] Impact frames (Hit stops)
+- [ ] UI & HUD Management
+- [ ] Input Management
+  - [ ] Default key mapping
+  - [ ] User remapping
+- [ ] Debugging tools
+  - [ ] Debug layers
+  - [ ] Scene / Camera debug overlay
 
 ## Installation
 
