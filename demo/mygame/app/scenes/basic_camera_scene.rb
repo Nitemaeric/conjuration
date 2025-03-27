@@ -34,7 +34,7 @@ class BasicCameraScene < Conjuration::Scene
 
   def render
     outputs.primitives << state.cells.map do |cell|
-      focused = focused_camera&.to_world(**inputs.mouse.rect).inside_rect?(cell)
+      focused = focused_camera&.to_world(**inputs.mouse.rect)&.inside_rect?(cell)
 
       [
         {
