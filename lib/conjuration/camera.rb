@@ -7,8 +7,6 @@ module Conjuration
     attr_accessor :target_x, :target_y, :target_zoom
     attr_accessor :speed, :zoom_speed
 
-    delegate :outputs, :grid, to: :game
-
     # camera = Camera.new(outputs[:scene])
     def initialize(scene, name: "", x: 0, y: 0, w: grid.w, h: grid.h, zoom: 1, speed: 1_000_000, zoom_speed: 0.1, source_w: nil, source_h: nil)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, zoom: zoom, speed: speed, zoom_speed: zoom_speed, source_w: source_w || w, source_h: source_h || h)
@@ -47,6 +45,17 @@ module Conjuration
 
     private
 
+    def perform_update
+      # return if target_x == focus_x && target_y == focus_y && target_zoom == zoom
+
+      # normalized_direction = Geometry.vec2_normalize(x: (target_x - focus_x), y: (target_y - focus_y))
+
+      # puts "normalized_direction: #{normalized_direction}"
+
+      # self.focus_x += normalized_direction.x * speed
+      # self.focus_y += normalized_direction.y * speed
+    end
+
     def perform_render
       # Render scene to camera viewport
       outputs.primitives << {
@@ -54,14 +63,14 @@ module Conjuration
         y: 0,
         w: grid.w,
         h: grid.h,
-        source_x: (focus_x - (w / 2) / zoom).clamp(0, outputs[:scene].w - w),
-        source_y: (focus_y - (h / 2) / zoom).clamp(0, outputs[:scene].h - h),
+        source_x: (focus_x - (w / 2) / zoom).clamp(0, scene.outputs.w - w),
+        source_y: (focus_y - (h / 2) / zoom).clamp(0, scene.outputs.h - h),
         source_w: source_w / zoom,
         source_h: source_h / zoom,
         path: "scene_#{scene.name}"
       }
 
-      # Render camera viewport to screen
+      # Render camera viewport to screen viewport
       game.outputs.primitives << [
         {
           x: x,
@@ -77,17 +86,6 @@ module Conjuration
           h: h,
         }.border!
       ]
-    end
-
-    def perform_update
-      # return if target_x == focus_x && target_y == focus_y && target_zoom == zoom
-
-      # normalized_direction = Geometry.vec2_normalize(x: (target_x - focus_x), y: (target_y - focus_y))
-
-      # puts "normalized_direction: #{normalized_direction}"
-
-      # self.focus_x += normalized_direction.x * speed
-      # self.focus_y += normalized_direction.y * speed
     end
 
     def inspect

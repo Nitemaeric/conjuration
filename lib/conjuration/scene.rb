@@ -4,7 +4,7 @@ module Conjuration
 
     attr_accessor :name, :config, :w, :h
 
-    delegate :inputs, :grid, :layout, :geometry, :gtk, :audio, to: :game
+    delegate :inputs, :layout, :geometry, :gtk, :audio, :change_scene, to: :game
 
     def initialize(name, **config)
       super(
@@ -16,7 +16,7 @@ module Conjuration
     end
 
     def state
-      game.state[name.to_sym]
+      game.state["scene_#{name}"]
     end
 
     def outputs
