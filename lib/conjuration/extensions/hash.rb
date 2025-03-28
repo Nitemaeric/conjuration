@@ -25,8 +25,8 @@ class Hash
 
   def center
     {
-      x: x + anchor_x * w,
-      y: y + anchor_y * h
+      x: (left + right) / 2,
+      y: (top + bottom) / 2
     }
   end
 

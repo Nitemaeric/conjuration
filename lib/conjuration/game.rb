@@ -40,6 +40,15 @@ module Conjuration
     def perform_render
       super
       render if respond_to?(:render)
+
+      if debug?
+        gtk.framerate_diagnostics_primitives
+          .select { |primitive| primitive[:primitive_marker] == :label && !primitive[:text].start_with?("FPS") }
+          .map { |primitive| primitive[:text] }
+          .each do |primitive|
+            outputs.debug << primitive
+          end
+      end
     end
   end
 end

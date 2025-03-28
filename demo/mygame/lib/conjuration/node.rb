@@ -10,7 +10,7 @@ module Conjuration
       end
     end
 
-    delegate :grid, :gtk, :debug?, to: :game
+    delegate :grid, :gtk, :events, :debug?, to: :game
 
     def initialize(**attributes)
       merge!(**attributes)

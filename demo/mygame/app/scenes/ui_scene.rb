@@ -38,7 +38,7 @@ class UIScene < Conjuration::Scene
           b: 255,
           w: 100,
           h: 20
-        }, {})
+        })
       end
 
       node({
@@ -50,7 +50,7 @@ class UIScene < Conjuration::Scene
         b: 255,
         w: 100,
         h: 20
-      }, {})
+      })
 
       node({
         id: "button",
@@ -66,7 +66,7 @@ class UIScene < Conjuration::Scene
           g: 255,
           b: 255,
           w: gtk.calcstringbox("Click me!")[0]
-        }, {})
+        })
       end
     end
 
@@ -91,7 +91,7 @@ class UIScene < Conjuration::Scene
         b: 255,
         w: 60,
         h: 60
-      }, {})
+      })
 
       node({
         primitive_marker: :solid,
@@ -100,7 +100,7 @@ class UIScene < Conjuration::Scene
         b: 255,
         w: 60,
         h: 60
-      }, {})
+      })
     end
 
     @minimap = Conjuration::UI::Node.new(

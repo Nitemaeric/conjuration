@@ -7,55 +7,115 @@ class MenuScene < Conjuration::Scene
 
   def setup
     gtk.set_cursor "sprites/cursor-none.png", 9, 4
-    audio[:bgm] = { input: "sounds/bgm.mp3", looping: true }
+
+    audio[:bgm] = { input: "sounds/bgm.mp3", looping: true, gain: 0.5 }
 
     add_camera(:main, x: 0, y: 0)
 
-    self.buttons = [
-      {
-        text: "Basic Camera",
-        action: -> { change_scene(to: BasicCameraScene.new(:basic_camera)) }
-      },
-      {
-        text: "Multiple Cameras",
-        action: -> { change_scene(to: MultipleCamerasScene.new(:multiple_cameras)) }
-      },
-      {
-        text: "UI",
-        action: -> { change_scene(to: UIScene.new(:ui)) }
-      },
-      {
-        text: "Exit",
-        action: -> { gtk.request_quit }
-      }
-    ].map.with_index do |button, index|
-      {
-        x: grid.w / 2,
-        y: grid.h / 2 + 92 - index * 92,
-        w: 256,
-        h: 64,
-        text: button[:text],
-        action: button[:action],
-        anchor_x: 0.5,
-        anchor_y: 0.5
-      }
+    @buttons = Conjuration::UI.build({
+      x: grid.w / 2,
+      y:  grid.h / 2 + 140,
+      w: 256,
+      h: 400,
+      anchor_x: 0.5,
+      anchor_y: 1
+    }, gap: 20) do
+      node(
+        {
+          h: 64,
+          action: -> { change_scene(to: BasicCameraScene.new(:basic_camera)) },
+          path: "sprites/button.png",
+        },
+        id: :basic_camera,
+        justify: :center,
+        alignment: :center
+      ) do
+        node(
+          {
+            text: "Basic Camera",
+            r: 255,
+            g: 255,
+            b: 255
+          }
+        )
+      end
+
+      node(
+        {
+          h: 64,
+          action: -> { change_scene(to: MultipleCamerasScene.new(:multiple_cameras)) },
+          path: "sprites/button.png",
+        },
+        id: :multiple_cameras,
+        justify: :center,
+        alignment: :center
+      ) do
+        node(
+          {
+            text: "Multiple Cameras",
+            r: 255,
+            g: 255,
+            b: 255
+          }
+        )
+      end
+
+      node(
+        {
+          h: 64,
+          action: -> { change_scene(to: UIScene.new(:ui)) },
+          path: "sprites/button.png",
+        },
+        id: :ui,
+        justify: :center,
+        alignment: :center
+      ) do
+        node(
+          {
+            text: "UI",
+            r: 255,
+            g: 255,
+            b: 255
+          }
+        )
+      end
+
+      node(
+        {
+          h: 64,
+          action: -> { gtk.request_quit },
+          path: "sprites/button.png",
+        },
+        id: :quit,
+        justify: :center,
+        alignment: :center
+      ) do
+        node(
+          {
+            text: "Exit",
+            r: 255,
+            g: 255,
+            b: 255
+          }
+        )
+      end
     end
   end
 
   def input
-    focused_button = geometry.find_intersect_rect(inputs.mouse, buttons)
+    focused_button = @buttons.find_interactive_intersect(inputs.mouse)
 
     if focused_button
       gtk.set_cursor "sprites/hand-point.png", 6, 4
 
-      focused_button.action.call if inputs.mouse.click
+      instance_exec(&focused_button.action) if inputs.mouse.click
     else
       gtk.set_cursor "sprites/cursor-none.png", 9, 4
     end
   end
 
   def update
-
+    @buttons.calculate_layout if events.orientation_changed
   end
 
   def render
@@ -95,21 +155,17 @@ class MenuScene < Conjuration::Scene
       }
     ]
 
-    outputs.primitives << buttons.map.with_index do |button, index|
-      [
+    outputs.primitives << @buttons.primitives
+
+    if debug?
+      outputs.primitives << @buttons.interactive_nodes.map do |node|
         {
-          **button,
-          path: "sprites/button.png",
-          primitive_marker: :sprite,
-        },
-        {
-          **button,
-          primitive_marker: :label,
-          r: 255,
+          **node.object,
+          r: 0,
           g: 255,
-          b: 255,
-        }
-      ]
+          b: 0
+        }.border!
+      end
     end
   end
 end

@@ -11,7 +11,7 @@ icon=metadata/icon.png
 # === Orientation Portrait/Landscape ===
 # The orientation can be set to either ~landscape~ (1280x720), ~portrait~ (720x1280), ~landscape,portrait~, or ~portrait,landscape~. The default is ~landscape~.
 # If ~landscape,portrait~ or ~portrait,landscape~, then the first value is used as the starting orientation for your game.
-# orientation=landscape
+orientation=landscape,portrait
 
 # === Sprite Rendering scale quality ===
 # Defines the render scale quality for sprites. scale_quality=0 (default) is nearest neighbor, scale_quality=1 is linear, scale_quality=2 is antialiased.
