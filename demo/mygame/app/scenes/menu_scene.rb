@@ -3,7 +3,7 @@ require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
 
 class MenuScene < Conjuration::Scene
-  attr_accessor :buttons
+  attr_reader :menu, :buttons
 
   def setup
     gtk.set_cursor "sprites/cursor-none.png", 9, 4
@@ -12,14 +12,13 @@ class MenuScene < Conjuration::Scene
 
     add_camera(:main, x: 0, y: 0)
 
-    @buttons = Conjuration::UI.build({
+    @menu = Conjuration::UI.build({
       x: grid.w / 2,
       y:  grid.h / 2 + 140,
       w: 256,
-      h: 400,
       anchor_x: 0.5,
-      anchor_y: 1
-    }, gap: 20) do
+      anchor_y: 1,
+    }, align: :stretch, gap: 20) do
       node(
         {
           h: 64,
@@ -28,7 +27,7 @@ class MenuScene < Conjuration::Scene
         },
         id: :basic_camera,
         justify: :center,
-        alignment: :center
+        align: :center
       ) do
         node(
           {
@@ -48,7 +47,7 @@ class MenuScene < Conjuration::Scene
         },
         id: :multiple_cameras,
         justify: :center,
-        alignment: :center
+        align: :center
       ) do
         node(
           {
@@ -68,7 +67,7 @@ class MenuScene < Conjuration::Scene
         },
         id: :ui,
         justify: :center,
-        alignment: :center
+        align: :center
       ) do
         node(
           {
@@ -88,7 +87,7 @@ class MenuScene < Conjuration::Scene
         },
         id: :quit,
         justify: :center,
-        alignment: :center
+        align: :center
       ) do
         node(
           {
@@ -100,10 +99,26 @@ class MenuScene < Conjuration::Scene
         )
       end
     end
+
+    @buttons = Conjuration::UI.build({
+      x: 10.from_right,
+      y: 10.from_top,
+      anchor_x: 1,
+      anchor_y: 1,
+    }, direction: :row, justify: :end, gap: 20) do
+      node({ w: 120, h: 40, path: "sprites/button.png", action: -> { audio[:bgm].muted_gain, audio[:bgm].gain = audio[:bgm].gain, audio[:bgm].muted_gain || 0 } }, justify: :center, align: :center) do
+        node({
+          text: "Mute",
+          r: 255,
+          g: 255,
+          b: 255
+        }, id: :mute_button_text)
+      end
+    end
   end
 
   def input
-    focused_button = @buttons.find_interactive_intersect(inputs.mouse)
+    focused_button = @menu.find_interactive_intersect(inputs.mouse) || @buttons.find_interactive_intersect(inputs.mouse)
 
     if focused_button
       gtk.set_cursor "sprites/hand-point.png", 6, 4
@@ -115,7 +130,9 @@ class MenuScene < Conjuration::Scene
   end
 
   def update
-    @buttons.calculate_layout if events.orientation_changed
+    @menu.calculate_layout if events.orientation_changed
+
+    @buttons.find(:mute_button_text).text = audio[:bgm].gain.zero? ? "Unmute" : "Mute"
   end
 
   def render
@@ -155,10 +172,11 @@ class MenuScene < Conjuration::Scene
       }
     ]
 
+    outputs.primitives << @menu.primitives
     outputs.primitives << @buttons.primitives
 
     if debug?
-      outputs.primitives << @buttons.interactive_nodes.map do |node|
+      outputs.primitives << [*@menu.interactive_nodes, *@buttons.interactive_nodes].map do |node|
         {
           **node.object,
           r: 0,
