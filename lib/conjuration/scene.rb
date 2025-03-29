@@ -30,6 +30,7 @@ module Conjuration
     private
 
     def perform_setup
+      audio.clear
       setup if respond_to?(:setup)
       outputs.width, outputs.height = w, h
     end
