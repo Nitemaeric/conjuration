@@ -78,13 +78,7 @@ module Conjuration
           w: w,
           h: h,
           path: "camera_#{name}"
-        },
-        {
-          x: x,
-          y: y,
-          w: w,
-          h: h,
-        }.border!
+        }
       ]
     end
 

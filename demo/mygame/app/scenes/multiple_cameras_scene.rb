@@ -77,5 +77,14 @@ class MultipleCamerasScene < Conjuration::Scene
         }
       ]
     end
+    cameras.each do |name, camera|
+      game.outputs.primitives << {
+        x: camera.x,
+        y: camera.y,
+        w: camera.w,
+        h: camera.h,
+        primitive_marker: :border
+      }
+    end
   end
 end
