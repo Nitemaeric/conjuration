@@ -1,33 +1,33 @@
 module Conjuration
   module UI
-    def self.build(object_hash = nil, id: :root, justify: :start, direction: :column, alignment: :start, gap: 0, padding: 0, **object, &block)
-      root = Node.new(object_hash, id: id, justify: justify, direction: direction, alignment: alignment, gap: gap, padding: padding, **object, &block)
+    def self.build(object_hash = nil, id: :root, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
+      root = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
       root.calculate_layout
       root
     end
 
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
-      attr_accessor :justify, :direction, :alignment, :gap, :padding
+      attr_accessor :justify, :direction, :align, :gap, :padding
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, justify: :start, direction: :column, alignment: :start, gap: 0, padding: 0, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
         @id = id.to_sym
         @object = object_hash || object
         @children = []
 
         @direction = direction
         @justify = justify
-        @alignment = alignment
+        @align = align
         @gap = gap
         @padding = padding
 
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, justify: :start, direction: :column, alignment: :start, gap: 0, padding: 0, **object, &block)
-        children << Node.new(object_hash, id: id, justify: justify, direction: direction, alignment: alignment, gap: gap, padding: padding, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
+        children << Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
       end
 
       def find(id)
@@ -51,54 +51,20 @@ module Conjuration
           object.w, object.h = gtk.calcstringbox(object.text)
         end
 
+        if justify == :end
+          children = @children.reverse
+        else
+          children = @children
+        end
+
         children.each_with_index do |child, index|
-          if direction == :row
-            # index 0: Left side of parent + padding
-            # index i: Right side of sibling + gap
-            child.object.x = index.zero? ? object.left + padding : children[index - 1].object.right + gap
-
-            # Top side of parent - padding
-            child.object.y = case justify
-                           when :start  then object.top + padding
-                           when :center then object.top + (object.h - child.object.h) / 2
-                           when :end    then object.bottom - child.object.h - padding
-                           end
-
-            child.object.h = object.h - padding * 2
-            child.object.anchor_x = 1
-          elsif direction == :column
-            child.object.anchor_x = 0
-            child.object.w = object.w - padding * 2 # stretch
-
-            case alignment
-            when :start
-              child.object.y = index.zero? ? object.top - padding : children[index - 1].object.bottom - gap
-              child.object.anchor_y = 1
-            when :center
-              child.object.y = object.center.y - (child.object.h ? child.object.h / 2 : 0)
-              child.object.anchor_y = 0.5
-            when :end     then object.right - child.object.w - padding
-            when :stretch then object.left + padding
-            when :between then object.left + padding
-            end
-
-            # index 0: Top side of parent - padding
-            # index i: Bottom side of sibling - gap
-            # child.object.y = index.zero? ? object.top - padding : children[index - 1].object.bottom - gap
-
-            # child.object.anchor_y = 1
-
-            case justify
-            when :start
-              child.object.x = object.left + padding
-              child.object.anchor_x = 0
-            when :center
-              child.object.x = object.center.x
-              child.object.anchor_x = 0.5
-            when :end     then object.right - child.object.w - padding
-            when :stretch then object.left + padding
-            when :between then object.left + padding
-            end
+          case direction
+          when :row
+            calculate_row_justify(child, children, index)
+            calculate_row_align(child)
+          when :column
+            calculate_column_justify(child, children, index)
+            calculate_column_align(child)
           end
 
           child.calculate_layout
@@ -144,12 +110,12 @@ module Conjuration
       def to_xml
         if children.any?
           <<~XML
-            <node id="#{id}" #{rect.keys.map { |key| "rect-#{key}=#{rect[key]}" }.join(' ')} direction="#{direction}" alignment="#{alignment}" gap="#{gap}" padding="#{padding}">
+            <node id="#{id}" #{object.keys.map { |key| "object-#{key}=\"#{object[key]}\"" }.join(' ')} direction="#{direction}" align="#{align}" gap="#{gap}" padding="#{padding}">
             #{children.map(&:to_xml).join("\n").indent(1)}</node>
           XML
         else
           <<~XML
-            <node id="#{id}" rect="#{{ x: rect.x, y: rect.y, w: rect.w, h: rect.h }}" direction="#{direction}" alignment="#{alignment}" gap="#{gap}" padding="#{padding}" />
+            <node id="#{id}" object="#{{ x: object.x, y: object.y, w: object.w, h: object.h }}" direction="#{direction}" align="#{align}" gap="#{gap}" padding="#{padding}" />
           XML
         end
       end
@@ -172,62 +138,84 @@ module Conjuration
 
       private
 
-      # def calculate_column_alignment()
+      # Top to Bottom of vertical children
+      def calculate_column_justify(child, children, index)
+        case justify
+        when :start
+          child.object.anchor_y = 1
+          child.object.y = index.zero? ? object.top - padding : children[index - 1].object.bottom - gap
+        when :center
+          child.object.anchor_y = 0.5
+          child.object.y = object.center.y
+          # I need to know the total height of all children
+        when :end
+          child.object.anchor_y = 0
+          child.object.y = index.zero? ? object.bottom + padding : children[index - 1].object.top + gap
+        when :between
+          # I need to know the total height of all children
+        when :around
+          # I need to know the total height of all children
+        when :evenly
+          # I need to know the total height of all children
+        end
+      end
 
-      # end
+      # Left to Right align of vertical children
+      def calculate_column_align(child)
+        case align
+        when :start
+          child.object.anchor_x = 0
+          child.object.x = object.left + padding
+        when :center
+          child.object.anchor_x = 0.5
+          child.object.x = object.center.x
+        when :end
+          child.object.anchor_x = 1
+          child.object.x = object.right - padding
+        when :stretch
+          child.object.anchor_x = 0.5
+          child.object.x = object.center.x
+          child.object.w = object.w - 2 * padding
+        end
+      end
 
-      # def calculate_row_alignment()
+      # Left to Right of horizontal children
+      def calculate_row_justify(child, children, index)
+        case justify
+        when :start
+          child.object.anchor_x = 0
+          child.object.x = index.zero? ? object.left + padding : children[index - 1].object.right + gap
+        when :center
+          child.object.anchor_x = 0.5
+          child.object.x = object.center.x
+        when :end
+          child.object.anchor_x = 1
+          child.object.x = index.zero? ? object.right - padding : children[index - 1].object.left - gap
+        when :between
 
-      # end
+        when :around
 
-      # def calculate_column_justify()
+        end
+      end
 
-      # end
-
-      # def calculate_row_justify()
-
-      # end
+      # Top to Bottom align of horizontal children
+      def calculate_row_align(child)
+        case align
+        when :start
+          child.object.anchor_y = 1
+          child.object.y = object.top - padding
+        when :center
+          child.object.anchor_y = 0.5
+          child.object.y = object.center.y
+        when :end
+          child.object.anchor_y = 0
+          child.object.y = object.bottom + padding
+        when :stretch
+          child.object.anchor_y = 0.5
+          child.object.y = object.center.y
+          child.object.h = object.h - 2 * padding
+        end
+      end
     end
   end
 end
-
-# Container
-# attributes (flexbox inspired)
-# - direction: row or column
-# - alignment: start, center, end, stretch, between
-# - gap: space between children
-# - padding: space around children
-
-# node(children = nil, **attributes, &block)
-# node([{}, {}], direction: :row)
-#
-# build(
-#   { left: grid.left + 20, top: grid.top - 200, bottom: grid.bottom + 200, w: 200 },
-#   [
-#     { text: "Hello" },
-#     { path: "sprites/ui.png", tile_x: 320, tile_y: 256, tile_w: 64, tile_h: 64 }
-#   ],
-#   gap: 10,
-#   padding: 10
-# )
-#
-# => [
-#   {
-#     text: "Hello",
-#     x: container.left + 10,
-#     y: container.top + 10,
-#     w: container.w - 20,
-#     h: node.h
-#   },
-#   {
-#     path: "sprites/ui.png",
-#     tile_x: 320,
-#     tile_y: 256,
-#     tile_w: 64,
-#     tile_h: 64,
-#     x: container.left + 10,
-#     y: sibling.bottom + gap,
-#     w: container.w - 20,
-#     h: node.h
-#   },
-# ]
