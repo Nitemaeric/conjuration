@@ -24,15 +24,27 @@ class MultipleCamerasScene < Conjuration::Scene
         }
       end
     end
+
+    @back_button = Conjuration::UI.build({ x: 20, y: 20.from_top, anchor_y: 1 }) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+        node({ text: "Back", r: 255, g: 255, b: 255 })
+      end
+    end
   end
 
   def input
     if focused_camera
-      # if inputs.mouse.click
-      #   focused_camera.look_at(inputs.mouse.rect)
-      # end
-
       focused_camera.look_at(x: focused_camera.focus_x + inputs.left_right * 10, y: focused_camera.focus_y + inputs.up_down * 10)
+    end
+
+    focused_button = @back_button.find_interactive_intersect(inputs.mouse)
+
+    if focused_button
+      gtk.set_cursor "sprites/hand-point.png", 6, 4
+
+      instance_exec(&focused_button.action) if inputs.mouse.click
+    else
+      gtk.set_cursor "sprites/cursor-none.png", 9, 4
     end
   end
 
@@ -77,6 +89,8 @@ class MultipleCamerasScene < Conjuration::Scene
         }
       ]
     end
+    game.outputs.primitives << @back_button.primitives
+
     cameras.each do |name, camera|
       game.outputs.primitives << {
         x: camera.x,
