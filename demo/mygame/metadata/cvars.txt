@@ -52,7 +52,7 @@ log.filter_subsystems=HTTPServer
 
 # Milliseconds to sleep per frame when the game is in
 # the background (zero to disable)
-# renderer.background_sleep=0
+renderer.background_sleep=0
 
 # Set the window as borderless.
 # Note: the ablity to quit the application via OS shortcuts will not
