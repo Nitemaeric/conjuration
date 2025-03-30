@@ -35,27 +35,25 @@ class UIScene < Conjuration::Scene
       node({ text: "Clicking this button will print 'Button clicked!' to the console.", r: 255, g: 255, b: 255 })
     end
 
-    @party = Conjuration::UI.build({ x: 0, y: grid.h / 2, w: 240, h: grid.h - 200, anchor_y: 0.5, path: "sprites/sidebar-container-background.png", r: 222, g: 222, b: 222 }, align: :stretch) do
-      node({ primitive_marker: :border, h: grid.h - 200 }, justify: :end, align: :stretch, padding: 20, gap: 20) do
-        node({ primitive_marker: :border, h: 200 }, id: :section_1, padding: 20) do
-          node({ text: "Hello, World!" }, id: :sub_section_1)
-        end
+    @party = Conjuration::UI.build({ x: 0, y: grid.h / 2, w: 240, h: grid.h - 200, anchor_y: 0.5, path: "sprites/sidebar-container-background.png", r: 222, g: 222, b: 222 }, justify: :end, align: :stretch, padding: 20, gap: 20) do
+      node({ primitive_marker: :border, h: 200 }, id: :section_1, padding: 20) do
+        node({ text: "Hello, World!" }, id: :sub_section_1)
+      end
 
-        node({ h: 20 }, id: :section_2, align: :end) do
-          node({ text: "Hello, World!" })
-        end
+      node({ h: 20 }, id: :section_2, align: :end) do
+        node({ text: "Hello, World!" })
+      end
 
-        node({ path: "sprites/button.png", h: 50, action: -> { puts "Button clicked!" } }, id: :button, align: :center, padding: 15) do
-          node(
-            {
-              text: "Click me!",
-              r: 255,
-              g: 255,
-              b: 255
-            },
-            id: :label
-          )
-        end
+      node({ path: "sprites/button.png", h: 50, action: -> { puts "Button clicked!" } }, id: :button, align: :center, padding: 15) do
+        node(
+          {
+            text: "Click me!",
+            r: 255,
+            g: 255,
+            b: 255
+          },
+          id: :label
+        )
       end
     end
   end
