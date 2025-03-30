@@ -13,6 +13,15 @@ class Game < Conjuration::Game
 
   def render
     outputs.background_color = [0, 0, 0]
-    outputs.primitives << { x: 5.from_right, y: 5.from_top, text: gtk.current_framerate.to_s, anchor_x: 1, anchor_y: 1 } if debug?
+
+    if debug?
+      outputs.primitives << {
+        x: 5.from_right,
+        y: 5.from_top,
+        text: gtk.current_framerate.to_s,
+        anchor_x: 1,
+        anchor_y: 1
+      }
+    end
   end
 end

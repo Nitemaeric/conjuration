@@ -31,8 +31,8 @@ class UIScene < Conjuration::Scene
       end
     end
 
-    @tooltip = Conjuration::UI.build({ x: grid.w, y: grid.h, path: :pixel, w: 200, h: 100, r: 0, g: 0, b: 0 }, padding: 20) do
-      node({ text: "Tooltip", r: 255, g: 255, b: 255 })
+    @tooltip = Conjuration::UI.build({ x: grid.w, y: grid.h, path: :pixel, w: 700, h: 60, r: 0, g: 0, b: 0 }, padding: 20) do
+      node({ text: "Clicking this button will print 'Button clicked!' to the console.", r: 255, g: 255, b: 255 })
     end
 
     @party = Conjuration::UI.build({ x: 0, y: grid.h / 2, w: 240, h: grid.h - 200, anchor_y: 0.5, path: "sprites/sidebar-container-background.png", r: 222, g: 222, b: 222 }, align: :stretch) do
@@ -131,11 +131,6 @@ class UIScene < Conjuration::Scene
     )
 
     tooltip.x, tooltip.y = inputs.mouse.x + 20, inputs.mouse.y + 20
-    if inputs.mouse.x > grid.w - tooltip.w
-      tooltip.object.anchor_x = 1
-    else
-      tooltip.object.anchor_x = 0
-    end
     tooltip.calculate_layout
   end
 
@@ -143,9 +138,10 @@ class UIScene < Conjuration::Scene
     outputs.primitives << background.primitives
     outputs.primitives << @back_button.primitives
     outputs.primitives << party.primitives
-    outputs.primitives << tooltip.primitives
-    # outputs.primitives << skills.primitives
-    # outputs.primitives << minimap.primitives
+
+    if inputs.mouse.inside_rect?(party.find(:button).object)
+      outputs.primitives << tooltip.primitives
+    end
 
     if debug?
       outputs.primitives << [*party.interactive_nodes].map do |node|
