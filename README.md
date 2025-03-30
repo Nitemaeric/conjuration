@@ -28,7 +28,7 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
   - [ ] Camera shake
   - [ ] Impact frames (Hit stops)
 - [x] UI & HUD Management
-  - [ ] #1
+  - [ ] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
   - [ ] Interactive node management
 - [ ] Input Management
   - [ ] Default key mapping
