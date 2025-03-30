@@ -145,9 +145,15 @@ module Conjuration
           child.object.anchor_y = 1
           child.object.y = index.zero? ? object.top - padding : children[index - 1].object.bottom - gap
         when :center
-          child.object.anchor_y = 0.5
-          child.object.y = object.center.y
-          # I need to know the total height of all children
+          if children.count == 1
+            child.object.anchor_y = 0.5
+            child.object.y = object.center.y
+          else
+            @children_height_with_gaps ||= (children.count - 1) * gap + children.sum { |child| child.object.h }
+
+            child.object.anchor_y = 1
+            child.object.y = index.zero? ? object.top - object.h / 2 + @children_height_with_gaps / 2 : children[index - 1].object.bottom - gap
+          end
         when :end
           child.object.anchor_y = 0
           child.object.y = index.zero? ? object.bottom + padding : children[index - 1].object.top + gap
@@ -186,8 +192,15 @@ module Conjuration
           child.object.anchor_x = 0
           child.object.x = index.zero? ? object.left + padding : children[index - 1].object.right + gap
         when :center
-          child.object.anchor_x = 0.5
-          child.object.x = object.center.x
+          if children.count == 1
+            child.object.anchor_x = 0.5
+            child.object.x = object.center.x
+          else
+            @children_width_with_gaps ||= (children.count - 1) * gap + children.sum { |child| child.object.w }
+
+            child.object.anchor_x = 0
+            child.object.x = index.zero? ? object.left + object.w / 2 - @children_width_with_gaps / 2 : children[index - 1].object.right + gap
+          end
         when :end
           child.object.anchor_x = 1
           child.object.x = index.zero? ? object.right - padding : children[index - 1].object.left - gap
