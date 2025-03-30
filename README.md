@@ -12,22 +12,24 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
 
 - [x] Gameloop conventions
   - [x] Order of operations
-    - [x] Setup (Run once when the scene is loaded)
+    - [x] Setup (Run once when a scene is loaded)
     - [x] Input (Handle user input logic)
     - [x] Update (Handle game logic)
-    - [x] Render (Draw things to the scene / camera (HUD, UI))
+    - [x] Render (Draw things to a scene / camera (HUD, UI))
 - [x] Scene Management
   - [ ] Scene transitions
 - [ ] Camera Management
   - [x] Look at
   - [ ] Zooming
-  - [ ] Panning
+  - [x] Panning
   - [ ] Following
   - [x] Multiple cameras
   - [ ] Minimaps
   - [ ] Camera shake
   - [ ] Impact frames (Hit stops)
-- [ ] UI & HUD Management
+- [x] UI & HUD Management
+  - [ ] #1
+  - [ ] Interactive node management
 - [ ] Input Management
   - [ ] Default key mapping
   - [ ] User remapping
@@ -46,3 +48,11 @@ You can install Conjuration into your DragonRuby project by following one of the
   ```ruby
   github :nitemaeric, :conjuration, "lib"
   ```
+
+## Quick Start
+
+View the following files to get started:
+
+- [main.rb](demo/mygame/app/main.rb)
+- [game.rb](demo/mygame/app/game.rb)
+- [scenes/menu_scene.rb](demo/mygame/app/scenes/menu_scene.rb)
