@@ -11,3 +11,7 @@ def tick args
   $game.perform_setup if Kernel.tick_count.zero?
   $game.tick
 end
+
+def current_scene
+  $game.current_scene
+end
