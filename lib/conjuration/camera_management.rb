@@ -7,10 +7,24 @@ module Conjuration
       @cameras = {}
     end
 
-    def add_camera(name, x:, y:, w: $game.grid.w, h: $game.grid.h, zoom: 1, speed: 1_000_000, zoom_speed: 0.1, source_w: nil, source_h: nil)
-      camera = Camera.new(self, name: name, x: x, y: y, w: w, h: h, zoom: zoom, speed: speed, zoom_speed: zoom_speed, source_w: source_w, source_h: source_h)
+    def add_camera(name, **attributes)
+      camera = Camera.new(self, name: name, **attributes)
       cameras[name] = camera
       camera
+    end
+
+    private
+
+    def perform_setup
+      cameras.each do |name, camera|
+        camera.perform_setup
+      end
+    end
+
+    def perform_input
+      cameras.each do |name, camera|
+        camera.perform_input
+      end
     end
 
     def perform_update

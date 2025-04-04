@@ -10,9 +10,9 @@ class MenuScene < Conjuration::Scene
 
     audio[:bgm] = { input: "sounds/bgm.mp3", looping: true, gain: 0.5 }
 
-    add_camera(:main, x: 0, y: 0)
+    add_camera(:main)
 
-    @menu = Conjuration::UI.build({
+    ui.node({
       x: grid.w / 2,
       y:  grid.h / 2 + 140,
       w: 256,
@@ -100,7 +100,7 @@ class MenuScene < Conjuration::Scene
       end
     end
 
-    @buttons = Conjuration::UI.build({
+    ui.node({
       x: 10.from_right,
       y: 10.from_top,
       anchor_x: 1,
@@ -117,22 +117,8 @@ class MenuScene < Conjuration::Scene
     end
   end
 
-  def input
-    focused_button = @menu.find_interactive_intersect(inputs.mouse) || @buttons.find_interactive_intersect(inputs.mouse)
-
-    if focused_button
-      gtk.set_cursor "sprites/hand-point.png", 6, 4
-
-      instance_exec(&focused_button.action) if inputs.mouse.click
-    else
-      gtk.set_cursor "sprites/cursor-none.png", 9, 4
-    end
-  end
-
   def update
-    @menu.calculate_layout if events.orientation_changed
-
-    @buttons.find(:mute_button_text).text = audio[:bgm].gain.zero? ? "Unmute" : "Mute"
+    ui.find(:mute_button_text).text = audio[:bgm].gain.zero? ? "Unmute" : "Mute"
   end
 
   def render
@@ -171,19 +157,5 @@ class MenuScene < Conjuration::Scene
         anchor_y: 0.5
       }
     ]
-
-    outputs.primitives << @menu.primitives
-    outputs.primitives << @buttons.primitives
-
-    if debug?
-      outputs.primitives << [*@menu.interactive_nodes, *@buttons.interactive_nodes].map do |node|
-        {
-          **node.object,
-          r: 0,
-          g: 255,
-          b: 0
-        }.border!
-      end
-    end
   end
 end

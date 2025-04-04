@@ -1,10 +1,13 @@
 module Conjuration
   class Scene < Node
     include CameraManagement
+    include UIManagement
 
-    attr_accessor :name, :config, :w, :h
+    attr_accessor :config, :w, :h
 
-    delegate :inputs, :layout, :geometry, :gtk, :audio, :change_scene, to: :game
+    attr_reader :name
+
+    delegate :layout, :geometry, :gtk, :audio, :change_scene, to: :game
 
     def initialize(name, **config)
       super(
@@ -31,11 +34,14 @@ module Conjuration
 
     def perform_setup
       audio.clear
+      UI.focused_node = nil
       setup if respond_to?(:setup)
       outputs.width, outputs.height = w, h
+      super
     end
 
     def perform_input
+      super
       input if respond_to?(:input)
     end
 
@@ -47,6 +53,18 @@ module Conjuration
     def perform_render
       super
       render if respond_to?(:render)
+      outputs.primitives << ui.primitives
+
+      if debug?
+        outputs.debug << ui.interactive_nodes.map do |node|
+          {
+            **node.object,
+            r: 0,
+            g: 255,
+            b: 0
+          }.border!
+        end
+      end
     end
   end
 end

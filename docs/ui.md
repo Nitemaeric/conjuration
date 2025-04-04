@@ -5,7 +5,7 @@
 ```ruby
 class MyScene < Conjuration::Scene
   def setup
-    add_camera(:main, x: 0, y: 0)
+    add_camera(:main)
 
     # Set root container to grid.rect. This is the entire 1280x720 screen.
     state.ui = Conjuration::UI.build(grid.rect, padding: 100, gap: 20) do

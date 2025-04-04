@@ -1,41 +1,45 @@
 module Conjuration
   class Camera < Node
+    include UIManagement
+
     attr_accessor :scene, :name
+
+    # Camera's viewport on the screen
     attr_accessor :x, :y, :w, :h
-    attr_accessor :source_w, :source_h
-    attr_accessor :focus_x, :focus_y, :zoom
-    attr_accessor :target_x, :target_y, :target_zoom
+
+    attr_accessor :current, :target, :current_at_target_change
     attr_accessor :speed, :zoom_speed
 
-    # camera = Camera.new(outputs[:scene])
-    def initialize(scene, name: "", x: 0, y: 0, w: grid.w, h: grid.h, zoom: 1, speed: 1_000_000, zoom_speed: 0.1, source_w: nil, source_h: nil)
-      super(scene: scene, name: name, x: x, y: y, w: w, h: h, zoom: zoom, speed: speed, zoom_speed: zoom_speed, source_w: source_w || w, source_h: source_h || h)
+    def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: 1_000_000, zoom_speed: 0.1)
+      super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
 
-      @target_x = @focus_x = grid.w / 2
-      @target_y = @focus_y = grid.h / 2
-      @target_zoom = @zoom
+      @current = FocalPoint.new(self, **current)
+      @target = FocalPoint.new(self, **current)
     end
 
     def look_at(object)
-      self.target_x = self.focus_x = object.x.clamp(w / 2, scene.w - w / 2)
-      self.target_y = self.focus_y = object.y.clamp(h / 2, scene.h - h / 2)
+      self.target.x    = object.x    if object.x
+      self.target.y    = object.y    if object.y
+      self.target.zoom = object.zoom if object.zoom
+
+      current_at_target_change = current.dup
     end
 
     def to_world(x:, y:, w: nil, h: nil)
       {
-        x: (x + focus_x - self.w / 2 - self.x) * zoom,
-        y: (y + focus_y - self.h / 2 - self.y) * zoom,
-        w: w ? w * zoom : nil,
-        h: h ? h * zoom : nil
+        x: (x + current.x - self.w / 2 - self.x) * current.zoom,
+        y: (y + current.y - self.h / 2 - self.y) * current.zoom,
+        w: w ? w * current.zoom : nil,
+        h: h ? h * current.zoom : nil
       }
     end
 
     def to_screen(x:, y:, w:, h:)
       {
-        x: (focus_x + self.x) / zoom,
-        y: (focus_y + self.y) / zoom,
-        w: w / zoom,
-        h: h / zoom
+        x: (current.x + self.x) / current.zoom,
+        y: (current.y + self.y) / current.zoom,
+        w: w / current.zoom,
+        h: h / current.zoom
       }
     end
 
@@ -45,15 +49,19 @@ module Conjuration
 
     private
 
+    def perform_input
+      super
+    end
+
     def perform_update
-      # return if target_x == focus_x && target_y == focus_y && target_zoom == zoom
+      super
 
-      # normalized_direction = Geometry.vec2_normalize(x: (target_x - focus_x), y: (target_y - focus_y))
+      if target.x != current.x || target.y != current.y
+        normalized_direction = Geometry.vec2_normalize(x: (target.x - current.x), y: (target.y - current.y))
 
-      # puts "normalized_direction: #{normalized_direction}"
-
-      # self.focus_x += normalized_direction.x * speed
-      # self.focus_y += normalized_direction.y * speed
+        self.current.x += (normalized_direction.x * speed).clamp(-(target.x - current.x).abs, (target.x - current.x).abs)
+        self.current.y += (normalized_direction.y * speed).clamp(-(target.y - current.y).abs, (target.y - current.y).abs)
+      end
     end
 
     def perform_render
@@ -63,12 +71,26 @@ module Conjuration
         y: 0,
         w: grid.w,
         h: grid.h,
-        source_x: (focus_x - (w / 2) / zoom).clamp(0, scene.outputs.w - w),
-        source_y: (focus_y - (h / 2) / zoom).clamp(0, scene.outputs.h - h),
-        source_w: source_w / zoom,
-        source_h: source_h / zoom,
+        source_x: (current.x - (w / 2) / current.zoom).clamp(0, scene.outputs.w - w),
+        source_y: (current.y - (h / 2) / current.zoom).clamp(0, scene.outputs.h - h),
+        source_w: w / current.zoom,
+        source_h: h / current.zoom,
         path: "scene_#{scene.name}"
       }
+
+      # Render UI components to camera viewport
+      outputs.primitives << ui.primitives
+
+      if debug?
+        outputs.debug << ui.interactive_nodes.map do |node|
+          {
+            **node.object,
+            r: 0,
+            g: 255,
+            b: 0
+          }.border!
+        end
+      end
 
       # Render camera viewport to screen viewport
       game.outputs.primitives << [
@@ -83,7 +105,27 @@ module Conjuration
     end
 
     def inspect
-      "#<#{self.class.name}:0x#{object_id.to_s(16)} name: #{name}, x: #{x}, y: #{y}, w: #{w}, h: #{h}, focus_x: #{focus_x}, focus_y: #{focus_y}, zoom: #{zoom}, speed: #{speed}, zoom_speed: #{zoom_speed}>"
+      "#<#{self.class.name}:0x#{object_id.to_s(16)} name: #{name}, x: #{x}, y: #{y}, w: #{w}, h: #{h}, current-x: #{current&.x}, current-y: #{current&.y}, current-zoom: #{current&.zoom}, speed: #{speed}, zoom_speed: #{zoom_speed}>"
+    end
+
+    class FocalPoint < Node
+      attr_accessor :x, :y, :zoom, :camera
+
+      def initialize(camera, **attributes)
+        super(camera: camera, **attributes)
+      end
+
+      def x=(value)
+        @x = camera && camera.scene ? value.clamp(camera.w / 2, camera.scene.outputs.w - camera.w / 2) : value
+      end
+
+      def y=(value)
+        @y = camera && camera.scene ? value.clamp(camera.h / 2, camera.scene.outputs.h - camera.h / 2) : value
+      end
+
+      def zoom=(value)
+        @zoom = value.clamp(0.1, 10)
+      end
     end
   end
 end

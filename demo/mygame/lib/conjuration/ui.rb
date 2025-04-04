@@ -1,18 +1,26 @@
 module Conjuration
   module UI
-    def self.build(object_hash = nil, id: :root, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
-      root = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
+    def self.build(object_hash = nil, id: :root, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, **object, &block)
+      root = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, visible: visible, **object, &block)
       root.calculate_layout
       root
     end
 
+    def self.focused_node
+      @focused_node
+    end
+
+    def self.focused_node=(node)
+      @focused_node = node
+    end
+
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
-      attr_accessor :justify, :direction, :align, :gap, :padding
+      attr_accessor :justify, :direction, :align, :gap, :padding, :visible
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, **object, &block)
         @id = id.to_sym
         @object = object_hash || object
         @children = []
@@ -22,16 +30,23 @@ module Conjuration
         @align = align
         @gap = gap
         @padding = padding
+        @visible = visible
 
         instance_exec(&block) if block_given?
       end
 
       def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
-        children << Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
+        children << element
+        element
       end
 
       def find(id)
         descendants[id.to_sym]
+      end
+
+      def intersect_rect?(rect)
+        Geometry.intersect_rect?(rect, object)
       end
 
       def find_interactive_intersect(rect)
@@ -58,15 +73,18 @@ module Conjuration
         end
 
         children.each_with_index do |child, index|
-          case direction
-          when :row
-            calculate_row_justify(child, children, index)
-            calculate_row_align(child)
-          when :column
-            calculate_column_justify(child, children, index)
-            calculate_column_align(child)
+          if id != :root
+            case direction
+            when :row
+              calculate_row_justify(child, children, index)
+              calculate_row_align(child)
+            when :column
+              calculate_column_justify(child, children, index)
+              calculate_column_align(child)
+            end
           end
 
+          child.visible = visible
           child.calculate_layout
         end
       end
@@ -125,6 +143,7 @@ module Conjuration
       end
 
       def renderable?
+        return false unless visible
         return %i[solid label sprite line border].include?(primitive_marker)
       end
 
