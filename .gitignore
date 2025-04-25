@@ -6,6 +6,7 @@ demo/dragonruby-publish
 demo/dragonruby-publish.exe
 demo/dragonruby-bind
 demo/dragonruby-bind.exe
+demo/dragonruby-firestarter
 demo/tmp/
 demo/builds/
 demo/logs/
