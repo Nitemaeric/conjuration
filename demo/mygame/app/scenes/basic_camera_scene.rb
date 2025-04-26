@@ -33,15 +33,15 @@ class BasicCameraScene < Conjuration::Scene
         node({ text: "camera around" })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
+      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
         node({ text: "Point A", r: 255, g: 255, b: 255 })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { cameras[:main].look_at(x: 640, y: 600) }}, justify: :center, align: :center) do
+      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 640, y: 600) }}, justify: :center, align: :center) do
         node({ text: "Point B", r: 255, g: 255, b: 255 })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { cameras[:main].look_at(x: 1200, y: 400) }}, justify: :center, align: :center) do
+      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 400) }}, justify: :center, align: :center) do
         node({ text: "Point C", r: 255, g: 255, b: 255 })
       end
     end
