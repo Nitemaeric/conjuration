@@ -79,24 +79,19 @@ class MenuScene < Conjuration::Scene
         )
       end
 
-      node(
-        {
-          h: 64,
-          action: -> { gtk.request_quit },
-          path: "sprites/button.png",
-        },
-        id: :quit,
-        justify: :center,
-        align: :center
-      ) do
+      if gtk.can_close_window?
         node(
           {
-            text: "Exit",
-            r: 255,
-            g: 255,
-            b: 255
-          }
-        )
+            h: 64,
+            action: -> { gtk.request_quit },
+            path: "sprites/button.png"
+          },
+          id: :quit,
+          justify: :center,
+          align: :center
+        ) do
+          node(text: "Quit", r: 255, g: 255, b: 255)
+        end
       end
     end
 
