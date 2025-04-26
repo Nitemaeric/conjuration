@@ -26,7 +26,7 @@ class MultipleCamerasScene < Conjuration::Scene
     end
 
     left_camera.ui.node({ x: 20, y: 20.from_top, anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
         node({ text: "Back", r: 255, g: 255, b: 255 })
       end
     end

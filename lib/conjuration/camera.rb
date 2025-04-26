@@ -1,5 +1,6 @@
 module Conjuration
   class Camera < Node
+    include BaseLifecycleMethods
     include UIManagement
 
     attr_accessor :scene, :name
@@ -48,10 +49,6 @@ module Conjuration
     end
 
     private
-
-    def perform_input
-      super
-    end
 
     def perform_update
       super

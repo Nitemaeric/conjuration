@@ -46,11 +46,11 @@ module Conjuration
       end
 
       def intersect_rect?(rect)
-        Geometry.intersect_rect?(rect, object)
+        Geometry.intersect_rect?(rect, self.rect)
       end
 
       def find_interactive_intersect(rect)
-        Geometry.find_intersect_rect(rect, interactive_nodes.map(&:object))
+        Geometry.find_intersect_rect(rect, interactive_nodes)
       end
 
       def descendants
@@ -112,6 +112,17 @@ module Conjuration
       def respond_to_missing?(method_name, include_private = false)
         object.respond_to?(method_name, include_private) || super
       end
+
+      # These are required, as `Geometry.find_intersect_rect` seems to check for method definitions,
+      # not if the instance responds to anchor_x and anchor_y.
+      def anchor_x
+        object.anchor_x
+      end
+
+      def anchor_y
+        object.anchor_y
+      end
+      # -----
 
       def has_key?(key)
         object.has_key?(key)

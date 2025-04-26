@@ -11,15 +11,18 @@ module Conjuration
 
     def perform_setup
       ui.calculate_layout
-      super rescue nil
+
+      super
     end
 
     def perform_input
-      super rescue nil
+      super
 
       if UI.focused_node
         if UI.focused_node.intersect_rect?(inputs.mouse)
-          instance_exec(&UI.focused_node.action) if inputs.mouse.click
+          if inputs.mouse.click
+            instance_exec(&UI.focused_node.object.action) if ui.interactive_nodes.include?(UI.focused_node)
+          end
         else
           UI.focused_node = nil
           gtk.set_cursor "sprites/cursor-none.png", 9, 4
@@ -32,7 +35,7 @@ module Conjuration
     end
 
     def perform_update
-      super rescue nil
+      super
 
       ui.calculate_layout if events.orientation_changed
     end
