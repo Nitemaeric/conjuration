@@ -1,5 +1,9 @@
 .DS_Store
 
+# Built test runtime: cloned mruby-patched source + compiled `mruby` binary
+# (produced by script/build-mruby.sh; cached, never committed)
+/tmp/
+
 demo/dragonruby
 demo/dragonruby.exe
 demo/dragonruby-publish
