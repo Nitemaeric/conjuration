@@ -39,15 +39,21 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
 
 ## Installation
 
-You can install Conjuration into your DragonRuby project by following one of these methods:
+The recommended way to install Conjuration is with [drenv](https://github.com/Nitemaeric/drenv), a DragonRuby environment and dependency manager.
 
-- Copy the `lib` directory into your `mygame` directory.
+From your project directory, add Conjuration as a dependency:
 
-- Using [Foodchain](https://github.com/pvande/foodchain)
+```sh
+drenv add github:Nitemaeric/conjuration
+```
 
-  ```ruby
-  github :nitemaeric, :conjuration, "lib"
-  ```
+Then require the generated bundle at the top of `mygame/app/main.rb`:
+
+```ruby
+require 'app/drenv_bundle.rb'
+```
+
+drenv vendors Conjuration into `mygame/vendor/` and pins it in `mygame/drenv.lock`. Run `drenv run` to sync dependencies and launch your game, or `drenv bundle` to refresh them without launching.
 
 ## Quick Start
 
