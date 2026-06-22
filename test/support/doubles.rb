@@ -26,9 +26,40 @@ class GtkDouble
   end
 end
 
+# A render target: tracks its size and accumulates primitives.
+class RenderTargetDouble
+  attr_accessor :width, :height
+
+  def primitives
+    @primitives ||= []
+  end
+end
+
+# args.outputs: the screen, plus named render targets via outputs[:name].
+class OutputsDouble
+  def [](name)
+    targets[name] ||= RenderTargetDouble.new
+  end
+
+  def primitives
+    @primitives ||= []
+  end
+
+  def targets
+    @targets ||= {}
+  end
+end
+
+# args.events: only orientation_changed is read (UIManagement#perform_update).
+class EventsDouble
+  def orientation_changed; false; end
+end
+
 class GameDouble
   def grid; @grid ||= GridDouble.new; end
   def gtk; @gtk ||= GtkDouble.new; end
+  def outputs; @outputs ||= OutputsDouble.new; end
+  def events; @events ||= EventsDouble.new; end
   def state; @state ||= {}; end
   def debug?; false; end
 end

@@ -21,16 +21,19 @@ class BasicCameraScene < Conjuration::Scene
       end
     end
 
-    cameras[:main].ui.node({ x: 20, y: 20.from_top, anchor_y: 1 }) do
+    # A target that orbits the world for the camera to follow.
+    state.target = { x: 1000, y: 1000, w: 80, h: 80 }
+
+    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
       node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
         node({ text: "Back", r: 255, g: 255, b: 255 })
       end
     end
 
-    cameras[:main].ui.node({ x: 0, y: grid.h / 2, w: 256, h: cameras[:main].h / 2, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
+    cameras[:main].ui.node({ x: 0, y: grid.h / 2, w: 256, h: 400, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
       node(h: 50, gap: 5, align: :center) do
-        node({ text: "Use WASD to move the" })
-        node({ text: "camera around" })
+        node({ text: "WASD to pan" })
+        node({ text: "SPACE to shake" })
       end
 
       node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
@@ -44,9 +47,13 @@ class BasicCameraScene < Conjuration::Scene
       node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 400) }}, justify: :center, align: :center) do
         node({ text: "Point C", r: 255, g: 255, b: 255 })
       end
+
+      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.following ? camera.unfollow : camera.follow(scene.state.target) }}, justify: :center, align: :center) do
+        node({ text: "Follow", r: 255, g: 255, b: 255 })
+      end
     end
 
-    cameras[:main].ui.node({ x: 20.from_right, y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
+    cameras[:main].ui.node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
       node({ text: "Camera" }, id: :camera_label)
     end
   end
@@ -55,10 +62,18 @@ class BasicCameraScene < Conjuration::Scene
     if focused_camera && (!inputs.up_down.zero? || !inputs.left_right.zero?)
       focused_camera.look_at(x: focused_camera.current.x + inputs.left_right * 10, y: focused_camera.current.y + inputs.up_down * 10)
     end
+
+    focused_camera.shake if focused_camera && inputs.keyboard.key_down.space
   end
 
   def update
-    cameras[:main].ui.find(:camera_label).object.text = "Camera: #{cameras[:main].current.x.round}, #{cameras[:main].current.y.round}"
+    angle = Kernel.tick_count * 0.02
+    state.target.x = 1000 + Math.cos(angle) * 400
+    state.target.y = 1000 + Math.sin(angle) * 400
+
+    camera = cameras[:main]
+    label = camera.following ? "Following target" : "Camera: #{camera.current.x.round}, #{camera.current.y.round}"
+    camera.ui.find(:camera_label).object.text = label
   end
 
   def draw_world(camera)
@@ -85,5 +100,8 @@ class BasicCameraScene < Conjuration::Scene
         a: 192
       })
     end
+
+    # The follow target (orange square).
+    camera.draw({ **state.target, path: :pixel, r: 255, g: 140, b: 0 })
   end
 end

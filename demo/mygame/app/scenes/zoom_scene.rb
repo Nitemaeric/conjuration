@@ -1,27 +1,25 @@
 class ZoomScene < Conjuration::Scene
-  TILE_SIZE = 80
+  TILE_SIZE = 40
 
   def setup
     gtk.set_cursor "sprites/cursor-none.png", 9, 4
 
-    self.virtual_w = self.virtual_h = 2000
+    self.virtual_w = self.virtual_h = 16000
 
     add_camera(:main, speed: 30, zoom_speed: 0.05)
 
-    state.cells = []
+    @tiles = Conjuration::TileLayer.new(name: :grid, chunk_size: 400)
 
     (virtual_w / TILE_SIZE).to_i.times do |row|
       (virtual_h / TILE_SIZE).to_i.times do |column|
-        state.cells << {
-          x: column * TILE_SIZE,
-          y: row * TILE_SIZE,
-          w: TILE_SIZE,
-          h: TILE_SIZE,
-        }
+        cell = { x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE }
+
+        @tiles.add({ **cell, path: :pixel, r: (row + column) % 2 == 0 ? 192 : 64, g: (row + column) % 2 == 0 ? 192 : 64, b: (row + column) % 2 == 0 ? 192 : 64, a: 192 })
+        @tiles.add({ **cell, primitive_marker: :border, r: 255, g: 255, b: 255, a: 192 })
       end
     end
 
-    cameras[:main].ui.node({ x: 20, y: 20.from_top, anchor_y: 1 }) do
+    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
       node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
         node({ text: "Back", r: 255, g: 255, b: 255 })
       end
@@ -33,11 +31,11 @@ class ZoomScene < Conjuration::Scene
         node({ text: "Scroll wheel to zoom" })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.5) }}, justify: :center, align: :center) do
+      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }}, justify: :center, align: :center) do
         node({ text: "Zoom In", r: 255, g: 255, b: 255 })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.5) }}, justify: :center, align: :center) do
+      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }}, justify: :center, align: :center) do
         node({ text: "Zoom Out", r: 255, g: 255, b: 255 })
       end
 
@@ -46,7 +44,7 @@ class ZoomScene < Conjuration::Scene
       end
     end
 
-    cameras[:main].ui.node({ x: 20.from_right, y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
+    cameras[:main].ui.node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
       node({ text: "Zoom" }, id: :zoom_label)
     end
   end
@@ -71,28 +69,30 @@ class ZoomScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    hover = camera == focused_camera ? camera.to_world(**inputs.mouse.rect) : nil
+    # Static grid: drawn from cached chunk textures, so the whole 2000x2000
+    # world stays cheap even fully zoomed out.
+    @tiles.draw(camera)
 
-    state.cells.each do |cell|
-      focused = hover&.inside_rect?(cell)
+    # Dynamic hover highlight: drawn immediately, on top of the cached tiles.
+    return unless camera == focused_camera
 
-      camera.draw({
-        **cell,
-        path: :pixel,
-        r: 192,
-        g: focused ? 0 : 192,
-        b: focused ? 0 : 192,
-        a: focused ? 255 : 192
-      })
+    point = camera.to_world(**inputs.mouse.rect)
+    column = (point.x / TILE_SIZE).floor
+    row = (point.y / TILE_SIZE).floor
 
-      camera.draw({
-        **cell,
-        primitive_marker: :border,
-        r: 255,
-        g: 255,
-        b: 255,
-        a: 192
-      })
-    end
+    return unless column.between?(0, (virtual_w / TILE_SIZE).to_i - 1)
+    return unless row.between?(0, (virtual_h / TILE_SIZE).to_i - 1)
+
+    camera.draw({
+      x: column * TILE_SIZE,
+      y: row * TILE_SIZE,
+      w: TILE_SIZE,
+      h: TILE_SIZE,
+      path: :pixel,
+      r: 255,
+      g: 0,
+      b: 0,
+      a: 128
+    })
   end
 end

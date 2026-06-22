@@ -11,6 +11,13 @@ module Conjuration
     attr_accessor :current, :target, :current_at_target_change
     attr_accessor :speed, :zoom_speed
 
+    attr_reader :following, :trauma
+
+    # Screen-shake tuning: peak view offset in world units (at trauma = 1), and
+    # trauma lost per tick.
+    SHAKE_MAGNITUDE = 24
+    SHAKE_DECAY = 0.04
+
     def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: 1_000_000, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
 
@@ -19,11 +26,33 @@ module Conjuration
     end
 
     def look_at(object)
+      # A positional look_at takes manual control, so it ends any active follow;
+      # a zoom-only look_at leaves the follow running.
+      @following = nil if object.x || object.y
+
       self.target.x    = object.x    if object.x
       self.target.y    = object.y    if object.y
       self.target.zoom = object.zoom if object.zoom
 
       self.current_at_target_change = current.dup
+    end
+
+    # Continuously centre the view on `object` (anything exposing x/y). The
+    # camera eases toward it each frame using `speed`, so a low speed gives a
+    # smooth, lagging follow and a high speed a rigid lock. Call #unfollow (or a
+    # positional #look_at) to stop.
+    def follow(object)
+      @following = object
+    end
+
+    def unfollow
+      @following = nil
+    end
+
+    # Add trauma (0..1) to shake the view. Stacks (capped at 1.0) and decays each
+    # tick; the offset scales with trauma squared, so it falls off smoothly.
+    def shake(amount = 0.6)
+      @trauma = [(@trauma || 0) + amount, 1.0].min
     end
 
     def to_world(x:, y:, w: nil, h: nil)
@@ -44,14 +73,19 @@ module Conjuration
       }
     end
 
-    # World-space rectangle this camera currently sees (pan + zoom applied).
+    # World-space rectangle this camera currently sees (pan, zoom, and any active
+    # screen shake applied). Memoized per render frame.
     def view_rect
-      @view_rect ||= {
-        x: current.x - (w / current.zoom) / 2,
-        y: current.y - (h / current.zoom) / 2,
-        w: w / current.zoom,
-        h: h / current.zoom
-      }
+      @view_rect ||= begin
+        shake_x, shake_y = shake_offset
+
+        {
+          x: current.x + shake_x - (w / current.zoom) / 2,
+          y: current.y + shake_y - (h / current.zoom) / 2,
+          w: w / current.zoom,
+          h: h / current.zoom
+        }
+      end
     end
 
     # Whether a world-space rect overlaps the current view at all. Hand-rolled
@@ -68,8 +102,11 @@ module Conjuration
         world_rect[:y] + rh > view[:y]
     end
 
-    # World space -> this camera's viewport-local space, (0, 0)..(w, h). Bracket
-    # access keeps this allocation- and method_missing-light on the hot path.
+    # World space -> this camera's viewport-local space, (0, 0)..(w, h). Handles
+    # rects/sprites (x/y/w/h), lines (x2/y2), and labels (size_px), so any world
+    # primitive pans and scales with the camera. Anchors are unitless and carried
+    # through unchanged. Bracket access keeps this allocation- and
+    # method_missing-light on the hot path.
     def to_viewport(world_rect)
       view = view_rect
       zoom = current.zoom
@@ -79,6 +116,9 @@ module Conjuration
       result[:y] = (world_rect[:y] - view[:y]) * zoom
       result[:w] = world_rect[:w] * zoom if world_rect[:w]
       result[:h] = world_rect[:h] * zoom if world_rect[:h]
+      result[:x2] = (world_rect[:x2] - view[:x]) * zoom if world_rect[:x2]
+      result[:y2] = (world_rect[:y2] - view[:y]) * zoom if world_rect[:y2]
+      result[:size_px] = world_rect[:size_px] * zoom if world_rect[:size_px]
       result
     end
 
@@ -89,6 +129,15 @@ module Conjuration
       outputs.primitives << to_viewport(world_rect) if visible?(world_rect)
     end
 
+    # Viewport-relative HUD coordinates. A camera's UI is drawn into its own
+    # w x h render target, so HUD positions are relative to the viewport, not the
+    # screen grid (DR's Numeric#from_top / #from_right assume the grid, which is
+    # only correct for a full-screen camera).
+    def from_left(distance);   distance;     end
+    def from_right(distance);  w - distance; end
+    def from_bottom(distance); distance;     end
+    def from_top(distance);    h - distance; end
+
     def outputs
       game.outputs["camera_#{name}"]
     end
@@ -97,6 +146,11 @@ module Conjuration
 
     def perform_update
       super
+
+      if following
+        self.target.x = following.x
+        self.target.y = following.y
+      end
 
       if target.x != current.x || target.y != current.y
         normalized_direction = Geometry.vec2_normalize(x: (target.x - current.x), y: (target.y - current.y))
@@ -110,13 +164,28 @@ module Conjuration
 
         self.current.zoom += zoom_step.clamp(-(target.zoom - current.zoom).abs, (target.zoom - current.zoom).abs)
       end
+
+      @trauma = [@trauma - SHAKE_DECAY, 0].max if @trauma && @trauma > 0
+    end
+
+    # Random view offset for the current trauma, falling off with trauma squared.
+    def shake_offset
+      return [0, 0] unless @trauma && @trauma > 0
+
+      magnitude = SHAKE_MAGNITUDE * @trauma * @trauma
+      [magnitude * (rand * 2 - 1), magnitude * (rand * 2 - 1)]
     end
 
     def perform_render
       @view_rect = nil
-      # The camera's render target is viewport-sized, never world-sized, so the
-      # world can be arbitrarily large without exceeding the GPU texture limit.
-      outputs.width, outputs.height = w, h
+
+      # Size the viewport target once. It stays viewport-sized (never world-sized)
+      # so an arbitrarily large world can't exceed the GPU texture limit, and DR
+      # retains the size across frames, so there's no need to set it every tick.
+      unless @target_sized
+        outputs.width, outputs.height = w, h
+        @target_sized = true
+      end
 
       # The scene draws its world through us; only on-screen content is emitted.
       scene.draw_world(self)
