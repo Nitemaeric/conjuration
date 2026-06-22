@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The built mruby-patched binary only changes when the pinned commit in
+      # script/build-mruby.sh changes, so key the cache on that file's hash.
+      # A native binary isn't portable across platforms — hence runner.os/arch
+      # in the key (this job pins ubuntu-latest).
+      - name: Cache mruby-patched
+        id: cache-mruby
+        uses: actions/cache@v4
+        with:
+          path: tmp/mruby
+          key: mruby-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('script/build-mruby.sh') }}
+
+      - name: Install build dependencies
+        if: steps.cache-mruby.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential bison
+
+      - name: Set up Ruby (for rake)
+        if: steps.cache-mruby.outputs.cache-hit != 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Build mruby-patched
+        if: steps.cache-mruby.outputs.cache-hit != 'true'
+        run: ./script/build-mruby.sh
+
+      - name: Run tests
+        run: ./script/test.sh
