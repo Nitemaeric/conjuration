@@ -7,6 +7,22 @@ demo/dragonruby-publish.exe
 demo/dragonruby-bind
 demo/dragonruby-bind.exe
 demo/dragonruby-firestarter
+demo/dragonruby-httpd
+
+# DragonRuby engine files (provided by the local DragonRuby install, not the project)
+demo/CHANGELOG-CURR.txt
+demo/CHANGELOG-PREV.txt
+demo/README.txt
+demo/VERSION.txt
+demo/eula.txt
+demo/open-source-licenses.txt
+demo/ctags-emacs
+demo/ctags-vim
+demo/console-logo.png
+demo/dragonruby-controller.png
+demo/dragonruby.png
+demo/font.ttf
+
 demo/tmp/
 demo/builds/
 demo/logs/
