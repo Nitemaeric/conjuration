@@ -4,8 +4,6 @@ class UIScene < Conjuration::Scene
   def setup
     gtk.set_cursor "sprites/cursor-none.png", 9, 4
 
-    add_camera(:main)
-
     ui.node(grid.rect, id: :background, direction: :row) do
       (grid.w / TILE_SIZE).to_i.times do |column|
         node({ w: TILE_SIZE }) do

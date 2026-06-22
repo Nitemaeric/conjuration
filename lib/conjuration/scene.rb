@@ -6,13 +6,18 @@ module Conjuration
 
     attr_accessor :config, :w, :h
 
+    # Logical world bounds. Cameras clamp panning to these; leave them nil for
+    # an unbounded (infinitely large) world.
+    attr_accessor :virtual_w, :virtual_h
+
     attr_reader :name
 
     delegate :layout, :geometry, :gtk, :audio, :change_scene, to: :game
 
     def initialize(name, **config)
+      @name = name
+
       super(
-        name: name,
         config: config,
         w: grid.w,
         h: grid.h
@@ -23,13 +28,20 @@ module Conjuration
       game.state["scene_#{name}"]
     end
 
+    # Screen-space output for HUD/backgrounds. World content is drawn through
+    # cameras via #draw_world, not into a scene-sized render target.
     def outputs
-      game.outputs["scene_#{name}"]
+      game.outputs
     end
 
     def debug_inspect
       "#<#{self.class.name}:0x#{object_id.to_s(16)} size: #{w}x#{h}>"
     end
+
+    # Emit world-space content for the given camera. Override in subclasses and
+    # use camera.draw(rect) (or camera.visible? / camera.to_viewport) so only
+    # on-screen objects are rendered. Called once per camera, per frame.
+    def draw_world(camera); end
 
     private
 
@@ -37,7 +49,6 @@ module Conjuration
       audio.clear
       UI.focused_node = nil
       setup if respond_to?(:setup)
-      outputs.width, outputs.height = w, h
 
       super
     end

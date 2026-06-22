@@ -21,7 +21,7 @@ module Conjuration
       delegate :first, :last, to: :children
 
       def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, **object, &block)
-        @id = id.to_sym
+        @id = id&.to_sym
         @object = object_hash || object
         @children = []
 
@@ -62,6 +62,11 @@ module Conjuration
       end
 
       def calculate_layout
+        # Per-pass caches for centered layouts; cleared each call so a
+        # re-layout after children change size doesn't reuse stale totals.
+        @children_width_with_gaps = nil
+        @children_height_with_gaps = nil
+
         if object.has_key?(:text)
           object.w, object.h = gtk.calcstringbox(object.text)
         end
@@ -102,7 +107,7 @@ module Conjuration
       end
 
       def method_missing(method_name, *args, &block)
-        if object.respond_to?(method_name, *args, &block)
+        if object.respond_to?(method_name)
           object.send(method_name, *args, &block)
         else
           super
@@ -150,7 +155,7 @@ module Conjuration
       end
 
       def interactive?
-        has_key?(:action)
+        visible && has_key?(:action)
       end
 
       def renderable?

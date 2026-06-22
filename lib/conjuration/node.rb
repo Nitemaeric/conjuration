@@ -22,6 +22,8 @@ module Conjuration
           send("#{key}=", value)
         elsif instance_variable_defined?("@#{key}")
           instance_variable_set("@#{key}", value)
+        else
+          raise ArgumentError, "#{self.class} has no attribute #{key.inspect} (define a #{key}= writer or initialize @#{key})"
         end
       end
     end

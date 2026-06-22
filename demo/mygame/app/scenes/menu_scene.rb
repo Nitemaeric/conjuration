@@ -1,6 +1,7 @@
 require_relative "basic_camera_scene"
 require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
+require_relative "zoom_scene"
 
 class MenuScene < Conjuration::Scene
   attr_reader :menu, :buttons
@@ -10,18 +11,16 @@ class MenuScene < Conjuration::Scene
 
     audio[:bgm] = { input: "sounds/bgm.mp3", looping: true, gain: 0.5 }
 
-    add_camera(:main)
-
     ui.node({
       x: grid.w / 2,
       y:  grid.h / 2 + 140,
       w: 256,
       anchor_x: 0.5,
       anchor_y: 1,
-    }, align: :stretch, gap: 20) do
+    }, align: :stretch, gap: 16) do
       node(
         {
-          h: 64,
+          h: 52,
           action: -> { change_scene(to: BasicCameraScene.new(:basic_camera)) },
           path: "sprites/button.png",
         },
@@ -41,7 +40,7 @@ class MenuScene < Conjuration::Scene
 
       node(
         {
-          h: 64,
+          h: 52,
           action: -> { change_scene(to: MultipleCamerasScene.new(:multiple_cameras)) },
           path: "sprites/button.png",
         },
@@ -61,7 +60,7 @@ class MenuScene < Conjuration::Scene
 
       node(
         {
-          h: 64,
+          h: 52,
           action: -> { change_scene(to: UIScene.new(:ui)) },
           path: "sprites/button.png",
         },
@@ -79,10 +78,30 @@ class MenuScene < Conjuration::Scene
         )
       end
 
+      node(
+        {
+          h: 52,
+          action: -> { change_scene(to: ZoomScene.new(:zoom)) },
+          path: "sprites/button.png",
+        },
+        id: :zoom,
+        justify: :center,
+        align: :center
+      ) do
+        node(
+          {
+            text: "Zoom",
+            r: 255,
+            g: 255,
+            b: 255
+          }
+        )
+      end
+
       if gtk.can_close_window?
         node(
           {
-            h: 64,
+            h: 52,
             action: -> { gtk.request_quit },
             path: "sprites/button.png"
           },
@@ -117,7 +136,7 @@ class MenuScene < Conjuration::Scene
   end
 
   def render
-    outputs.background_color = [52, 153, 218]
+    outputs.primitives << { x: grid.allscreen_x, y: grid.allscreen_y, w: grid.allscreen_w, h: grid.allscreen_h, path: :pixel, r: 52, g: 153, b: 218 }
 
     outputs.primitives << [
       {
