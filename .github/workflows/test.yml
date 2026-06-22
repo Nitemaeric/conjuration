@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v5
 
       # The built mruby-patched binary only changes when the pinned commit in
       # script/build-mruby.sh changes, so key the cache on that file's hash.
@@ -18,7 +18,7 @@ jobs:
       # in the key (this job pins ubuntu-latest).
       - name: Cache mruby-patched
         id: cache-mruby
-        uses: actions/cache@main
+        uses: actions/cache@v5
         with:
           path: tmp/mruby
           key: mruby-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('script/build-mruby.sh') }}
