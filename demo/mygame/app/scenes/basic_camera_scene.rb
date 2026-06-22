@@ -63,7 +63,11 @@ class BasicCameraScene < Conjuration::Scene
       focused_camera.look_at(x: focused_camera.current.x + inputs.left_right * 10, y: focused_camera.current.y + inputs.up_down * 10)
     end
 
-    focused_camera.shake if focused_camera && inputs.keyboard.key_down.space
+    if focused_camera && inputs.keyboard.key_down.space
+      # Shake along the target's orbital velocity, for a directional impact.
+      angle = Kernel.tick_count * 0.02
+      focused_camera.shake(0.8, direction: { x: -Math.sin(angle), y: Math.cos(angle) })
+    end
   end
 
   def update

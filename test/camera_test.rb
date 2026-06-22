@@ -163,3 +163,23 @@ def test_shake_offsets_view_within_magnitude(args, assert)
   assert.true!(v[:x].abs <= max, "shake x within magnitude")
   assert.true!(v[:y].abs <= max, "shake y within magnitude")
 end
+
+def test_directional_shake_oscillates_along_its_axis(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 }) # base view (0, 0)
+  cam.shake(1.0, direction: { x: 1, y: 0 })
+  v = cam.view_rect
+  assert.equal!(v[:y], 0, "a horizontal impact has no vertical shake")
+  assert.true!(v[:x].abs <= Conjuration::Camera::SHAKE_MAGNITUDE, "horizontal shake within magnitude")
+end
+
+def test_directional_shake_vertical_axis(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  cam.shake(1.0, direction: { x: 0, y: 1 })
+  assert.equal!(cam.view_rect[:x], 0, "a vertical impact has no horizontal shake")
+end
+
+def test_directional_shake_normalizes_the_direction(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  cam.shake(1.0, direction: { x: 10, y: 0 }) # length 10, not unit
+  assert.true!(cam.view_rect[:x].abs <= Conjuration::Camera::SHAKE_MAGNITUDE, "offset bounded despite a long direction vector")
+end

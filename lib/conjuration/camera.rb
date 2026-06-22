@@ -50,9 +50,12 @@ module Conjuration
     end
 
     # Add trauma (0..1) to shake the view. Stacks (capped at 1.0) and decays each
-    # tick; the offset scales with trauma squared, so it falls off smoothly.
-    def shake(amount = 0.6)
+    # tick; the offset scales with trauma squared, so it falls off smoothly. Pass
+    # a `direction:` vector (e.g. an impact's direction) to shake along that axis;
+    # omit it for an omnidirectional shake.
+    def shake(amount = 0.6, direction: nil)
       @trauma = [(@trauma || 0) + amount, 1.0].min
+      @shake_direction = normalize_direction(direction)
     end
 
     def to_world(x:, y:, w: nil, h: nil)
@@ -168,12 +171,30 @@ module Conjuration
       @trauma = [@trauma - SHAKE_DECAY, 0].max if @trauma && @trauma > 0
     end
 
-    # Random view offset for the current trauma, falling off with trauma squared.
+    # View offset for the current trauma, falling off with trauma squared. With a
+    # shake direction set, the offset oscillates along that axis (impact shake);
+    # otherwise it is omnidirectional.
     def shake_offset
       return [0, 0] unless @trauma && @trauma > 0
 
       magnitude = SHAKE_MAGNITUDE * @trauma * @trauma
-      [magnitude * (rand * 2 - 1), magnitude * (rand * 2 - 1)]
+
+      if @shake_direction
+        amount = magnitude * (rand * 2 - 1)
+        [amount * @shake_direction[:x], amount * @shake_direction[:y]]
+      else
+        [magnitude * (rand * 2 - 1), magnitude * (rand * 2 - 1)]
+      end
+    end
+
+    # Unit vector for a direction hash, or nil when absent or zero-length.
+    def normalize_direction(vector)
+      return nil unless vector
+
+      magnitude = Math.sqrt(vector[:x]**2 + vector[:y]**2)
+      return nil if magnitude.zero?
+
+      { x: vector[:x] / magnitude, y: vector[:y] / magnitude }
     end
 
     def perform_render
