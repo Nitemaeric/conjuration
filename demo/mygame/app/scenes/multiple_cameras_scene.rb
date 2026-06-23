@@ -2,8 +2,6 @@ class MultipleCamerasScene < Conjuration::Scene
   TILE_SIZE = 40
 
   def setup
-    gtk.set_cursor "sprites/cursor-none.png", 9, 4
-
     self.virtual_w = self.virtual_h = 2000
 
     left_camera = add_camera(:left, x: 0, y: 0, w: grid.w / 2)

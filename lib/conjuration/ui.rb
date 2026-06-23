@@ -14,6 +14,24 @@ module Conjuration
       @focused_node = node
     end
 
+    # Cursor sprites for hover / idle, each as [path, hotspot_x, hotspot_y]. The
+    # UI input loop applies them on focus change; leave nil to not touch the cursor.
+    def self.hover_cursor
+      @hover_cursor
+    end
+
+    def self.hover_cursor=(cursor)
+      @hover_cursor = cursor
+    end
+
+    def self.default_cursor
+      @default_cursor
+    end
+
+    def self.default_cursor=(cursor)
+      @default_cursor = cursor
+    end
+
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible

@@ -29,8 +29,6 @@ class HitStopScene < Conjuration::Scene
   POP_SCALE = 1.45     # crate scale punch on impact
 
   def setup
-    gtk.set_cursor "sprites/cursor-none.png", 9, 4
-
     add_camera(:main)
 
     reset_crates

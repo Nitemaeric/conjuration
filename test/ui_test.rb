@@ -166,3 +166,31 @@ def test_column_stretch_respects_per_side_padding(args, assert)
 
   assert.equal!(n1.object.w, 370, "stretched to inner width (400 - 5 - 25)")
 end
+
+# --- cursor globals (issue #1) ---
+
+def test_ui_cursor_globals_round_trip(args, assert)
+  saved_hover = Conjuration::UI.hover_cursor
+  saved_default = Conjuration::UI.default_cursor
+
+  Conjuration::UI.hover_cursor = ["sprites/hand.png", 6, 4]
+  Conjuration::UI.default_cursor = ["sprites/none.png", 9, 4]
+
+  assert.equal!(Conjuration::UI.hover_cursor, ["sprites/hand.png", 6, 4], "hover_cursor round-trips")
+  assert.equal!(Conjuration::UI.default_cursor, ["sprites/none.png", 9, 4], "default_cursor round-trips")
+ensure
+  Conjuration::UI.hover_cursor = saved_hover
+  Conjuration::UI.default_cursor = saved_default
+end
+
+# --- debug: invisible container bounds (issue #1) ---
+
+def test_non_renderable_nodes_are_the_containers(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container) do
+      node({ w: 50, h: 50, primitive_marker: :solid }, id: :box)
+    end
+  end
+
+  assert.equal!(ui.nodes.reject(&:renderable?).map(&:id), [:root, :container], "containers are non-renderable; the solid box renders")
+end

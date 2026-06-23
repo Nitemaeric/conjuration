@@ -2,8 +2,6 @@ class BasicCameraScene < Conjuration::Scene
   TILE_SIZE = 40
 
   def setup
-    gtk.set_cursor "sprites/cursor-none.png", 9, 4
-
     self.virtual_w = self.virtual_h = 2000
 
     add_camera(:main, speed: 30)

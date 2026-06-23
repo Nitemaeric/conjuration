@@ -11,6 +11,7 @@ module Conjuration
 
     def perform_setup
       ui.calculate_layout
+      gtk.set_cursor(*UI.default_cursor) if UI.default_cursor
 
       super
     end
@@ -25,12 +26,12 @@ module Conjuration
           end
         else
           UI.focused_node = nil
-          gtk.set_cursor "sprites/cursor-none.png", 9, 4
+          gtk.set_cursor(*UI.default_cursor) if UI.default_cursor
         end
       else
         UI.focused_node = ui.find_interactive_intersect(inputs.mouse)
 
-        gtk.set_cursor "sprites/hand-point.png", 6, 4 if UI.focused_node
+        gtk.set_cursor(*UI.hover_cursor) if UI.focused_node && UI.hover_cursor
       end
     end
 

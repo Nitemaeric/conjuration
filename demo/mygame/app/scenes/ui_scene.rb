@@ -2,8 +2,6 @@ class UIScene < Conjuration::Scene
   TILE_SIZE = 40
 
   def setup
-    gtk.set_cursor "sprites/cursor-none.png", 9, 4
-
     ui.node(grid.rect, id: :background, direction: :row) do
       (grid.w / TILE_SIZE).to_i.times do |column|
         node({ w: TILE_SIZE }) do
