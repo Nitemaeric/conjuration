@@ -28,6 +28,13 @@ class Hash
   end
 
   def center
+    # Defer to an explicit :center, exactly as left/right/top/bottom defer to
+    # their own keys above. DR's Geometry.rect_navigate stashes a computed center
+    # on intermediate { item:, center: } hashes and reads it back as `.center`;
+    # without this fallback our override recomputes from absent x/y/w/h, returns
+    # { x: nil, y: nil }, and the nav comparisons blow up on nil.
+    return self[:center] if key?(:center)
+
     {
       x: left && right  ? (left + right) / 2 : nil,
       y: top  && bottom ? (top + bottom) / 2 : nil

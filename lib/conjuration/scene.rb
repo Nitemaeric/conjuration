@@ -48,6 +48,7 @@ module Conjuration
     def perform_setup
       audio.clear
       UI.focused_node = nil
+      UI.focus_cursor[:w] = 0 # re-snap the highlight in the new scene
       setup if respond_to?(:setup)
 
       super
@@ -70,6 +71,9 @@ module Conjuration
 
       render if respond_to?(:render)
       outputs.primitives << ui.primitives
+
+      indicator = focus_indicator
+      outputs.primitives << indicator if indicator
 
       if debug?
         outputs.debug << ui.interactive_nodes.map do |node|

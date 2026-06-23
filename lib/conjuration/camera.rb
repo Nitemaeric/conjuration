@@ -214,6 +214,9 @@ module Conjuration
       # Camera HUD, positioned in viewport-local space.
       outputs.primitives << ui.primitives
 
+      indicator = focus_indicator
+      outputs.primitives << indicator if indicator
+
       if debug?
         outputs.debug << ui.interactive_nodes.map do |node|
           {

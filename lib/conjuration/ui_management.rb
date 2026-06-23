@@ -40,6 +40,13 @@ module Conjuration
     def update_focus_from_mouse
       hovered = ui.find_interactive_intersect(inputs.mouse)
 
+      # Scene + cameras share UI.focused_node and each runs this; the scene's input
+      # supers into the cameras', so it runs last. Only manage focus for this ui's
+      # own nodes, or an empty scene ui would clear focus owned by a camera (and
+      # reset its cursor) — which is why the Back button never showed the hand.
+      owns_focus = UI.focused_node && ui.interactive_nodes.include?(UI.focused_node)
+      return if hovered.nil? && !owns_focus
+
       if hovered != UI.focused_node
         UI.focused_node = hovered
 
@@ -54,26 +61,26 @@ module Conjuration
       trigger_focused_node if inputs.mouse.click && focused && focused.intersect_rect?(inputs.mouse)
     end
 
-    # Keyboard / controller moves focus spatially. The cursor is left as-is — it's
-    # a mouse affordance, irrelevant while navigating by key or d-pad.
+    # Keyboard / controller moves focus spatially via the engine's own
+    # Geometry.rect_navigate, over the nodes' own rects (using: :rect). The cursor
+    # is left as-is — a mouse affordance, irrelevant while navigating by key/pad.
     def update_focus_by_navigation
-      direction = navigation_direction
-      return unless direction
+      direction = inputs.key_down.directional_vector
+      return if direction.nil? || (direction.x == 0 && direction.y == 0)
 
-      target = ui.navigate(UI.focused_node, direction)
-      UI.focused_node = target if target
-    end
-
-    def navigation_direction
-      keyboard = inputs.keyboard.key_down
-      controller = inputs.controller_one.key_down
-
-      return :up if keyboard.up || controller.up
-      return :down if keyboard.down || controller.down
-      return :left if keyboard.left || controller.left
-      return :right if keyboard.right || controller.right
-
-      nil
+      if UI.focused_node
+        target = Geometry.rect_navigate(
+          rect: UI.focused_node,
+          rects: ui.interactive_nodes,
+          directional_vector: direction,
+          wrap_x: true,
+          wrap_y: true,
+          using: :rect
+        )
+        UI.focused_node = target if target
+      else
+        UI.focused_node = ui.interactive_nodes.first
+      end
     end
 
     # Enter or controller A. Space is intentionally excluded — games commonly bind
@@ -88,6 +95,31 @@ module Conjuration
       return unless ui.interactive_nodes.include?(UI.focused_node)
 
       instance_exec(&UI.focused_node.object.action)
+    end
+
+    # A single border that lerps to follow the focused node — the built-in
+    # selection highlight, so keyboard / pad focus is always visible (and mouse
+    # hover too). Returns nil unless THIS ui owns the focused node, since focus is
+    # a shared global reached by every scene + camera each tick.
+    def focus_indicator
+      focused = UI.focused_node
+      return unless focused && ui.interactive_nodes.include?(focused)
+
+      rect = focused.rect
+      x = rect.x - (rect.anchor_x || 0) * rect.w
+      y = rect.y - (rect.anchor_y || 0) * rect.h
+
+      cursor = UI.focus_cursor
+      if cursor[:w] == 0 # uninitialised / reset on scene change: snap, don't slide
+        cursor[:x], cursor[:y], cursor[:w], cursor[:h] = x, y, rect.w, rect.h
+      else
+        cursor[:x] = cursor[:x].lerp(x, 0.3)
+        cursor[:y] = cursor[:y].lerp(y, 0.3)
+        cursor[:w] = cursor[:w].lerp(rect.w, 0.3)
+        cursor[:h] = cursor[:h].lerp(rect.h, 0.3)
+      end
+
+      { x: cursor[:x] - 4, y: cursor[:y] - 4, w: cursor[:w] + 8, h: cursor[:h] + 8, r: 255, g: 220, b: 0 }.border!
     end
   end
 end
