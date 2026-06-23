@@ -124,6 +124,39 @@ module Conjuration
         nodes.select(&:interactive?)
       end
 
+      # The nearest interactive node from `from` in `direction` (:up/:down/:left/
+      # :right), by squared centre-distance. `from` nil starts at the first
+      # interactive node. DR's origin is bottom-left, so :up means a higher y.
+      def navigate(from, direction)
+        candidates = interactive_nodes
+        return candidates.first if from.nil?
+
+        origin = from.object.center
+
+        in_direction = candidates.reject { |node| node.equal?(from) }.select do |node|
+          centre = node.object.center
+          case direction
+          when :up    then centre.y > origin.y
+          when :down  then centre.y < origin.y
+          when :left  then centre.x < origin.x
+          when :right then centre.x > origin.x
+          end
+        end
+
+        nearest = nil
+        nearest_distance = nil
+        in_direction.each do |node|
+          centre = node.object.center
+          distance = (centre.x - origin.x)**2 + (centre.y - origin.y)**2
+          if nearest_distance.nil? || distance < nearest_distance
+            nearest = node
+            nearest_distance = distance
+          end
+        end
+
+        nearest
+      end
+
       def method_missing(method_name, *args, &block)
         if object.respond_to?(method_name)
           object.send(method_name, *args, &block)

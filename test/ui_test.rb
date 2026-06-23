@@ -194,3 +194,45 @@ def test_non_renderable_nodes_are_the_containers(args, assert)
 
   assert.equal!(ui.nodes.reject(&:renderable?).map(&:id), [:root, :container], "containers are non-renderable; the solid box renders")
 end
+
+# --- keyboard / controller navigation (issue #1) ---
+
+# Five interactive nodes, then overwrite the auto-layout with a known cross of
+# centres (DR origin is bottom-left, so :north has the higher y).
+def cross_ui
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container) do
+      node({ w: 40, h: 40, action: -> {} }, id: :north)
+      node({ w: 40, h: 40, action: -> {} }, id: :south)
+      node({ w: 40, h: 40, action: -> {} }, id: :west)
+      node({ w: 40, h: 40, action: -> {} }, id: :east)
+      node({ w: 40, h: 40, action: -> {} }, id: :middle)
+    end
+  end
+
+  ui.find(:north).object.merge!(x: 200, y: 300, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:south).object.merge!(x: 200, y: 100, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:west).object.merge!(x: 100, y: 200, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:east).object.merge!(x: 300, y: 200, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:middle).object.merge!(x: 200, y: 200, anchor_x: 0.5, anchor_y: 0.5)
+  ui
+end
+
+def test_navigate_picks_nearest_in_each_direction(args, assert)
+  ui = cross_ui
+  middle = ui.find(:middle)
+
+  assert.equal!(ui.navigate(middle, :up).id, :north, "up -> higher y")
+  assert.equal!(ui.navigate(middle, :down).id, :south, "down -> lower y")
+  assert.equal!(ui.navigate(middle, :left).id, :west, "left -> lower x")
+  assert.equal!(ui.navigate(middle, :right).id, :east, "right -> higher x")
+end
+
+def test_navigate_from_nil_returns_first_interactive(args, assert)
+  assert.equal!(cross_ui.navigate(nil, :up).id, :north, "nil from -> first interactive node")
+end
+
+def test_navigate_returns_nil_when_nothing_in_direction(args, assert)
+  ui = cross_ui
+  assert.equal!(ui.navigate(ui.find(:north), :up), nil, "nothing above the topmost node")
+end
