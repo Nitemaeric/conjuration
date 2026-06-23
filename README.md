@@ -26,7 +26,7 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
   - [x] Multiple cameras
   - [ ] Minimaps
   - [x] Camera shake
-  - [ ] Impact frames (Hit stops)
+  - [x] Impact frames (Hit stops)
 - [x] Rendering
   - [x] Virtual scenes (worlds beyond the GPU texture limit)
   - [x] Viewport culling

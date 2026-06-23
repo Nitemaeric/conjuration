@@ -2,6 +2,7 @@ require_relative "basic_camera_scene"
 require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
 require_relative "zoom_scene"
+require_relative "hit_stop_scene"
 
 class MenuScene < Conjuration::Scene
   attr_reader :menu, :buttons
@@ -17,10 +18,10 @@ class MenuScene < Conjuration::Scene
       w: 256,
       anchor_x: 0.5,
       anchor_y: 1,
-    }, align: :stretch, gap: 16) do
+    }, align: :stretch, gap: 14) do
       node(
         {
-          h: 52,
+          h: 46,
           action: -> { change_scene(to: BasicCameraScene.new(:basic_camera)) },
           path: "sprites/button.png",
         },
@@ -40,7 +41,7 @@ class MenuScene < Conjuration::Scene
 
       node(
         {
-          h: 52,
+          h: 46,
           action: -> { change_scene(to: MultipleCamerasScene.new(:multiple_cameras)) },
           path: "sprites/button.png",
         },
@@ -60,7 +61,7 @@ class MenuScene < Conjuration::Scene
 
       node(
         {
-          h: 52,
+          h: 46,
           action: -> { change_scene(to: UIScene.new(:ui)) },
           path: "sprites/button.png",
         },
@@ -80,7 +81,7 @@ class MenuScene < Conjuration::Scene
 
       node(
         {
-          h: 52,
+          h: 46,
           action: -> { change_scene(to: ZoomScene.new(:zoom)) },
           path: "sprites/button.png",
         },
@@ -98,10 +99,30 @@ class MenuScene < Conjuration::Scene
         )
       end
 
+      node(
+        {
+          h: 46,
+          action: -> { change_scene(to: HitStopScene.new(:hit_stop)) },
+          path: "sprites/button.png",
+        },
+        id: :hit_stop,
+        justify: :center,
+        align: :center
+      ) do
+        node(
+          {
+            text: "Hit Stop",
+            r: 255,
+            g: 255,
+            b: 255
+          }
+        )
+      end
+
       if gtk.can_close_window?
         node(
           {
-            h: 52,
+            h: 46,
             action: -> { gtk.request_quit },
             path: "sprites/button.png"
           },

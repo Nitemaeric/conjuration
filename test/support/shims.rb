@@ -13,9 +13,12 @@
 #     `hash[:x]`), which extensions/hash.rb and ui.rb rely on.
 
 # game.rb mixes this in at load time. DragonRuby's real AttrGTK
-# (dragon/attr_gtk.rb in the contrib repo) wires up args/state/outputs/etc.; the
-# layout + camera math under test never touches it, so an empty module suffices.
-module AttrGTK; end
+# (dragon/attr_gtk.rb in the contrib repo) wires up args/state/outputs/etc. Most
+# tests never touch it, but the hit-stop test instantiates a Game (which assigns
+# `args` in its initializer), so expose that one accessor.
+module AttrGTK
+  attr_accessor :args
+end
 
 # DragonRuby exposes hash values as methods: `h.x` reads `h[:x]`, `h.x = v`
 # writes it. The framework leans on this throughout (rects, primitives, the

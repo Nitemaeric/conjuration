@@ -10,9 +10,21 @@ module Conjuration
       self.debug = false
     end
 
+    # Freeze the game for `frames` ticks: input and update are skipped while
+    # rendering continues (a hit stop / impact freeze). Pair with camera shake
+    # for impact effects.
+    def hit_stop(frames)
+      @hit_stop = frames
+    end
+
     def tick
-      perform_input
-      perform_update
+      if @hit_stop && @hit_stop > 0
+        @hit_stop -= 1
+      else
+        perform_input
+        perform_update
+      end
+
       perform_render
     end
 
