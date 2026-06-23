@@ -104,3 +104,65 @@ def test_interactive_nodes_require_visible_action(args, assert)
 
   assert.equal!(ui.interactive_nodes.map(&:id), [:button], "only the node with an action is interactive")
 end
+
+# --- justify: :between / :around / :evenly (issue #1) ---
+# Container inner main-axis = 400; two 100-tall/wide children => 200 free.
+
+def test_column_between_pins_children_to_edges(args, assert)
+  c = build_container(direction: :column, justify: :between, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  # spacing = 200 / (2 - 1); first at the top edge, last at the bottom edge.
+  assert.equal!([n1.object.y, n1.object.anchor_y], [400, 1], "n1 pinned to the top")
+  assert.equal!([n2.object.y, n2.object.anchor_y], [100, 1], "n2 pinned to the bottom")
+end
+
+def test_column_around_splits_space_around_each(args, assert)
+  c = build_container(direction: :column, justify: :around, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  # spacing = 200 / 2 = 100; leading = 50 before the first child.
+  assert.equal!(n1.object.y, 350, "n1 down by half a spacing")
+  assert.equal!(n2.object.y, 150, "n2 a full spacing below n1")
+end
+
+def test_column_evenly_equalizes_every_gap(args, assert)
+  c = build_container(direction: :column, justify: :evenly, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  # free 200 / (2 + 1) = 66.67 before, between, and after (DR's `/` is float).
+  assert.close!(n1.object.y, 333.333, "n1 down by one gap")
+  assert.close!(n2.object.y, 166.667, "n2 one gap below n1")
+end
+
+def test_row_between_pins_children_to_edges(args, assert)
+  c = build_container(direction: :row, justify: :between, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  assert.equal!([n1.object.x, n1.object.anchor_x], [0, 0], "n1 pinned to the left")
+  assert.equal!(n2.object.x, 300, "n2 pinned to the right")
+end
+
+# --- per-side padding (issue #1) ---
+
+def test_column_array_padding_is_css_shorthand(args, assert)
+  # [20, 10] => 20 left/right, 10 top/bottom.
+  c = build_container(direction: :column, justify: :start, align: :start, padding: [20, 10], &two_solids)
+  n1 = c.find(:n1)
+
+  assert.equal!([n1.object.x, n1.object.y], [20, 390], "x inset by left:20, y inset by top:10")
+end
+
+def test_column_hash_padding_applies_per_side(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, padding: { left: 5, top: 15, right: 25, bottom: 35 }, &two_solids)
+  n1 = c.find(:n1)
+
+  assert.equal!([n1.object.x, n1.object.y], [5, 385], "x by left:5, y by top:15")
+end
+
+def test_column_stretch_respects_per_side_padding(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :stretch, padding: { left: 5, right: 25 }, &two_solids)
+  n1 = c.find(:n1)
+
+  assert.equal!(n1.object.w, 370, "stretched to inner width (400 - 5 - 25)")
+end

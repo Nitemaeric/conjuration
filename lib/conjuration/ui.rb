@@ -178,26 +178,27 @@ module Conjuration
         case justify
         when :start
           child.object.anchor_y = 1
-          child.object.y = index.zero? ? object.top - padding : children[index - 1].object.bottom - gap
+          child.object.y = index.zero? ? object.top - padding_top : children[index - 1].object.bottom - gap
         when :center
           if children.count == 1
             child.object.anchor_y = 0.5
             child.object.y = object.center.y
           else
-            @children_height_with_gaps ||= (children.count - 1) * gap + children.sum { |child| child.object.h }
+            @children_height_with_gaps ||= (children.count - 1) * gap + sum_main_size(children, :h)
 
             child.object.anchor_y = 1
             child.object.y = index.zero? ? object.top - object.h / 2 + @children_height_with_gaps / 2 : children[index - 1].object.bottom - gap
           end
         when :end
           child.object.anchor_y = 0
-          child.object.y = index.zero? ? object.bottom + padding : children[index - 1].object.top + gap
-        when :between
-          # I need to know the total height of all children
-        when :around
-          # I need to know the total height of all children
-        when :evenly
-          # I need to know the total height of all children
+          child.object.y = index.zero? ? object.bottom + padding_bottom : children[index - 1].object.top + gap
+        when :between, :around, :evenly
+          inner = object.h - padding_top - padding_bottom
+          free = inner - sum_main_size(children, :h)
+          spacing, leading = free_space_distribution(free, children.count)
+
+          child.object.anchor_y = 1
+          child.object.y = index.zero? ? object.top - padding_top - leading : children[index - 1].object.bottom - spacing
         end
       end
 
@@ -206,17 +207,17 @@ module Conjuration
         case align
         when :start
           child.object.anchor_x = 0
-          child.object.x = object.left + padding
+          child.object.x = object.left + padding_left
         when :center
           child.object.anchor_x = 0.5
           child.object.x = object.center.x
         when :end
           child.object.anchor_x = 1
-          child.object.x = object.right - padding
+          child.object.x = object.right - padding_right
         when :stretch
           child.object.anchor_x = 0.5
           child.object.x = object.center.x
-          child.object.w = object.w - 2 * padding
+          child.object.w = object.w - padding_left - padding_right
         end
       end
 
@@ -225,24 +226,27 @@ module Conjuration
         case justify
         when :start
           child.object.anchor_x = 0
-          child.object.x = index.zero? ? object.left + padding : children[index - 1].object.right + gap
+          child.object.x = index.zero? ? object.left + padding_left : children[index - 1].object.right + gap
         when :center
           if children.count == 1
             child.object.anchor_x = 0.5
             child.object.x = object.center.x
           else
-            @children_width_with_gaps ||= (children.count - 1) * gap + children.sum { |child| child.object.w }
+            @children_width_with_gaps ||= (children.count - 1) * gap + sum_main_size(children, :w)
 
             child.object.anchor_x = 0
             child.object.x = index.zero? ? object.left + object.w / 2 - @children_width_with_gaps / 2 : children[index - 1].object.right + gap
           end
         when :end
           child.object.anchor_x = 1
-          child.object.x = index.zero? ? object.right - padding : children[index - 1].object.left - gap
-        when :between
+          child.object.x = index.zero? ? object.right - padding_right : children[index - 1].object.left - gap
+        when :between, :around, :evenly
+          inner = object.w - padding_left - padding_right
+          free = inner - sum_main_size(children, :w)
+          spacing, leading = free_space_distribution(free, children.count)
 
-        when :around
-
+          child.object.anchor_x = 0
+          child.object.x = index.zero? ? object.left + padding_left + leading : children[index - 1].object.right + spacing
         end
       end
 
@@ -251,18 +255,64 @@ module Conjuration
         case align
         when :start
           child.object.anchor_y = 1
-          child.object.y = object.top - padding
+          child.object.y = object.top - padding_top
         when :center
           child.object.anchor_y = 0.5
           child.object.y = object.center.y
         when :end
           child.object.anchor_y = 0
-          child.object.y = object.bottom + padding
+          child.object.y = object.bottom + padding_bottom
         when :stretch
           child.object.anchor_y = 0.5
           child.object.y = object.center.y
-          child.object.h = object.h - 2 * padding
+          child.object.h = object.h - padding_top - padding_bottom
         end
+      end
+
+      # justify: :between/:around/:evenly distribute free main-axis space. Returns
+      # [spacing-between-children, leading-before-the-first-child].
+      def free_space_distribution(free, count)
+        case justify
+        when :between then [count > 1 ? free / (count - 1) : 0, 0]
+        when :around
+          spacing = free / count
+          [spacing, spacing / 2]
+        when :evenly
+          spacing = free / (count + 1)
+          [spacing, spacing]
+        end
+      end
+
+      # Sum a sizing axis (:w/:h) across children. Folded explicitly because the
+      # mruby build the tests run under has no Enumerable#sum.
+      def sum_main_size(children, axis)
+        children.inject(0) { |total, child| total + child.object[axis] }
+      end
+
+      # padding may be a scalar (all sides), [x, y] (CSS shorthand: x = left/right,
+      # y = top/bottom), or a per-side hash. Resolve to explicit sides.
+      def normalized_padding
+        case padding
+        when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
+        when Hash  then { left: padding[:left] || 0, right: padding[:right] || 0, top: padding[:top] || 0, bottom: padding[:bottom] || 0 }
+        else            { left: padding, right: padding, top: padding, bottom: padding }
+        end
+      end
+
+      def padding_left
+        normalized_padding[:left]
+      end
+
+      def padding_right
+        normalized_padding[:right]
+      end
+
+      def padding_top
+        normalized_padding[:top]
+      end
+
+      def padding_bottom
+        normalized_padding[:bottom]
       end
     end
   end
