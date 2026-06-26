@@ -8,8 +8,6 @@ class MenuScene < Conjuration::Scene
   attr_reader :menu, :buttons
 
   def setup
-    gtk.set_cursor "sprites/cursor-none.png", 9, 4
-
     audio[:bgm] = { input: "sounds/bgm.mp3", looping: true, gain: 0.5 }
 
     ui.node({

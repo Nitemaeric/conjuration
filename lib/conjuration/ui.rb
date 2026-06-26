@@ -14,6 +14,28 @@ module Conjuration
       @focused_node = node
     end
 
+    # [path, hotspot_x, hotspot_y]; applied by the input loop on focus change.
+    def self.hover_cursor
+      @hover_cursor
+    end
+
+    def self.hover_cursor=(cursor)
+      @hover_cursor = cursor
+    end
+
+    def self.default_cursor
+      @default_cursor
+    end
+
+    def self.default_cursor=(cursor)
+      @default_cursor = cursor
+    end
+
+    # Lerp state for the focus indicator (the highlight that trails focused_node).
+    def self.focus_cursor
+      @focus_cursor ||= { x: 0, y: 0, w: 0, h: 0 }
+    end
+
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible
@@ -106,6 +128,40 @@ module Conjuration
         nodes.select(&:interactive?)
       end
 
+      # The nearest interactive node within a 45-degree cone of `direction`. For
+      # true row/column grids, DR's grid-based Geometry.rect_navigate is the tool;
+      # it's global, so call it directly rather than wrapping it here.
+      def spatial_navigate(from, direction)
+        return interactive_nodes.first if from.nil?
+
+        origin = from.rect.center
+        best = nil
+        best_distance = nil
+
+        interactive_nodes.each do |node|
+          next if node.equal?(from)
+
+          centre = node.rect.center
+          dx = centre.x - origin.x
+          dy = centre.y - origin.y
+
+          # Inside a 45-degree cone of the direction: the projection along it must
+          # be positive and at least as large as the perpendicular offset.
+          along = dx * direction.x + dy * direction.y
+          next unless along > 0
+          across = (dx * direction.y - dy * direction.x).abs
+          next if along < across
+
+          distance = dx * dx + dy * dy
+          if best_distance.nil? || distance < best_distance
+            best = node
+            best_distance = distance
+          end
+        end
+
+        best
+      end
+
       def method_missing(method_name, *args, &block)
         if object.respond_to?(method_name)
           object.send(method_name, *args, &block)
@@ -127,7 +183,6 @@ module Conjuration
       def anchor_y
         object.anchor_y
       end
-      # -----
 
       def has_key?(key)
         object.has_key?(key)
@@ -173,96 +228,137 @@ module Conjuration
 
       private
 
-      # Top to Bottom of vertical children
       def calculate_column_justify(child, children, index)
         case justify
         when :start
           child.object.anchor_y = 1
-          child.object.y = index.zero? ? object.top - padding : children[index - 1].object.bottom - gap
+          child.object.y = index.zero? ? object.top - padding_top : children[index - 1].object.bottom - gap
         when :center
           if children.count == 1
             child.object.anchor_y = 0.5
             child.object.y = object.center.y
           else
-            @children_height_with_gaps ||= (children.count - 1) * gap + children.sum { |child| child.object.h }
+            @children_height_with_gaps ||= (children.count - 1) * gap + sum_main_size(children, :h)
 
             child.object.anchor_y = 1
             child.object.y = index.zero? ? object.top - object.h / 2 + @children_height_with_gaps / 2 : children[index - 1].object.bottom - gap
           end
         when :end
           child.object.anchor_y = 0
-          child.object.y = index.zero? ? object.bottom + padding : children[index - 1].object.top + gap
-        when :between
-          # I need to know the total height of all children
-        when :around
-          # I need to know the total height of all children
-        when :evenly
-          # I need to know the total height of all children
+          child.object.y = index.zero? ? object.bottom + padding_bottom : children[index - 1].object.top + gap
+        when :between, :around, :evenly
+          inner = object.h - padding_top - padding_bottom
+          free = inner - sum_main_size(children, :h)
+          spacing, leading = free_space_distribution(free, children.count)
+
+          child.object.anchor_y = 1
+          child.object.y = index.zero? ? object.top - padding_top - leading : children[index - 1].object.bottom - spacing
         end
       end
 
-      # Left to Right align of vertical children
       def calculate_column_align(child)
         case align
         when :start
           child.object.anchor_x = 0
-          child.object.x = object.left + padding
+          child.object.x = object.left + padding_left
         when :center
           child.object.anchor_x = 0.5
           child.object.x = object.center.x
         when :end
           child.object.anchor_x = 1
-          child.object.x = object.right - padding
+          child.object.x = object.right - padding_right
         when :stretch
           child.object.anchor_x = 0.5
           child.object.x = object.center.x
-          child.object.w = object.w - 2 * padding
+          child.object.w = object.w - padding_left - padding_right
         end
       end
 
-      # Left to Right of horizontal children
       def calculate_row_justify(child, children, index)
         case justify
         when :start
           child.object.anchor_x = 0
-          child.object.x = index.zero? ? object.left + padding : children[index - 1].object.right + gap
+          child.object.x = index.zero? ? object.left + padding_left : children[index - 1].object.right + gap
         when :center
           if children.count == 1
             child.object.anchor_x = 0.5
             child.object.x = object.center.x
           else
-            @children_width_with_gaps ||= (children.count - 1) * gap + children.sum { |child| child.object.w }
+            @children_width_with_gaps ||= (children.count - 1) * gap + sum_main_size(children, :w)
 
             child.object.anchor_x = 0
             child.object.x = index.zero? ? object.left + object.w / 2 - @children_width_with_gaps / 2 : children[index - 1].object.right + gap
           end
         when :end
           child.object.anchor_x = 1
-          child.object.x = index.zero? ? object.right - padding : children[index - 1].object.left - gap
-        when :between
+          child.object.x = index.zero? ? object.right - padding_right : children[index - 1].object.left - gap
+        when :between, :around, :evenly
+          inner = object.w - padding_left - padding_right
+          free = inner - sum_main_size(children, :w)
+          spacing, leading = free_space_distribution(free, children.count)
 
-        when :around
-
+          child.object.anchor_x = 0
+          child.object.x = index.zero? ? object.left + padding_left + leading : children[index - 1].object.right + spacing
         end
       end
 
-      # Top to Bottom align of horizontal children
       def calculate_row_align(child)
         case align
         when :start
           child.object.anchor_y = 1
-          child.object.y = object.top - padding
+          child.object.y = object.top - padding_top
         when :center
           child.object.anchor_y = 0.5
           child.object.y = object.center.y
         when :end
           child.object.anchor_y = 0
-          child.object.y = object.bottom + padding
+          child.object.y = object.bottom + padding_bottom
         when :stretch
           child.object.anchor_y = 0.5
           child.object.y = object.center.y
-          child.object.h = object.h - 2 * padding
+          child.object.h = object.h - padding_top - padding_bottom
         end
+      end
+
+      def free_space_distribution(free, count)
+        case justify
+        when :between then [count > 1 ? free / (count - 1) : 0, 0]
+        when :around
+          spacing = free / count
+          [spacing, spacing / 2]
+        when :evenly
+          spacing = free / (count + 1)
+          [spacing, spacing]
+        end
+      end
+
+      # Folded explicitly: the mruby build the tests run under has no Enumerable#sum.
+      def sum_main_size(children, axis)
+        children.inject(0) { |total, child| total + child.object[axis] }
+      end
+
+      def normalized_padding
+        case padding
+        when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
+        when Hash  then { left: padding[:left] || 0, right: padding[:right] || 0, top: padding[:top] || 0, bottom: padding[:bottom] || 0 }
+        else            { left: padding, right: padding, top: padding, bottom: padding }
+        end
+      end
+
+      def padding_left
+        normalized_padding[:left]
+      end
+
+      def padding_right
+        normalized_padding[:right]
+      end
+
+      def padding_top
+        normalized_padding[:top]
+      end
+
+      def padding_bottom
+        normalized_padding[:bottom]
       end
     end
   end

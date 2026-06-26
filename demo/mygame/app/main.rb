@@ -1,4 +1,3 @@
-require "app/lib/frame-timer.rb"
 require "app/drenv_bundle.rb"
 
 require_relative "game"
