@@ -61,26 +61,16 @@ module Conjuration
       trigger_focused_node if inputs.mouse.click && focused && focused.intersect_rect?(inputs.mouse)
     end
 
-    # Keyboard / controller moves focus spatially via the engine's own
-    # Geometry.rect_navigate, over the nodes' own rects (using: :rect). The cursor
-    # is left as-is — a mouse affordance, irrelevant while navigating by key/pad.
+    # Keyboard / controller moves focus by direction, via spatial_navigate
+    # (nearest interactive node within a cone of the direction) — the right fit
+    # for free-form layouts. The cursor is left as-is — a mouse affordance,
+    # irrelevant while navigating by key/pad.
     def update_focus_by_navigation
       direction = inputs.key_down.directional_vector
       return if direction.nil? || (direction.x == 0 && direction.y == 0)
 
-      if UI.focused_node
-        target = Geometry.rect_navigate(
-          rect: UI.focused_node,
-          rects: ui.interactive_nodes,
-          directional_vector: direction,
-          wrap_x: true,
-          wrap_y: true,
-          using: :rect
-        )
-        UI.focused_node = target if target
-      else
-        UI.focused_node = ui.interactive_nodes.first
-      end
+      target = ui.spatial_navigate(UI.focused_node, direction)
+      UI.focused_node = target if target
     end
 
     # Enter or controller A. Space is intentionally excluded — games commonly bind

@@ -194,3 +194,53 @@ def test_non_renderable_nodes_are_the_containers(args, assert)
 
   assert.equal!(ui.nodes.reject(&:renderable?).map(&:id), [:root, :container], "containers are non-renderable; the solid box renders")
 end
+
+# --- spatial navigation ---
+
+# Five interactive nodes placed in a cross around (200, 200). DR origin is
+# bottom-left, so :north has the higher y.
+def navigation_cross
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container) do
+      node({ w: 40, h: 40, action: -> {} }, id: :north)
+      node({ w: 40, h: 40, action: -> {} }, id: :south)
+      node({ w: 40, h: 40, action: -> {} }, id: :west)
+      node({ w: 40, h: 40, action: -> {} }, id: :east)
+      node({ w: 40, h: 40, action: -> {} }, id: :middle)
+    end
+  end
+  ui.find(:north).object.merge!(x: 200, y: 300, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:south).object.merge!(x: 200, y: 100, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:west).object.merge!(x: 100, y: 200, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:east).object.merge!(x: 300, y: 200, anchor_x: 0.5, anchor_y: 0.5)
+  ui.find(:middle).object.merge!(x: 200, y: 200, anchor_x: 0.5, anchor_y: 0.5)
+  ui
+end
+
+def test_spatial_navigate_picks_the_node_in_each_direction(args, assert)
+  ui = navigation_cross
+  middle = ui.find(:middle)
+
+  assert.equal!(ui.spatial_navigate(middle, { x: 0, y: 1 }).id, :north, "up")
+  assert.equal!(ui.spatial_navigate(middle, { x: 0, y: -1 }).id, :south, "down")
+  assert.equal!(ui.spatial_navigate(middle, { x: -1, y: 0 }).id, :west, "left")
+  assert.equal!(ui.spatial_navigate(middle, { x: 1, y: 0 }).id, :east, "right")
+end
+
+def test_spatial_navigate_reaches_an_off_axis_node(args, assert)
+  # The case grid nav can't do: a node up-and-to-the-right is reachable via
+  # "right" (within a 45-degree cone), not just a same-row node.
+  ui = navigation_cross
+  ui.find(:east).object.merge!(x: 300, y: 260)
+
+  assert.equal!(ui.spatial_navigate(ui.find(:middle), { x: 1, y: 0 }).id, :east, "right reaches the off-row node")
+end
+
+def test_spatial_navigate_from_nil_returns_the_first_interactive(args, assert)
+  assert.equal!(navigation_cross.spatial_navigate(nil, { x: 1, y: 0 }).id, :north, "nil from -> first interactive node")
+end
+
+def test_spatial_navigate_returns_nil_when_nothing_is_in_the_direction(args, assert)
+  ui = navigation_cross
+  assert.equal!(ui.spatial_navigate(ui.find(:north), { x: 0, y: 1 }), nil, "nothing above the topmost node")
+end

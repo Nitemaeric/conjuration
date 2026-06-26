@@ -129,6 +129,46 @@ module Conjuration
         nodes.select(&:interactive?)
       end
 
+      # Focus navigation: the nearest interactive node whose centre lies within a
+      # 45-degree cone of `direction` ({ x:, y: }) from `from` (nil starts at the
+      # first interactive node). Returns the next node to focus, or nil if there's
+      # nowhere to go — "the nearest thing that way", which is what free-form
+      # layouts want.
+      #
+      # For genuinely grid-shaped menus, DR's Geometry.rect_navigate keys off
+      # row/column alignment; it's globally accessible, so reach for it directly
+      # rather than wrapping it here.
+      def spatial_navigate(from, direction)
+        return interactive_nodes.first if from.nil?
+
+        origin = from.rect.center
+        best = nil
+        best_distance = nil
+
+        interactive_nodes.each do |node|
+          next if node.equal?(from)
+
+          centre = node.rect.center
+          dx = centre.x - origin.x
+          dy = centre.y - origin.y
+
+          # Inside a 45-degree cone of the direction: the projection along it must
+          # be positive and at least as large as the perpendicular offset.
+          along = dx * direction.x + dy * direction.y
+          next unless along > 0
+          across = (dx * direction.y - dy * direction.x).abs
+          next if along < across
+
+          distance = dx * dx + dy * dy
+          if best_distance.nil? || distance < best_distance
+            best = node
+            best_distance = distance
+          end
+        end
+
+        best
+      end
+
       def method_missing(method_name, *args, &block)
         if object.respond_to?(method_name)
           object.send(method_name, *args, &block)
