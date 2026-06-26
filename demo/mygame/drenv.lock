@@ -2,9 +2,16 @@
 # Run `drenv bundle` to update it.
 
 lockfile_version = 1
-manifest_digest = "sha256-4a901333a75b029be31bd20b7bb381ad109a9dfbec34eb2779200c8169d0c4ef"
+manifest_digest = "sha256-dffa450eb597c4546f9c8950111dc509f514a5f39aeaa3ff818ecca916ddb9fd"
 
 [[dependencies]]
 name = "conjuration"
 source = "path:../../lib"
 require = ["vendor/conjuration/conjuration.rb"]
+
+[[dependencies]]
+name = "frame-timer"
+source = "github:owenbutler/dr-frame-timer"
+ref = "c93f3140044201e0f3edaa72a6817a69d48de84e"
+require = ["vendor/frame-timer/frame-timer.rb"]
+integrity = "sha256-98a254b10aad875ce04b04137f741a4935ec7196b831d82be425fe08a161c968"
