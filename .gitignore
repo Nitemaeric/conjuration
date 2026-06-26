@@ -30,6 +30,7 @@ demo/font.ttf
 demo/tmp/
 demo/builds/
 demo/logs/
+demo/mygame/errors/
 demo/samples/
 demo/docs/
 demo/.dragonruby/
