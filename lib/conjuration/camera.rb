@@ -227,8 +227,8 @@ module Conjuration
           }.border!
         end
 
-        # Invisible layout containers (no primitive of their own) in magenta —
-        # only where they resolve to real bounds (the root has none).
+        # Invisible layout containers, in magenta — only where they resolve to
+        # real bounds (the root has none).
         container_bounds = ui.nodes.reject(&:renderable?).map(&:rect).select { |rect| rect[:w] && rect[:h] }
         outputs.debug << container_bounds.map { |rect| { **rect, r: 255, g: 0, b: 255 }.border! }
       end

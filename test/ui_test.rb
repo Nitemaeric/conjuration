@@ -90,7 +90,6 @@ end
 def test_primitives_excludes_non_renderable_container(args, assert)
   c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
 
-  # The container has no primitive_marker, so only the two solid children render.
   assert.equal!(c.primitives.length, 2, "only renderable nodes are primitives")
 end
 

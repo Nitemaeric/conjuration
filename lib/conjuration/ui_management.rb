@@ -36,7 +36,6 @@ module Conjuration
       ui.calculate_layout if events.orientation_changed
     end
 
-    # Mouse drives focus: hover to focus (swapping the cursor), click to trigger.
     def update_focus_from_mouse
       hovered = ui.find_interactive_intersect(inputs.mouse)
 
@@ -61,10 +60,8 @@ module Conjuration
       trigger_focused_node if inputs.mouse.click && focused && focused.intersect_rect?(inputs.mouse)
     end
 
-    # Keyboard / controller moves focus by direction, via spatial_navigate
-    # (nearest interactive node within a cone of the direction) — the right fit
-    # for free-form layouts. The cursor is left as-is — a mouse affordance,
-    # irrelevant while navigating by key/pad.
+    # The cursor is left as-is here — a mouse affordance, irrelevant when
+    # navigating by key/pad.
     def update_focus_by_navigation
       direction = inputs.key_down.directional_vector
       return if direction.nil? || (direction.x == 0 && direction.y == 0)
@@ -73,24 +70,23 @@ module Conjuration
       UI.focused_node = target if target
     end
 
-    # Enter or controller A. Space is intentionally excluded — games commonly bind
-    # it (the hit-stop demo swings with it), so confirming on it would double-fire.
+    # Space is intentionally excluded — games commonly bind it (the hit-stop demo
+    # swings with it), so confirming on it would double-fire.
     def confirm_pressed?
       inputs.keyboard.key_down.enter || inputs.controller_one.key_down.a
     end
 
-    # Run the focused node's action, but only if it belongs to THIS ui: focus is a
-    # shared global, so a scene and its cameras all reach here each tick.
+    # Only triggers if the focused node belongs to THIS ui: focus is a shared
+    # global, so a scene and its cameras all reach here each tick.
     def trigger_focused_node
       return unless ui.interactive_nodes.include?(UI.focused_node)
 
       instance_exec(&UI.focused_node.object.action)
     end
 
-    # A single border that lerps to follow the focused node — the built-in
-    # selection highlight, so keyboard / pad focus is always visible (and mouse
-    # hover too). Returns nil unless THIS ui owns the focused node, since focus is
-    # a shared global reached by every scene + camera each tick.
+    # The built-in focus highlight, so keyboard/pad focus is always visible. nil
+    # unless THIS ui owns the focused node (focus is a shared global, reached by
+    # every scene + camera each tick).
     def focus_indicator
       focused = UI.focused_node
       return unless focused && ui.interactive_nodes.include?(focused)

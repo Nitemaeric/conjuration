@@ -14,8 +14,7 @@ module Conjuration
       @focused_node = node
     end
 
-    # Cursor sprites for hover / idle, each as [path, hotspot_x, hotspot_y]. The
-    # UI input loop applies them on focus change; leave nil to not touch the cursor.
+    # [path, hotspot_x, hotspot_y]; applied by the input loop on focus change.
     def self.hover_cursor
       @hover_cursor
     end
@@ -129,15 +128,9 @@ module Conjuration
         nodes.select(&:interactive?)
       end
 
-      # Focus navigation: the nearest interactive node whose centre lies within a
-      # 45-degree cone of `direction` ({ x:, y: }) from `from` (nil starts at the
-      # first interactive node). Returns the next node to focus, or nil if there's
-      # nowhere to go — "the nearest thing that way", which is what free-form
-      # layouts want.
-      #
-      # For genuinely grid-shaped menus, DR's Geometry.rect_navigate keys off
-      # row/column alignment; it's globally accessible, so reach for it directly
-      # rather than wrapping it here.
+      # The nearest interactive node within a 45-degree cone of `direction`. For
+      # true row/column grids, DR's grid-based Geometry.rect_navigate is the tool;
+      # it's global, so call it directly rather than wrapping it here.
       def spatial_navigate(from, direction)
         return interactive_nodes.first if from.nil?
 
@@ -190,7 +183,6 @@ module Conjuration
       def anchor_y
         object.anchor_y
       end
-      # -----
 
       def has_key?(key)
         object.has_key?(key)
@@ -236,7 +228,6 @@ module Conjuration
 
       private
 
-      # Top to Bottom of vertical children
       def calculate_column_justify(child, children, index)
         case justify
         when :start
@@ -265,7 +256,6 @@ module Conjuration
         end
       end
 
-      # Left to Right align of vertical children
       def calculate_column_align(child)
         case align
         when :start
@@ -284,7 +274,6 @@ module Conjuration
         end
       end
 
-      # Left to Right of horizontal children
       def calculate_row_justify(child, children, index)
         case justify
         when :start
@@ -313,7 +302,6 @@ module Conjuration
         end
       end
 
-      # Top to Bottom align of horizontal children
       def calculate_row_align(child)
         case align
         when :start
@@ -332,8 +320,6 @@ module Conjuration
         end
       end
 
-      # justify: :between/:around/:evenly distribute free main-axis space. Returns
-      # [spacing-between-children, leading-before-the-first-child].
       def free_space_distribution(free, count)
         case justify
         when :between then [count > 1 ? free / (count - 1) : 0, 0]
@@ -346,14 +332,11 @@ module Conjuration
         end
       end
 
-      # Sum a sizing axis (:w/:h) across children. Folded explicitly because the
-      # mruby build the tests run under has no Enumerable#sum.
+      # Folded explicitly: the mruby build the tests run under has no Enumerable#sum.
       def sum_main_size(children, axis)
         children.inject(0) { |total, child| total + child.object[axis] }
       end
 
-      # padding may be a scalar (all sides), [x, y] (CSS shorthand: x = left/right,
-      # y = top/bottom), or a per-side hash. Resolve to explicit sides.
       def normalized_padding
         case padding
         when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
