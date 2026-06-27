@@ -100,13 +100,14 @@ class UIScene < Conjuration::Scene
   end
 
   def update
-    ui.find(:party).object.w = 240 + Math.sin(Kernel.tick_count.to_radians * 2) * 40
-    ui.find(:party).calculate_layout
+    party = ui.find(:party)
+    party.object.w = 240 + Math.sin(Kernel.tick_count.to_radians * 2) * 40
+    party.invalidate!
 
     button = ui.find(:button)
     tooltip = ui.find(:tooltip)
     tooltip.visible = button.focused?
     tooltip.object.merge!(x: button.rect.right + 20, y: button.rect.center.y, anchor_y: 0.5)
-    tooltip.calculate_layout
+    tooltip.invalidate!
   end
 end
