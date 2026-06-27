@@ -46,11 +46,12 @@ module Conjuration
 
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
-      attr_accessor :justify, :direction, :align, :gap, :padding, :visible
+      attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position
+      attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -62,11 +63,21 @@ module Conjuration
         @padding = padding
         @visible = visible
 
+        # Out-of-flow nodes are placed by their parent against its box using these
+        # CSS-style insets, rather than flowing alongside their siblings. They're
+        # kept off the object hash so they don't shadow object.left/top (computed
+        # geometry accessors) — which would also go stale across re-layouts.
+        @position = position
+        @inset_top = top
+        @inset_right = right
+        @inset_bottom = bottom
+        @inset_left = left
+
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, **object, &block)
         children << element
         element
       end
@@ -101,24 +112,27 @@ module Conjuration
           object.w, object.h = gtk.calcstringbox(object.text)
         end
 
-        if justify == :end
-          children = @children.reverse
-        else
-          children = @children
-        end
+        # Absolutely-positioned children are out of flow: they don't consume
+        # space, shift siblings, or count toward justify/align distribution.
+        flow_children = @children.reject(&:absolute?)
+        flow_children = flow_children.reverse if justify == :end
 
-        children.each_with_index do |child, index|
-          if id != :root
+        unless id == :root
+          flow_children.each_with_index do |child, index|
             case direction
             when :row
-              calculate_row_justify(child, children, index)
+              calculate_row_justify(child, flow_children, index)
               calculate_row_align(child)
             when :column
-              calculate_column_justify(child, children, index)
+              calculate_column_justify(child, flow_children, index)
               calculate_column_align(child)
             end
           end
 
+          @children.each { |child| position_absolute(child) if child.absolute? }
+        end
+
+        @children.each do |child|
           child.visible = visible
           child.calculate_layout
         end
@@ -234,6 +248,10 @@ module Conjuration
         object.primitive_marker
       end
 
+      def absolute?
+        position == :absolute
+      end
+
       def disabled?
         !!object[:disabled]
       end
@@ -263,6 +281,40 @@ module Conjuration
       end
 
       private
+
+      # Place an out-of-flow child against this node's padding box using its
+      # CSS-style insets. Both insets on an axis stretch the child to span between
+      # them; a single inset pins that edge and leaves the child's size as-is.
+      def position_absolute(child)
+        inner_left   = object.left   + padding_left
+        inner_right  = object.right  - padding_right
+        inner_top    = object.top    - padding_top
+        inner_bottom = object.bottom + padding_bottom
+
+        if child.inset_left && child.inset_right
+          child.object.anchor_x = 0
+          child.object.x = inner_left + child.inset_left
+          child.object.w = inner_right - child.inset_right - (inner_left + child.inset_left)
+        elsif child.inset_left
+          child.object.anchor_x = 0
+          child.object.x = inner_left + child.inset_left
+        elsif child.inset_right
+          child.object.anchor_x = 1
+          child.object.x = inner_right - child.inset_right
+        end
+
+        if child.inset_top && child.inset_bottom
+          child.object.anchor_y = 1
+          child.object.y = inner_top - child.inset_top
+          child.object.h = inner_top - child.inset_top - (inner_bottom + child.inset_bottom)
+        elsif child.inset_top
+          child.object.anchor_y = 1
+          child.object.y = inner_top - child.inset_top
+        elsif child.inset_bottom
+          child.object.anchor_y = 0
+          child.object.y = inner_bottom + child.inset_bottom
+        end
+      end
 
       def calculate_column_justify(child, children, index)
         case justify

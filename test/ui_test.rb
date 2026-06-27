@@ -304,3 +304,79 @@ ensure
   Conjuration::UI.focused_node = nil
   Conjuration::UI.pressed_node = nil
 end
+
+# --- Absolute positioning (3.1) -----------------------------------------------
+# build_container is a 400x400 box at the origin: left 0, right 400, bottom 0,
+# top 400 (y-up).
+
+def test_absolute_child_is_excluded_from_flow(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1)
+    node({ w: 20, h: 20, primitive_marker: :solid }, id: :badge, position: :absolute, top: 0, right: 0)
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2)
+  end
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  assert.equal!([n1.object.y, n2.object.y], [400, 300], "flow stacks n1/n2 as if the absolute badge weren't there")
+end
+
+def test_absolute_child_is_excluded_from_free_space(args, assert)
+  c = build_container(direction: :column, justify: :between, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1)
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2)
+    node({ w: 20, h: 20, primitive_marker: :solid }, id: :badge, position: :absolute, top: 0, right: 0)
+  end
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  assert.equal!([n1.object.y, n2.object.y], [400, 100], ":between spreads only the two flow children")
+end
+
+def test_absolute_child_pins_to_top_right_corner(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 20, h: 20, primitive_marker: :solid }, id: :badge, position: :absolute, top: 10, right: 10)
+  end
+  badge = c.find(:badge)
+
+  assert.equal!([badge.object.x, badge.object.anchor_x], [390, 1], "10px in from the right edge")
+  assert.equal!([badge.object.y, badge.object.anchor_y], [390, 1], "10px down from the top edge")
+end
+
+def test_absolute_child_pins_to_bottom_left_corner(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 20, h: 20, primitive_marker: :solid }, id: :badge, position: :absolute, bottom: 10, left: 10)
+  end
+  badge = c.find(:badge)
+
+  assert.equal!([badge.object.x, badge.object.anchor_x], [10, 0], "10px in from the left edge")
+  assert.equal!([badge.object.y, badge.object.anchor_y], [10, 0], "10px up from the bottom edge")
+end
+
+def test_absolute_child_stretches_between_opposing_insets(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ h: 20, primitive_marker: :solid }, id: :bar, position: :absolute, left: 10, right: 30, bottom: 0)
+  end
+  bar = c.find(:bar)
+
+  assert.equal!([bar.object.x, bar.object.anchor_x, bar.object.w], [10, 0, 360], "spans 400 - 10 - 30 between the left/right insets")
+end
+
+def test_absolute_child_pins_inside_parent_padding(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, padding: 20) do
+    node({ w: 20, h: 20, primitive_marker: :solid }, id: :badge, position: :absolute, top: 0, right: 0)
+  end
+  badge = c.find(:badge)
+
+  assert.equal!([badge.object.x, badge.object.y], [380, 380], "pinned to the padded inner corner (400 - 20)")
+end
+
+def test_absolute_child_still_lays_out_its_subtree(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 100, h: 40, primitive_marker: :solid }, id: :panel, position: :absolute, top: 0, left: 0) do
+      node({ w: 30, h: 30, primitive_marker: :solid }, id: :inner)
+    end
+  end
+  panel, inner = c.find(:panel), c.find(:inner)
+
+  assert.equal!([panel.object.x, panel.object.y], [0, 400], "panel pinned to the top-left corner")
+  assert.equal!([inner.object.x, inner.object.y], [0, 400], "inner flows from the absolute panel's own top-left")
+end
