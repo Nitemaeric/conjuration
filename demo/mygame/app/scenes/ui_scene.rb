@@ -34,7 +34,7 @@ class UIScene < Conjuration::Scene
         node({ text: "Hello, World!" })
       end
 
-      node({ path: "sprites/button.png", h: 50, action: -> { puts "Button clicked!" } }, id: :button, align: :center, padding: 15) do
+      node({ path: "sprites/button.png", h: 50, action: -> { puts "Button clicked!" }, hover: { r: 220, g: 230, b: 255 }, pressed: { r: 160, g: 170, b: 210 } }, id: :button, align: :center, padding: 15) do
         node(
           {
             text: "Click me!",
@@ -84,7 +84,9 @@ class UIScene < Conjuration::Scene
           path: "sprites/skill-background.png",
           w: 50,
           h: 50,
-          action: -> { ui.find(:skills).interactive_nodes.each { |node| node.object.path = "sprites/skill-background.png" }; ui.find("skill_#{i + 1}").object.path = "sprites/selected-skill-background.png" }
+          action: -> { puts "skill #{i + 1}" },
+          hover: { path: "sprites/selected-skill-background.png" },
+          disabled: i == 3 ? { r: 90, g: 90, b: 90 } : nil
         }, id: "skill_#{i + 1}")
       end
     end
