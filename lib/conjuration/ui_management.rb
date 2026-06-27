@@ -35,7 +35,9 @@ module Conjuration
     def perform_update
       super
 
-      ui.calculate_layout if events.orientation_changed
+      # Orientation flips every grid-relative value; mark the whole tree dirty so
+      # the per-frame relayout (perform_render) rebuilds it.
+      ui.invalidate_subtree! if events.orientation_changed
     end
 
     def update_focus_from_mouse

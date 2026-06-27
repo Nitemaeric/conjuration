@@ -380,3 +380,28 @@ def test_absolute_child_still_lays_out_its_subtree(args, assert)
   assert.equal!([panel.object.x, panel.object.y], [0, 400], "panel pinned to the top-left corner")
   assert.equal!([inner.object.x, inner.object.y], [0, 400], "inner flows from the absolute panel's own top-left")
 end
+
+# --- Dirty-flag relayout (3.5) ------------------------------------------------
+
+def test_invalidate_marks_node_and_ancestors_dirty(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
+  n1 = c.find(:n1)
+  assert.equal!([c.dirty?, n1.dirty?], [false, false], "clean after the build's layout")
+
+  n1.invalidate!
+  assert.equal!([n1.dirty?, c.dirty?], [true, true], "invalidate! marks the node and its ancestors")
+end
+
+def test_calculate_layout_skips_clean_subtrees(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+  original_y = n2.object.y
+
+  n1.object.h = 200  # mutate the raw object without invalidating
+  c.calculate_layout # clean subtree -> early-out, nothing recomputed
+  assert.equal!(n2.object.y, original_y, "no invalidate! leaves the clean subtree untouched")
+
+  n1.invalidate!
+  c.calculate_layout
+  assert.equal!(n2.object.y, 200, "invalidate! -> n2 restacks under the now-taller n1")
+end

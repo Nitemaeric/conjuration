@@ -46,7 +46,7 @@ module Conjuration
 
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
-      attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position
+      attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
 
       delegate :first, :last, to: :children
@@ -55,6 +55,7 @@ module Conjuration
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
+        @parent = nil
 
         @direction = direction
         @justify = justify
@@ -73,12 +74,18 @@ module Conjuration
         @inset_bottom = bottom
         @inset_left = left
 
+        # Retained-mode layout: a node starts dirty (needs its first layout) and
+        # is recomputed only when invalidate! marks it — see calculate_layout.
+        @dirty = true
+
         instance_exec(&block) if block_given?
       end
 
       def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, **object, &block)
         element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, **object, &block)
+        element.parent = self
         children << element
+        invalidate!
         element
       end
 
@@ -102,14 +109,48 @@ module Conjuration
         end
       end
 
-      def calculate_layout
+      def dirty?
+        @dirty
+      end
+
+      # Mark this node — and its ancestors, since a child's size change reflows
+      # the parent — for relayout. Short-circuits at the first already-dirty node,
+      # so it's cheap and a no-op during construction (the node starts dirty).
+      def invalidate!
+        return if @dirty
+
+        @dirty = true
+        parent&.invalidate!
+      end
+
+      # Force the whole subtree dirty — e.g. on orientation change, where every
+      # grid-relative value has to be recomputed.
+      def invalidate_subtree!
+        @dirty = true
+        children.each(&:invalidate_subtree!)
+      end
+
+      # Memoized text measurement: re-measure only when the string changes, so a
+      # relayout that merely repositions a label doesn't re-run calcstringbox.
+      def measure_text
+        if @measured_text != object.text
+          @measured_text = object.text
+          @measured_size = gtk.calcstringbox(object.text)
+        end
+
+        @measured_size
+      end
+
+      def calculate_layout(force: false)
+        return unless @dirty || force
+
         # Per-pass caches for centered layouts; cleared each call so a
         # re-layout after children change size doesn't reuse stale totals.
         @children_width_with_gaps = nil
         @children_height_with_gaps = nil
 
         if object.has_key?(:text)
-          object.w, object.h = gtk.calcstringbox(object.text)
+          object.w, object.h = measure_text
         end
 
         # Absolutely-positioned children are out of flow: they don't consume
@@ -132,9 +173,14 @@ module Conjuration
           @children.each { |child| position_absolute(child) if child.absolute? }
         end
 
+        @dirty = false
+
+        # We just repositioned our children (everywhere but the root canvas), so
+        # they moved and must relay; the root leaves children to their own state.
+        cascade = id != :root
         @children.each do |child|
           child.visible = visible
-          child.calculate_layout
+          child.calculate_layout(force: cascade)
         end
       end
 

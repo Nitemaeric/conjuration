@@ -70,6 +70,11 @@ module Conjuration
       super
 
       render if respond_to?(:render)
+
+      # Relayout once per frame, after input/update have mutated + invalidated.
+      # Clean subtrees early-out, so this is near-free when nothing changed.
+      ui.calculate_layout
+
       outputs.primitives << ui.primitives
 
       indicator = focus_indicator
