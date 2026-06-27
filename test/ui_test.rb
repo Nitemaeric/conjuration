@@ -304,3 +304,34 @@ ensure
   Conjuration::UI.focused_node = nil
   Conjuration::UI.pressed_node = nil
 end
+
+# --- Tab order (3.3) ----------------------------------------------------------
+
+def test_tab_order_places_focus_index_first_then_tree_order(args, assert)
+  container = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 10, h: 10, action: -> {} }, id: :a)
+    node({ w: 10, h: 10, action: -> {} }, id: :b, focus_index: 0)
+    node({ w: 10, h: 10, action: -> {} }, id: :c)
+    node({ w: 10, h: 10, action: -> {} }, id: :d, focus_index: 1)
+  end
+
+  assert.equal!(container.tab_order.map(&:id), [:b, :d, :a, :c], "explicit focus_index first (ascending), then tree order")
+end
+
+def test_tab_order_defaults_to_tree_order(args, assert)
+  container = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 10, h: 10, action: -> {} }, id: :a)
+    node({ w: 10, h: 10, action: -> {} }, id: :b)
+  end
+
+  assert.equal!(container.tab_order.map(&:id), [:a, :b], "unindexed nodes follow tree order")
+end
+
+def test_tab_order_excludes_disabled_nodes(args, assert)
+  container = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 10, h: 10, action: -> {} }, id: :a, focus_index: 0)
+    node({ w: 10, h: 10, action: -> {}, disabled: true }, id: :off, focus_index: 1)
+  end
+
+  assert.equal!(container.tab_order.map(&:id), [:a], "disabled nodes are not tab-focusable")
+end

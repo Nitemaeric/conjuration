@@ -65,10 +65,42 @@ module Conjuration
     # The cursor is left as-is here — a mouse affordance, irrelevant when
     # navigating by key/pad.
     def update_focus_by_navigation
+      if (step = tab_step)
+        advance_tab_focus(step)
+        return
+      end
+
       direction = inputs.key_down.directional_vector
       return if direction.nil? || (direction.x == 0 && direction.y == 0)
 
       target = ui.spatial_navigate(UI.focused_node, direction)
+      UI.focused_node = target if target
+    end
+
+    # Tab / Shift-Tab (or the controller's shoulder bumpers) step through the tab
+    # order: +1 forward, -1 back, nil when neither is pressed this tick.
+    def tab_step
+      return -1 if inputs.controller_one.key_down.l1
+      return  1 if inputs.controller_one.key_down.r1
+      return nil unless inputs.keyboard.key_down.tab
+
+      inputs.keyboard.key_held.shift || inputs.keyboard.key_down.shift ? -1 : 1
+    end
+
+    # Move focus to the next/previous node in this ui's tab order, wrapping
+    # around. With nothing focused here, Tab takes the first, Shift-Tab the last.
+    def advance_tab_focus(step)
+      order = ui.tab_order
+      return if order.empty?
+
+      current = order.index { |node| node.equal?(UI.focused_node) }
+      target =
+        if current
+          order[(current + step) % order.length]
+        else
+          step.positive? ? order.first : order.last
+        end
+
       UI.focused_node = target if target
     end
 

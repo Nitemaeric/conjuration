@@ -47,10 +47,11 @@ module Conjuration
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible
+      attr_reader :focus_index
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, focus_index: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -62,11 +63,15 @@ module Conjuration
         @padding = padding
         @visible = visible
 
+        # Optional explicit tab-order: nodes with one tab first (ascending), then
+        # the rest in tree order — mirroring CSS tabindex.
+        @focus_index = focus_index
+
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, focus_index: nil, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, focus_index: focus_index, **object, &block)
         children << element
         element
       end
@@ -134,6 +139,13 @@ module Conjuration
 
       def interactive_nodes
         nodes.select(&:interactive?)
+      end
+
+      # Interactive nodes in tab-traversal order: those with an explicit
+      # focus_index first (ascending), then the rest in tree order.
+      def tab_order
+        indexed, unindexed = interactive_nodes.partition(&:focus_index)
+        indexed.sort_by(&:focus_index) + unindexed
       end
 
       # The nearest interactive node within a 45-degree cone of `direction`. For
