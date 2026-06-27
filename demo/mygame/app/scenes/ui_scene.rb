@@ -87,7 +87,10 @@ class UIScene < Conjuration::Scene
           action: -> { puts "skill #{i + 1}" },
           hover: { path: "sprites/selected-skill-background.png" },
           disabled: i == 3 ? { r: 90, g: 90, b: 90 } : nil
-        }, id: "skill_#{i + 1}")
+        }, id: "skill_#{i + 1}") do
+          # Out-of-flow notification badge, pinned overhanging the slot's corner.
+          node({ w: 14, h: 14, path: :pixel, r: 200, g: 50, b: 50 }, position: :absolute, top: -4, right: -4) if i.zero?
+        end
       end
     end
 
