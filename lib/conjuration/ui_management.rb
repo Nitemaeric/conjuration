@@ -28,6 +28,8 @@ module Conjuration
       end
 
       trigger_focused_node if UI.focused_node && confirm_pressed?
+
+      UI.pressed_node = pressing? ? UI.focused_node : nil
     end
 
     def perform_update
@@ -74,6 +76,17 @@ module Conjuration
     # swings with it), so confirming on it would double-fire.
     def confirm_pressed?
       inputs.keyboard.key_down.enter || inputs.controller_one.key_down.a
+    end
+
+    # Drives the :pressed state: the focused node held down (mouse over it with the
+    # button down, or a held confirm key).
+    def pressing?
+      focused = UI.focused_node
+      return false unless focused
+
+      (inputs.mouse.held && focused.intersect_rect?(inputs.mouse)) ||
+        inputs.keyboard.key_held.enter ||
+        inputs.controller_one.key_held.a
     end
 
     # Only triggers if the focused node belongs to THIS ui: focus is a shared

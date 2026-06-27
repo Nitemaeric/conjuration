@@ -243,3 +243,45 @@ def test_spatial_navigate_returns_nil_when_nothing_is_in_the_direction(args, ass
   ui = navigation_cross
   assert.equal!(ui.spatial_navigate(ui.find(:north), { x: 0, y: 1 }), nil, "nothing above the topmost node")
 end
+
+# --- interaction states ---
+
+def interaction_ui
+  Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container) do
+      node({ w: 50, h: 50, path: "base.png", action: -> {}, hover: { path: "hover.png" } }, id: :button)
+      node({ w: 50, h: 50, primitive_marker: :solid, action: -> {}, disabled: true }, id: :off)
+    end
+  end
+end
+
+def test_styled_object_merges_the_hover_override_when_focused(args, assert)
+  ui = interaction_ui
+  button = ui.find(:button)
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.pressed_node = nil
+
+  assert.equal!(button.styled_object[:path], "base.png", "default state renders the base object")
+
+  Conjuration::UI.focused_node = button
+  assert.equal!(button.styled_object[:path], "hover.png", "hover merges the override")
+ensure
+  Conjuration::UI.focused_node = nil
+end
+
+def test_disabled_nodes_are_excluded_from_interactive_nodes(args, assert)
+  assert.equal!(interaction_ui.interactive_nodes.map(&:id), [:button], "disabled nodes drop out of interactive_nodes")
+end
+
+def test_pressed_state_takes_priority_over_hover(args, assert)
+  ui = interaction_ui
+  button = ui.find(:button)
+  button.object.merge!(pressed: { path: "pressed.png" })
+  Conjuration::UI.focused_node = button
+  Conjuration::UI.pressed_node = button
+
+  assert.equal!(button.styled_object[:path], "pressed.png", "pressed wins over hover")
+ensure
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.pressed_node = nil
+end
