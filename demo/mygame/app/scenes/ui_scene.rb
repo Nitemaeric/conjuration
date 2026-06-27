@@ -100,9 +100,10 @@ class UIScene < Conjuration::Scene
     ui.find(:party).object.w = 240 + Math.sin(Kernel.tick_count.to_radians * 2) * 40
     ui.find(:party).calculate_layout
 
+    button = ui.find(:button)
     tooltip = ui.find(:tooltip)
-    tooltip.x, tooltip.y = inputs.mouse.x + 20, inputs.mouse.y + 20
-    tooltip.visible = inputs.mouse.inside_rect?(ui.find(:button).object)
+    tooltip.visible = button.focused?
+    tooltip.object.merge!(x: button.rect.right + 20, y: button.rect.center.y, anchor_y: 0.5)
     tooltip.calculate_layout
   end
 end
