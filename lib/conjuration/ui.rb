@@ -85,6 +85,7 @@ module Conjuration
         element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, **object, &block)
         element.parent = self
         children << element
+        clear_structure_cache!
         invalidate!
         element
       end
@@ -213,7 +214,16 @@ module Conjuration
       end
 
       def nodes
-        [self, *children.flat_map(&:nodes)].compact
+        @nodes ||= [self, *children.flat_map(&:nodes)].compact
+      end
+
+      # A structural change (a node added/removed) invalidates the memoized node
+      # and descendant lists here and in every ancestor that contains this
+      # subtree, so they rebuild on next access.
+      def clear_structure_cache!
+        @nodes = nil
+        @descendants = nil
+        parent&.clear_structure_cache!
       end
 
       def primitives

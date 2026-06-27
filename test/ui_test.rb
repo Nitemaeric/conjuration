@@ -466,3 +466,25 @@ def test_text_children_stack_without_overlap(args, assert)
   assert.equal!(a.object.h, 22, "the first label's height is measured")
   assert.equal!(a.object.y - b.object.y, a.object.h + 5, "the second label clears the first by its height + the gap")
 end
+
+def test_nodes_is_memoized(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 100, h: 100 }, id: :root) do
+    node({ w: 10, h: 10 }, id: :a)
+  end
+
+  assert.equal!(ui.nodes.equal?(ui.nodes), true, "nodes returns the same cached array on repeated reads")
+end
+
+def test_structural_change_invalidates_caches_up_the_tree(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 100, h: 100 }, id: :root) do
+    node({ x: 0, y: 0, w: 50, h: 50 }, id: :panel) do
+      node({ w: 10, h: 10 }, id: :a)
+    end
+  end
+  assert.equal!(ui.nodes.length, 3, "root + panel + a (primes the caches)")
+
+  ui.find(:panel).node({ w: 10, h: 10 }, id: :b) # add deep in the tree
+
+  assert.equal!(ui.nodes.length, 4, "ancestor node cache rebuilt to include b")
+  assert.equal!(ui.find(:b).id, :b, "ancestor descendants cache rebuilt to find b")
+end
