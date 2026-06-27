@@ -14,6 +14,14 @@ module Conjuration
       @focused_node = node
     end
 
+    def self.pressed_node
+      @pressed_node
+    end
+
+    def self.pressed_node=(node)
+      @pressed_node = node
+    end
+
     # [path, hotspot_x, hotspot_y]; applied by the input loop on focus change.
     def self.hover_cursor
       @hover_cursor
@@ -121,7 +129,7 @@ module Conjuration
       end
 
       def primitives
-        nodes.select(&:renderable?).map(&:object)
+        nodes.select(&:renderable?).map(&:styled_object)
       end
 
       def interactive_nodes
@@ -210,7 +218,7 @@ module Conjuration
       end
 
       def interactive?
-        visible && has_key?(:action)
+        visible && has_key?(:action) && !disabled?
       end
 
       def renderable?
@@ -224,6 +232,34 @@ module Conjuration
         return :line   if has_key?(:x2) && has_key?(:y2)
 
         object.primitive_marker
+      end
+
+      def disabled?
+        !!object[:disabled]
+      end
+
+      def focused?
+        UI.focused_node.equal?(self)
+      end
+
+      def pressed?
+        UI.pressed_node.equal?(self)
+      end
+
+      def interaction_state
+        return :disabled if disabled?
+        return :pressed if pressed?
+        return :hover if focused?
+
+        :default
+      end
+
+      # Nodes declare per-state style overrides as hover:/pressed:/disabled: hashes.
+      def styled_object
+        override = object[interaction_state]
+        return object unless override.is_a?(Hash)
+
+        { **object, **override }
       end
 
       private
