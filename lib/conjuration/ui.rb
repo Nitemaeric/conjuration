@@ -164,6 +164,11 @@ module Conjuration
         @measured_size
       end
 
+      # Resolve this node's own intrinsic size from its text, if any.
+      def measure!
+        object.w, object.h = measure_text if object.has_key?(:text)
+      end
+
       def calculate_layout(force: false)
         return unless @dirty || force
 
@@ -172,9 +177,11 @@ module Conjuration
         @children_width_with_gaps = nil
         @children_height_with_gaps = nil
 
-        if object.has_key?(:text)
-          object.w, object.h = measure_text
-        end
+        measure!
+
+        # A child's intrinsic (text) size must be known before we position it, or
+        # a sibling stacks against an unmeasured height of zero and they overlap.
+        @children.each(&:measure!)
 
         # Absolutely-positioned children are out of flow: they don't consume
         # space, shift siblings, or count toward justify/align distribution.

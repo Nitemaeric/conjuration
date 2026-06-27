@@ -450,3 +450,19 @@ def test_invisible_ancestor_hides_descendants(args, assert)
   assert.equal!(child.visible, true, "the child keeps its own visible")
   assert.equal!([child.renderable?, child.interactive?], [false, false], "an invisible ancestor hides and disables it")
 end
+
+def test_text_children_stack_without_overlap(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 200, h: 100 }, id: :root) do
+    node({ x: 0, y: 0, w: 200, h: 100 }, id: :col, gap: 5) do
+      node({ text: "First line" }, id: :a)
+      node({ text: "Second line" }, id: :b)
+    end
+  end
+  a, b = ui.find(:a), ui.find(:b)
+
+  # The double measures text height as 22; the second label must clear the first
+  # by its height + gap, which only holds if the first was measured before being
+  # positioned (an unmeasured height of 0 would overlap them).
+  assert.equal!(a.object.h, 22, "the first label's height is measured")
+  assert.equal!(a.object.y - b.object.y, a.object.h + 5, "the second label clears the first by its height + the gap")
+end

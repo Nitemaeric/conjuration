@@ -151,7 +151,9 @@ class MenuScene < Conjuration::Scene
   end
 
   def update
-    ui.find(:mute_button_text).text = audio[:bgm].gain.zero? ? "Unmute" : "Mute"
+    mute = ui.find(:mute_button_text)
+    mute.text = audio[:bgm].gain.zero? ? "Unmute" : "Mute"
+    mute.invalidate! # relabel changes its width; re-center it (no-op if unchanged)
   end
 
   def render
