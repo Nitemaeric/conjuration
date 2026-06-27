@@ -113,14 +113,37 @@ module Conjuration
         @dirty
       end
 
-      # Mark this node — and its ancestors, since a child's size change reflows
-      # the parent — for relayout. Short-circuits at the first already-dirty node,
-      # so it's cheap and a no-op during construction (the node starts dirty).
+      # Mark this node for relayout — but only if a layout-relevant input actually
+      # changed since it was last laid out. A no-op write (same value) or a
+      # render-only change (colour, sprite) leaves it clean. Then propagate up so
+      # the per-frame relay reaches it (a child's size change reflows its parent).
       def invalidate!
+        return if @dirty
+        return if layout_signature == @laid_out_signature
+
+        mark_dirty!
+      end
+
+      # Set this node and its ancestors dirty so the relay traverses to it,
+      # short-circuiting at the first already-dirty node. Unlike invalidate! it
+      # doesn't re-test the signature — ancestors just need to be reachable.
+      def mark_dirty!
         return if @dirty
 
         @dirty = true
-        parent&.invalidate!
+        parent&.mark_dirty!
+      end
+
+      # The layout-relevant inputs: geometry, layout properties, text, and child
+      # count. Render-only fields (colour, path, alpha) are deliberately excluded,
+      # so changing them never forces a relayout.
+      def layout_signature
+        [
+          object.x, object.y, object.w, object.h, object.anchor_x, object.anchor_y, object.text,
+          justify, direction, align, gap, padding, position,
+          inset_top, inset_right, inset_bottom, inset_left,
+          visible, children.length
+        ]
       end
 
       # Force the whole subtree dirty — e.g. on orientation change, where every
@@ -174,6 +197,7 @@ module Conjuration
         end
 
         @dirty = false
+        @laid_out_signature = layout_signature
 
         # We just repositioned our children (everywhere but the root canvas), so
         # they moved and must relay; the root leaves children to their own state.

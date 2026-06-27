@@ -388,6 +388,7 @@ def test_invalidate_marks_node_and_ancestors_dirty(args, assert)
   n1 = c.find(:n1)
   assert.equal!([c.dirty?, n1.dirty?], [false, false], "clean after the build's layout")
 
+  n1.object.h = 200 # a real layout change
   n1.invalidate!
   assert.equal!([n1.dirty?, c.dirty?], [true, true], "invalidate! marks the node and its ancestors")
 end
@@ -404,4 +405,21 @@ def test_calculate_layout_skips_clean_subtrees(args, assert)
   n1.invalidate!
   c.calculate_layout
   assert.equal!(n2.object.y, 200, "invalidate! -> n2 restacks under the now-taller n1")
+end
+
+def test_invalidate_ignores_no_op_and_render_only_changes(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
+  n1 = c.find(:n1)
+
+  n1.object.r = 255 # a render-only field, not in the layout signature
+  n1.invalidate!
+  assert.equal!([n1.dirty?, c.dirty?], [false, false], "a render-only change doesn't invalidate")
+
+  n1.object.w = 100 # the same width it already has
+  n1.invalidate!
+  assert.equal!(n1.dirty?, false, "writing the same value doesn't dirty")
+
+  n1.object.w = 150 # a real size change
+  n1.invalidate!
+  assert.equal!([n1.dirty?, c.dirty?], [true, true], "a size change invalidates the node and its ancestors")
 end
