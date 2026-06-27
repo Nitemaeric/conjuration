@@ -34,7 +34,7 @@ class UIScene < Conjuration::Scene
         node({ text: "Hello, World!" })
       end
 
-      node({ path: "sprites/button.png", h: 50, action: -> { puts "Button clicked!" }, hover: { r: 220, g: 230, b: 255 }, pressed: { r: 160, g: 170, b: 210 } }, id: :button, align: :center, padding: 15) do
+      node({ path: "sprites/button.png", h: 50, action: -> { puts "Button clicked!" }, hover: { r: 220, g: 230, b: 255 }, pressed: { r: 160, g: 170, b: 210 } }, id: :button, align: :center, padding: 15, focus_index: 0) do
         node(
           {
             text: "Click me!",
