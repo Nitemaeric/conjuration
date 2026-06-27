@@ -202,10 +202,7 @@ module Conjuration
         # We just repositioned our children (everywhere but the root canvas), so
         # they moved and must relay; the root leaves children to their own state.
         cascade = id != :root
-        @children.each do |child|
-          child.visible = visible
-          child.calculate_layout(force: cascade)
-        end
+        @children.each { |child| child.calculate_layout(force: cascade) }
       end
 
       def nodes
@@ -302,12 +299,24 @@ module Conjuration
       end
 
       def interactive?
-        visible && has_key?(:action) && !disabled?
+        visible_in_tree? && has_key?(:action) && !disabled?
       end
 
       def renderable?
-        return false unless visible
+        return false unless visible_in_tree?
         return %i[solid label sprite line border].include?(primitive_marker)
+      end
+
+      # Visible only if this node and every ancestor is visible. Effective
+      # visibility is read here rather than assigned down the tree, so the
+      # per-frame relayout can't clobber a node's own `visible` setting.
+      def visible_in_tree?
+        node = self
+        while node
+          return false unless node.visible
+          node = node.parent
+        end
+        true
       end
 
       def primitive_marker

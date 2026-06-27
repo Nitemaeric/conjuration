@@ -423,3 +423,30 @@ def test_invalidate_ignores_no_op_and_render_only_changes(args, assert)
   n1.invalidate!
   assert.equal!([n1.dirty?, c.dirty?], [true, true], "a size change invalidates the node and its ancestors")
 end
+
+def test_relayout_does_not_clobber_a_nodes_own_visibility(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 100, h: 100, primitive_marker: :solid }, id: :panel)
+  end
+  panel = ui.find(:panel)
+
+  panel.visible = false
+  panel.invalidate!
+  ui.calculate_layout
+
+  assert.equal!(panel.visible, false, "the per-frame relayout leaves the node's own visible alone")
+  assert.equal!(ui.primitives.length, 0, "an invisible node is excluded from primitives")
+end
+
+def test_invisible_ancestor_hides_descendants(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 200, h: 200 }, id: :panel) do
+      node({ w: 50, h: 50, primitive_marker: :solid, action: -> {} }, id: :child)
+    end
+  end
+  ui.find(:panel).visible = false
+  child = ui.find(:child)
+
+  assert.equal!(child.visible, true, "the child keeps its own visible")
+  assert.equal!([child.renderable?, child.interactive?], [false, false], "an invisible ancestor hides and disables it")
+end
