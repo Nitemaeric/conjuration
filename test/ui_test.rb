@@ -380,3 +380,111 @@ def test_absolute_child_still_lays_out_its_subtree(args, assert)
   assert.equal!([panel.object.x, panel.object.y], [0, 400], "panel pinned to the top-left corner")
   assert.equal!([inner.object.x, inner.object.y], [0, 400], "inner flows from the absolute panel's own top-left")
 end
+
+# --- Dirty-flag relayout (3.5) ------------------------------------------------
+
+def test_invalidate_marks_node_and_ancestors_dirty(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
+  n1 = c.find(:n1)
+  assert.equal!([c.dirty?, n1.dirty?], [false, false], "clean after the build's layout")
+
+  n1.object.h = 200 # a real layout change
+  n1.invalidate!
+  assert.equal!([n1.dirty?, c.dirty?], [true, true], "invalidate! marks the node and its ancestors")
+end
+
+def test_calculate_layout_skips_clean_subtrees(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+  original_y = n2.object.y
+
+  n1.object.h = 200  # mutate the raw object without invalidating
+  c.calculate_layout # clean subtree -> early-out, nothing recomputed
+  assert.equal!(n2.object.y, original_y, "no invalidate! leaves the clean subtree untouched")
+
+  n1.invalidate!
+  c.calculate_layout
+  assert.equal!(n2.object.y, 200, "invalidate! -> n2 restacks under the now-taller n1")
+end
+
+def test_invalidate_ignores_no_op_and_render_only_changes(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start, &two_solids)
+  n1 = c.find(:n1)
+
+  n1.object.r = 255 # a render-only field, not in the layout signature
+  n1.invalidate!
+  assert.equal!([n1.dirty?, c.dirty?], [false, false], "a render-only change doesn't invalidate")
+
+  n1.object.w = 100 # the same width it already has
+  n1.invalidate!
+  assert.equal!(n1.dirty?, false, "writing the same value doesn't dirty")
+
+  n1.object.w = 150 # a real size change
+  n1.invalidate!
+  assert.equal!([n1.dirty?, c.dirty?], [true, true], "a size change invalidates the node and its ancestors")
+end
+
+def test_relayout_does_not_clobber_a_nodes_own_visibility(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 100, h: 100, primitive_marker: :solid }, id: :panel)
+  end
+  panel = ui.find(:panel)
+
+  panel.visible = false
+  panel.invalidate!
+  ui.calculate_layout
+
+  assert.equal!(panel.visible, false, "the per-frame relayout leaves the node's own visible alone")
+  assert.equal!(ui.primitives.length, 0, "an invisible node is excluded from primitives")
+end
+
+def test_invisible_ancestor_hides_descendants(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 200, h: 200 }, id: :panel) do
+      node({ w: 50, h: 50, primitive_marker: :solid, action: -> {} }, id: :child)
+    end
+  end
+  ui.find(:panel).visible = false
+  child = ui.find(:child)
+
+  assert.equal!(child.visible, true, "the child keeps its own visible")
+  assert.equal!([child.renderable?, child.interactive?], [false, false], "an invisible ancestor hides and disables it")
+end
+
+def test_text_children_stack_without_overlap(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 200, h: 100 }, id: :root) do
+    node({ x: 0, y: 0, w: 200, h: 100 }, id: :col, gap: 5) do
+      node({ text: "First line" }, id: :a)
+      node({ text: "Second line" }, id: :b)
+    end
+  end
+  a, b = ui.find(:a), ui.find(:b)
+
+  # The double measures text height as 22; the second label must clear the first
+  # by its height + gap, which only holds if the first was measured before being
+  # positioned (an unmeasured height of 0 would overlap them).
+  assert.equal!(a.object.h, 22, "the first label's height is measured")
+  assert.equal!(a.object.y - b.object.y, a.object.h + 5, "the second label clears the first by its height + the gap")
+end
+
+def test_nodes_is_memoized(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 100, h: 100 }, id: :root) do
+    node({ w: 10, h: 10 }, id: :a)
+  end
+
+  assert.equal!(ui.nodes.equal?(ui.nodes), true, "nodes returns the same cached array on repeated reads")
+end
+
+def test_structural_change_invalidates_caches_up_the_tree(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 100, h: 100 }, id: :root) do
+    node({ x: 0, y: 0, w: 50, h: 50 }, id: :panel) do
+      node({ w: 10, h: 10 }, id: :a)
+    end
+  end
+  assert.equal!(ui.nodes.length, 3, "root + panel + a (primes the caches)")
+
+  ui.find(:panel).node({ w: 10, h: 10 }, id: :b) # add deep in the tree
+
+  assert.equal!(ui.nodes.length, 4, "ancestor node cache rebuilt to include b")
+  assert.equal!(ui.find(:b).id, :b, "ancestor descendants cache rebuilt to find b")
+end

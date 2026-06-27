@@ -211,7 +211,10 @@ module Conjuration
       # The scene draws its world through us; only on-screen content is emitted.
       scene.draw_world(self)
 
-      # Camera HUD, positioned in viewport-local space.
+      # Camera HUD, positioned in viewport-local space. Relaid once per frame;
+      # clean subtrees early-out, so this is near-free when nothing changed.
+      ui.calculate_layout
+
       outputs.primitives << ui.primitives
 
       indicator = focus_indicator
