@@ -285,3 +285,22 @@ ensure
   Conjuration::UI.focused_node = nil
   Conjuration::UI.pressed_node = nil
 end
+
+def test_a_node_knows_its_own_focused_and_pressed_state(args, assert)
+  ui = interaction_ui
+  button = ui.find(:button)
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.pressed_node = nil
+
+  assert.equal!(button.focused?, false, "not focused by default")
+
+  Conjuration::UI.focused_node = button
+  assert.equal!(button.focused?, true, "focused? reflects UI.focused_node")
+  assert.equal!(ui.find(:off).focused?, false, "a sibling node is not focused")
+
+  Conjuration::UI.pressed_node = button
+  assert.equal!(button.pressed?, true, "pressed? reflects UI.pressed_node")
+ensure
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.pressed_node = nil
+end

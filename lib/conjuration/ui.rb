@@ -238,10 +238,18 @@ module Conjuration
         !!object[:disabled]
       end
 
+      def focused?
+        UI.focused_node.equal?(self)
+      end
+
+      def pressed?
+        UI.pressed_node.equal?(self)
+      end
+
       def interaction_state
         return :disabled if disabled?
-        return :pressed if UI.pressed_node.equal?(self)
-        return :hover if UI.focused_node.equal?(self)
+        return :pressed if pressed?
+        return :hover if focused?
 
         :default
       end
