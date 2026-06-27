@@ -488,3 +488,44 @@ def test_structural_change_invalidates_caches_up_the_tree(args, assert)
   assert.equal!(ui.nodes.length, 4, "ancestor node cache rebuilt to include b")
   assert.equal!(ui.find(:b).id, :b, "ancestor descendants cache rebuilt to find b")
 end
+
+# --- Navigation groups (named, dev-managed) -----------------------------------
+
+def test_navigation_groups_bucket_named_groups_only(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ x: 0, y: 0, w: 10, h: 10 }, id: :left, group: :left) do
+      node({ w: 10, h: 10, action: -> {} }, id: :l1)
+      node({ w: 10, h: 10, action: -> {} }, id: :l2)
+    end
+    node({ w: 10, h: 10, action: -> {} }, id: :loose) # no group
+  end
+
+  groups = c.navigation_groups
+  assert.equal!(groups.keys, [:left], "only named groups — ungrouped nodes are not bucketed")
+  assert.equal!(groups[:left].map(&:id), [:l1, :l2], "left pane members in tree order")
+end
+
+def test_group_of_returns_named_group_or_nil(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ x: 0, y: 0, w: 10, h: 10 }, id: :pane, group: :pane) do
+      node({ w: 10, h: 10, action: -> {} }, id: :item)
+    end
+    node({ w: 10, h: 10, action: -> {} }, id: :loose)
+  end
+
+  assert.equal!(c.group_of(c.find(:item)), :pane, "a grouped node resolves to its pane")
+  assert.equal!(c.group_of(c.find(:loose)), nil, "an ungrouped node has no group")
+end
+
+def test_spatial_navigate_restricts_to_candidates(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 50, h: 50, action: -> {} }, id: :a)
+    node({ w: 50, h: 50, action: -> {} }, id: :b)
+    node({ w: 50, h: 50, action: -> {} }, id: :c)
+  end
+  a, cc = c.find(:a), c.find(:c)
+  right = { x: 1, y: 0 }
+
+  assert.equal!(c.spatial_navigate(a, right).id, :b, "unrestricted -> nearest neighbour b")
+  assert.equal!(c.spatial_navigate(a, right, candidates: [a, cc]).id, :c, "candidates restrict the search, skipping b")
+end

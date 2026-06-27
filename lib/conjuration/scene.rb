@@ -48,6 +48,7 @@ module Conjuration
     def perform_setup
       audio.clear
       UI.focused_node = nil
+      UI.active_navigation_group = nil # every scene starts inert; opt in via setup
       UI.focus_cursor[:w] = 0 # re-snap the highlight in the new scene
       setup if respond_to?(:setup)
 

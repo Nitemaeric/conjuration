@@ -44,14 +44,27 @@ module Conjuration
       @focus_cursor ||= { x: 0, y: 0, w: 0, h: 0 }
     end
 
+    # The active navigation group (a node's `group:` id). The game owns this —
+    # there is no built-in trigger to switch groups; you set it yourself. nil
+    # disables UI navigation entirely: the input loop is inert until a group is
+    # set, so menus stay dormant while gameplay owns the input.
+    def self.active_navigation_group
+      @active_navigation_group
+    end
+
+    def self.active_navigation_group=(group)
+      @active_navigation_group = group
+    end
+
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
+      attr_reader :group
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -74,6 +87,10 @@ module Conjuration
         @inset_bottom = bottom
         @inset_left = left
 
+        # A named navigation group: this node's interactive descendants form one
+        # pane for UI.active_navigation_group. nil inherits the nearest ancestor's.
+        @group = group
+
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
         @dirty = true
@@ -81,8 +98,8 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, **object, &block)
         element.parent = self
         children << element
         clear_structure_cache!
@@ -234,17 +251,41 @@ module Conjuration
         nodes.select(&:interactive?)
       end
 
-      # The nearest interactive node within a 45-degree cone of `direction`. For
-      # true row/column grids, DR's grid-based Geometry.rect_navigate is the tool;
-      # it's global, so call it directly rather than wrapping it here.
-      def spatial_navigate(from, direction)
-        return interactive_nodes.first if from.nil?
+      # Interactive nodes bucketed by their navigation group — the nearest
+      # ancestor's `group:`. Ungrouped nodes are omitted: groups are explicit and
+      # named, and the game decides which one is active.
+      def navigation_groups
+        accumulate_navigation_groups(nil, {})
+      end
+
+      # The group id a given interactive node belongs to (or nil if ungrouped).
+      def group_of(target)
+        navigation_groups.each do |id, members|
+          return id if members.any? { |member| member.equal?(target) }
+        end
+        nil
+      end
+
+      # Recursive helper for navigation_groups; threads the nearest enclosing
+      # group down the tree so the innermost group wins.
+      def accumulate_navigation_groups(inherited, groups)
+        current = group || inherited
+        (groups[current] ||= []) << self if interactive? && current
+        children.each { |child| child.accumulate_navigation_groups(current, groups) }
+        groups
+      end
+
+      # The nearest interactive node to `from` within a 45-degree cone of
+      # `direction`, among `candidates` (default: all interactive nodes; the input
+      # loop passes the active group's members to keep navigation inside a pane).
+      def spatial_navigate(from, direction, candidates: interactive_nodes)
+        return candidates.first if from.nil?
 
         origin = from.rect.center
         best = nil
         best_distance = nil
 
-        interactive_nodes.each do |node|
+        candidates.each do |node|
           next if node.equal?(from)
 
           centre = node.rect.center
