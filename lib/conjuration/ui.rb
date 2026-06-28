@@ -318,11 +318,13 @@ module Conjuration
         { **styled_object, x: 0, y: 0, w: object.w, h: object.h, anchor_x: 0, anchor_y: 0 }
       end
 
-      # The total height the children span — the basis for how far it scrolls.
+      # The total height the content occupies — the children's span plus the
+      # container's top and bottom padding — the basis for how far it scrolls.
       def content_height
         return 0 if children.empty?
 
-        children.map { |child| child.object.top }.max - children.map { |child| child.object.bottom }.min
+        span = children.map { |child| child.object.top }.max - children.map { |child| child.object.bottom }.min
+        span + padding_top + padding_bottom
       end
 
       # How far the content can scroll past the box (0 when it already fits).

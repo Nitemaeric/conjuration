@@ -582,3 +582,16 @@ def test_scroll_container_is_focusable(args, assert)
 
   assert.equal!(ui.interactive_nodes.map(&:id), [:scroller], "a scroll container is focusable even without an action")
 end
+
+def test_scroll_content_height_includes_padding(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 300, w: 100, h: 100 }, id: :scroller, overflow: :scroll, justify: :start, align: :start, padding: 10) do
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :a)
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :b)
+    end
+  end
+  scroller = ui.find(:scroller)
+
+  # children span 160 (two 80s, no gap) + 10 top + 10 bottom padding.
+  assert.equal!(scroller.content_height, 180, "content height includes the container's top and bottom padding")
+end
