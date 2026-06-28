@@ -102,14 +102,14 @@ class UIScene < Conjuration::Scene
       node({ text: "Clicking this button will print 'Button clicked!' to the console.", r: 255, g: 255, b: 255 })
     end
 
-    ui.node({ x: grid.w / 2, y: 28, anchor_x: 0.5, text: "Press N to enable keyboard navigation", r: 255, g: 255, b: 255 }, id: :nav_hint)
+    ui.node({ x: grid.w / 2, y: 28, anchor_x: 0.5, text: "Use the keyboard or d-pad to navigate", r: 255, g: 255, b: 255 }, id: :nav_hint)
   end
 
-  # The game drives navigation: N toggles keyboard nav on/off, Tab cycles the
-  # panes in an order this scene defines. The mouse works regardless.
+  # Navigation turns on the moment the player uses the keyboard or pad (the mouse
+  # works without it); Tab then cycles the panes in an order this scene defines.
   def input
-    if inputs.keyboard.key_down.n || inputs.controller_one.key_down.start
-      Conjuration::UI.active_navigation_group ? deactivate_navigation : activate_navigation(:skills)
+    if Conjuration::UI.active_navigation_group.nil? && inputs.last_active != :mouse
+      activate_navigation(:skills)
     elsif Conjuration::UI.active_navigation_group && (inputs.keyboard.key_down.tab || inputs.controller_one.key_down.r1)
       current = NAV_GROUPS.index(Conjuration::UI.active_navigation_group) || -1
       activate_navigation(NAV_GROUPS[(current + 1) % NAV_GROUPS.length])
@@ -129,7 +129,7 @@ class UIScene < Conjuration::Scene
 
     group = Conjuration::UI.active_navigation_group
     hint = ui.find(:nav_hint)
-    hint.text = group ? "Keyboard nav: #{group}  -  arrows move, Tab switches panes, N disables" : "Keyboard nav: OFF (mouse still works)  -  press N to enable"
+    hint.text = group ? "Keyboard nav: #{group}  -  arrows move, Tab switches panes" : "Keyboard nav: off  -  press a key or use the d-pad (mouse works too)"
     hint.invalidate!
   end
 end
