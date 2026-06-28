@@ -357,7 +357,10 @@ module Conjuration
       end
 
       def interactive?
-        visible_in_tree? && has_key?(:action) && !disabled?
+        # Cheap checks first: most nodes have no action, so short-circuit before
+        # the visible_in_tree? parent walk (this runs over every node, every tick,
+        # in interactive_nodes / navigation_groups).
+        has_key?(:action) && !disabled? && visible_in_tree?
       end
 
       def renderable?
