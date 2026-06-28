@@ -214,6 +214,7 @@ module Conjuration
       # Camera HUD, positioned in viewport-local space. Relaid once per frame;
       # clean subtrees early-out, so this is near-free when nothing changed.
       ui.calculate_layout
+      ui.render_scroll_targets
 
       outputs.primitives << ui.primitives
 

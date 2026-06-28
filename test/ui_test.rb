@@ -541,3 +541,34 @@ def test_a_root_group_names_the_whole_ui_as_one_pane(args, assert)
   assert.equal!(groups.keys, [:hud], "the root group names the whole ui as one pane")
   assert.equal!(groups[:hud].map(&:id), [:a, :b], "every interactive node inherits it")
 end
+
+# --- Scroll containers (overflow: :scroll, 3.4) -------------------------------
+
+def test_scroll_container_emits_a_target_sprite_not_its_children(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 300, w: 100, h: 100, primitive_marker: :solid }, id: :scroller, overflow: :scroll, justify: :start, align: :start) do
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :a)
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :b)
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :c)
+    end
+  end
+  scroller = ui.find(:scroller)
+  prims = ui.primitives
+
+  assert.equal!(prims.any? { |p| p[:path] == scroller.scroll_target_path }, true, "emits the render-target blit sprite")
+  assert.equal!(prims.any? { |p| p[:w] == 80 }, false, "the 80px children are clipped into the target, not the flat list")
+end
+
+def test_scroll_content_height_and_max_scroll(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 300, w: 100, h: 100 }, id: :scroller, overflow: :scroll, justify: :start, align: :start, gap: 10) do
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :a)
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :b)
+    end
+  end
+  scroller = ui.find(:scroller)
+
+  assert.equal!(scroller.content_height, 170, "children span (80 + 10 gap + 80)")
+  assert.equal!(scroller.max_scroll, 70, "content 170 - box 100")
+  assert.equal!(scroller.scroll?, true, "overflow: :scroll marks it a scroll container")
+end

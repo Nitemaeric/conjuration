@@ -61,10 +61,12 @@ module Conjuration
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
       attr_accessor :group
+      attr_reader :overflow
+      attr_accessor :scroll_offset
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -91,6 +93,11 @@ module Conjuration
         # pane for UI.active_navigation_group. nil inherits the nearest ancestor's.
         @group = group
 
+        # overflow: :scroll clips this node's children to its box and offsets them
+        # by scroll_offset; nil (the default) lays out normally.
+        @overflow = overflow
+        @scroll_offset = 0
+
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
         @dirty = true
@@ -98,8 +105,8 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, **object, &block)
         element.parent = self
         children << element
         clear_structure_cache!
@@ -244,7 +251,94 @@ module Conjuration
       end
 
       def primitives
-        nodes.select(&:renderable?).map(&:styled_object)
+        collect_primitives([])
+      end
+
+      # Walk the tree emitting each renderable node's styled object — but a scroll
+      # container emits a sprite of its (clipped) render target plus its scrollbar
+      # instead of recursing, so overflowing children don't leak into the flat
+      # list. render_scroll_targets fills those targets before this is emitted.
+      def collect_primitives(acc)
+        if scroll?
+          # The container's background + children are painted into its render
+          # target (see render_scroll_target); the flat list gets the blit + bar.
+          acc << scroll_sprite
+          acc.concat(scrollbar_primitives)
+        else
+          acc << styled_object if renderable?
+          children.each { |child| child.collect_primitives(acc) }
+        end
+
+        acc
+      end
+
+      def scroll?
+        overflow == :scroll
+      end
+
+      # Render each scroll container's children into its render target, translated
+      # to target-local space and shifted by scroll_offset. Call once per frame,
+      # before emitting primitives.
+      def render_scroll_targets
+        nodes.each { |node| node.render_scroll_target if node.scroll? }
+      end
+
+      def render_scroll_target
+        target = game.outputs[scroll_target_path]
+        target.width = object.w
+        target.height = object.h
+
+        # Fill with the container's own background first, then the children
+        # translated to target-local space and shifted by scroll_offset.
+        target.primitives << scroll_background if renderable?
+
+        dx = -object.left
+        dy = -object.bottom + scroll_offset
+        children.flat_map(&:nodes).select(&:renderable?).each do |node|
+          primitive = node.styled_object.dup
+          primitive[:x]  += dx if primitive[:x]
+          primitive[:y]  += dy if primitive[:y]
+          primitive[:x2] += dx if primitive[:x2]
+          primitive[:y2] += dy if primitive[:y2]
+          target.primitives << primitive
+        end
+      end
+
+      # The blit of a scroll container's render target at its on-screen box.
+      def scroll_sprite
+        { x: object.left, y: object.bottom, w: object.w, h: object.h, path: scroll_target_path }
+      end
+
+      def scroll_target_path
+        "ui_scroll_#{id || object_id}"
+      end
+
+      # The container's own background, sized to fill its render target.
+      def scroll_background
+        { **styled_object, x: 0, y: 0, w: object.w, h: object.h, anchor_x: 0, anchor_y: 0 }
+      end
+
+      # The total height the children span — the basis for how far it scrolls.
+      def content_height
+        return 0 if children.empty?
+
+        children.map { |child| child.object.top }.max - children.map { |child| child.object.bottom }.min
+      end
+
+      # How far the content can scroll past the box (0 when it already fits).
+      def max_scroll
+        [content_height - object.h, 0].max
+      end
+
+      # A thin thumb on the right edge, sized and placed by the scroll position.
+      def scrollbar_primitives
+        return [] if max_scroll <= 0
+
+        track = object.h
+        thumb = [track * object.h / content_height, 16].max
+        thumb_top = object.top - (scroll_offset / max_scroll) * (track - thumb)
+
+        [{ x: object.right - 6, y: thumb_top - thumb, w: 4, h: thumb, path: :pixel, r: 70, g: 70, b: 70, a: 200 }]
       end
 
       def interactive_nodes

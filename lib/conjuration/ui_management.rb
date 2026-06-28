@@ -33,6 +33,8 @@ module Conjuration
     def perform_input
       super
 
+      scroll_under_mouse
+
       # The mouse drives focus directly and always — it's pointing, not
       # "navigating". Keyboard/controller navigation only runs once the game has
       # set an active group; nil means nav is off, so gameplay can own the stick
@@ -46,6 +48,16 @@ module Conjuration
       end
 
       UI.pressed_node = pressing? ? UI.focused_node : nil
+    end
+
+    # Mouse wheel scrolls the overflow: :scroll container under the cursor.
+    def scroll_under_mouse
+      return unless inputs.mouse.wheel
+
+      container = ui.nodes.find { |node| node.scroll? && node.intersect_rect?(inputs.mouse) }
+      return unless container
+
+      container.scroll_offset = (container.scroll_offset - inputs.mouse.wheel.y * 20).clamp(0, container.max_scroll)
     end
 
     def perform_update
