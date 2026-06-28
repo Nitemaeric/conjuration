@@ -8,6 +8,8 @@ class MenuScene < Conjuration::Scene
   attr_reader :menu, :buttons
 
   def setup
+    activate_navigation(:menu) # the main menu is keyboard/pad navigable on entry
+
     audio[:bgm] = { input: "sounds/bgm.mp3", looping: true, gain: 0.5 }
 
     ui.node({
@@ -16,7 +18,7 @@ class MenuScene < Conjuration::Scene
       w: 256,
       anchor_x: 0.5,
       anchor_y: 1,
-    }, align: :stretch, gap: 14) do
+    }, align: :stretch, gap: 14, group: :menu) do
       node(
         {
           h: 46,
@@ -138,7 +140,7 @@ class MenuScene < Conjuration::Scene
       y: 10.from_top,
       anchor_x: 1,
       anchor_y: 1,
-    }, direction: :row, justify: :end, gap: 20) do
+    }, direction: :row, justify: :end, gap: 20, group: :menu) do
       node({ w: 120, h: 40, path: "sprites/button.png", action: -> { audio[:bgm].muted_gain, audio[:bgm].gain = audio[:bgm].gain, audio[:bgm].muted_gain || 0 } }, justify: :center, align: :center) do
         node({
           text: "Mute",

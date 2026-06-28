@@ -5,6 +5,8 @@ class ZoomScene < Conjuration::Scene
     self.virtual_w = self.virtual_h = 16000
 
     add_camera(:main, speed: 30, zoom_speed: 0.05)
+    cameras[:main].ui.group = :hud # the whole HUD is one navigable pane
+    activate_navigation(:hud)
 
     @tiles = Conjuration::TileLayer.new(name: :grid, chunk_size: 400)
 

@@ -5,6 +5,8 @@ class BasicCameraScene < Conjuration::Scene
     self.virtual_w = self.virtual_h = 2000
 
     add_camera(:main, speed: 30)
+    cameras[:main].ui.group = :hud # the whole HUD is one navigable pane
+    activate_navigation(:hud)
 
     state.cells = []
 
