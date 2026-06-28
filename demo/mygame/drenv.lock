@@ -12,6 +12,6 @@ require = ["vendor/conjuration/conjuration.rb"]
 [[dependencies]]
 name = "frame-timer"
 source = "github:owenbutler/dr-frame-timer"
-ref = "c93f3140044201e0f3edaa72a6817a69d48de84e"
+ref = "60733abd90e7de5e9f53d025b593ab3084c75460"
 require = ["vendor/frame-timer/frame-timer.rb"]
-integrity = "sha256-98a254b10aad875ce04b04137f741a4935ec7196b831d82be425fe08a161c968"
+integrity = "sha256-0362fd56b4409db27437328f22c86bfe9c22a9dd8bd7e5c82251a92e00d4fbd2"
