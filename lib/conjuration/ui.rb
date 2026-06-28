@@ -63,11 +63,11 @@ module Conjuration
       attr_accessor :group
       attr_reader :overflow
       attr_accessor :scroll_offset
-      attr_reader :wrap
+      attr_reader :wrap, :text_break
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -99,8 +99,12 @@ module Conjuration
         @overflow = overflow
         @scroll_offset = 0
 
-        # wrap: a max width that breaks this node's text across multiple lines.
+        # wrap: this container wraps its text children to its content width.
         @wrap = wrap
+
+        # text_break: how this text node breaks when wrapped — :word (default,
+        # on spaces), :letter (anywhere, mid-word), or false (never wrap).
+        @text_break = text_break
 
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
@@ -109,8 +113,8 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, wrap: wrap, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, wrap: wrap, text_break: text_break, **object, &block)
         element.parent = self
         children << element
         clear_structure_cache!
@@ -212,17 +216,11 @@ module Conjuration
         !wrap_width.nil?
       end
 
-      # How text breaks when its container wraps: :word (default, on spaces),
-      # :letter (anywhere, mid-word), or false (this text never wraps).
-      def break_mode
-        object.has_key?(:break) ? object[:break] : :word
-      end
-
       # The width this text node wraps to — its parent's content width when the
-      # parent set wrap: true (and this text doesn't opt out with break: false),
-      # else nil. Coupling to the parent's width reflows the text when it resizes.
+      # parent set wrap: true (and this text doesn't opt out with text_break:
+      # false), else nil. Coupling to the parent's width reflows it on resize.
       def wrap_width
-        return nil if break_mode == false
+        return nil if text_break == false
         return nil unless object.has_key?(:text) && parent&.wrap
 
         parent.inner_width
@@ -233,16 +231,16 @@ module Conjuration
         object.w - padding_left - padding_right
       end
 
-      # The text wrapped to width, per break_mode. Memoized per [text, width, mode].
+      # The text wrapped to width, per text_break. Memoized per [text, width, mode].
       def wrap_lines
         width = wrap_width
         return [] unless width
 
-        key = [object.text, width, break_mode]
+        key = [object.text, width, text_break]
         return @wrapped_lines if @wrapped_key == key
 
         @wrapped_key = key
-        @wrapped_lines = break_mode == :letter ? break_by_letter(width) : break_by_word(width)
+        @wrapped_lines = text_break == :letter ? break_by_letter(width) : break_by_word(width)
       end
 
       # Greedy break on word boundaries; a word wider than the width takes its own

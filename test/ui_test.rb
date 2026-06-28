@@ -626,7 +626,7 @@ end
 def test_letter_break_splits_mid_word(args, assert)
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
     node({ x: 0, y: 0, w: 40, h: 100 }, id: :box, wrap: true) do
-      node({ text: "abcdefgh", break: :letter }, id: :para)
+      node({ text: "abcdefgh" }, id: :para, text_break: :letter)
     end
   end
   para = ui.find(:para)
@@ -638,11 +638,11 @@ end
 def test_break_false_disables_wrapping(args, assert)
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
     node({ x: 0, y: 0, w: 40, h: 100 }, id: :box, wrap: true) do
-      node({ text: "aa bb cc", break: false }, id: :para)
+      node({ text: "aa bb cc" }, id: :para, text_break: false)
     end
   end
   para = ui.find(:para)
 
-  assert.equal!(para.wrapped?, false, "break: false opts out even under a wrapping parent")
+  assert.equal!(para.wrapped?, false, "text_break: false opts out even under a wrapping parent")
   assert.equal!(para.object.w, 64, "stays a single line (8 chars * 8px)")
 end
