@@ -595,3 +595,54 @@ def test_scroll_content_height_includes_padding(args, assert)
   # children span 160 (two 80s, no gap) + 10 top + 10 bottom padding.
   assert.equal!(scroller.content_height, 180, "content height includes the container's top and bottom padding")
 end
+
+# --- Text wrapping (wrap:, 3.6) -----------------------------------------------
+
+def test_wrapped_text_breaks_into_lines(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 48, h: 100 }, id: :box, wrap: true) do
+      node({ text: "aa bb cc dd" }, id: :para)
+    end
+  end
+  para = ui.find(:para)
+
+  # box content width = 48 (no padding). The double measures width as length * 8:
+  # "aa bb" (5 chars) = 40 <= 48 fits; "aa bb cc" (8 chars) = 64 > 48, so it breaks.
+  assert.equal!(para.wrap_lines, ["aa bb", "cc dd"], "wraps to the parent's content width")
+  assert.equal!([para.object.w, para.object.h], [48, 44], "sized to the wrap width and lines * line height (22)")
+end
+
+def test_wrapped_text_emits_one_label_per_line(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 100, w: 48, h: 100 }, id: :box, wrap: true) do
+      node({ text: "aa bb cc dd", r: 1, g: 2, b: 3 }, id: :para)
+    end
+  end
+
+  labels = ui.primitives.select { |p| p[:text] }
+  assert.equal!(labels.map { |p| p[:text] }, ["aa bb", "cc dd"], "one label primitive per wrapped line")
+end
+
+def test_letter_break_splits_mid_word(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 40, h: 100 }, id: :box, wrap: true) do
+      node({ text: "abcdefgh" }, id: :para, text_break: :letter)
+    end
+  end
+  para = ui.find(:para)
+
+  # width 40 = 5 chars (8px each); "abcdefgh" packs 5 then breaks mid-word.
+  assert.equal!(para.wrap_lines, ["abcde", "fgh"], "letter break splits within a word to fit the width")
+end
+
+def test_break_false_disables_wrapping(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 40, h: 100 }, id: :box, wrap: true) do
+      node({ text: "aa bb cc" }, id: :para, text_break: false)
+    end
+  end
+  para = ui.find(:para)
+
+  assert.equal!(para.wrapped?, false, "text_break: false opts out even under a wrapping parent")
+  assert.equal!(para.object.w, 64, "stays a single line (8 chars * 8px)")
+end

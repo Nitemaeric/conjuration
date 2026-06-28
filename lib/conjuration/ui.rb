@@ -63,10 +63,11 @@ module Conjuration
       attr_accessor :group
       attr_reader :overflow
       attr_accessor :scroll_offset
+      attr_reader :wrap, :text_break
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -98,6 +99,13 @@ module Conjuration
         @overflow = overflow
         @scroll_offset = 0
 
+        # wrap: this container wraps its text children to its content width.
+        @wrap = wrap
+
+        # text_break: how this text node breaks when wrapped — :word (default,
+        # on spaces), :letter (anywhere, mid-word), or false (never wrap).
+        @text_break = text_break
+
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
         @dirty = true
@@ -105,8 +113,8 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, wrap: wrap, text_break: text_break, **object, &block)
         element.parent = self
         children << element
         clear_structure_cache!
@@ -189,9 +197,90 @@ module Conjuration
         @measured_size
       end
 
-      # Resolve this node's own intrinsic size from its text, if any.
+      # Resolve this node's own intrinsic size from its text, if any. When the
+      # parent opted into wrapping (wrap: true), the text breaks across lines to
+      # the parent's content width and the node sizes to the wrapped block.
       def measure!
-        object.w, object.h = measure_text if object.has_key?(:text)
+        return unless object.has_key?(:text)
+
+        width = wrap_width
+        if width
+          object.w = width
+          object.h = wrap_lines.length * measure_text[1]
+        else
+          object.w, object.h = measure_text
+        end
+      end
+
+      def wrapped?
+        !wrap_width.nil?
+      end
+
+      # The width this text node wraps to — its parent's content width when the
+      # parent set wrap: true (and this text doesn't opt out with text_break:
+      # false), else nil. Coupling to the parent's width reflows it on resize.
+      def wrap_width
+        return nil if text_break == false
+        return nil unless object.has_key?(:text) && parent&.wrap
+
+        parent.inner_width
+      end
+
+      # This node's content width — its box minus left/right padding.
+      def inner_width
+        object.w - padding_left - padding_right
+      end
+
+      # The text wrapped to width, per text_break. Memoized per [text, width, mode].
+      def wrap_lines
+        width = wrap_width
+        return [] unless width
+
+        key = [object.text, width, text_break]
+        return @wrapped_lines if @wrapped_key == key
+
+        @wrapped_key = key
+        @wrapped_lines = text_break == :letter ? break_by_letter(width) : break_by_word(width)
+      end
+
+      # Greedy break on word boundaries; a word wider than the width takes its own
+      # line (and overflows rather than splitting).
+      def break_by_word(width)
+        accumulate_lines(object.text.to_s.split(" "), width) { |line, word| line.empty? ? word : "#{line} #{word}" }
+      end
+
+      # Greedy break anywhere — characters are packed until the line overflows.
+      def break_by_letter(width)
+        accumulate_lines(object.text.to_s.chars, width) { |line, char| line + char }
+      end
+
+      # Greedily pack tokens into lines no wider than width: each token joins the
+      # current line (via the block) if it fits, else it starts a new line.
+      def accumulate_lines(tokens, width)
+        lines = []
+        line = ""
+
+        tokens.each do |token|
+          candidate = yield(line, token)
+          if line.empty? || gtk.calcstringbox(candidate)[0] <= width
+            line = candidate
+          else
+            lines << line
+            line = token
+          end
+        end
+
+        lines << line unless line.empty?
+        lines
+      end
+
+      # One label primitive per wrapped line, stacked down from the node's top.
+      def wrapped_text_primitives
+        line_height = measure_text[1]
+
+        wrap_lines.each_with_index.map do |line, index|
+          { **styled_object, text: line, x: object.left, y: object.top - index * line_height, anchor_x: 0, anchor_y: 1 }
+        end
       end
 
       def calculate_layout(force: false)
@@ -264,6 +353,8 @@ module Conjuration
           # target (see render_scroll_target); the flat list gets the blit + bar.
           acc << scroll_sprite
           acc.concat(scrollbar_primitives)
+        elsif wrapped? && renderable?
+          acc.concat(wrapped_text_primitives)
         else
           acc << styled_object if renderable?
           children.each { |child| child.collect_primitives(acc) }
@@ -294,8 +385,8 @@ module Conjuration
 
         dx = -object.left
         dy = -object.bottom + scroll_offset
-        children.flat_map(&:nodes).select(&:renderable?).each do |node|
-          primitive = node.styled_object.dup
+        children.flat_map { |child| child.collect_primitives([]) }.each do |source|
+          primitive = source.dup
           primitive[:x]  += dx if primitive[:x]
           primitive[:y]  += dy if primitive[:y]
           primitive[:x2] += dx if primitive[:x2]
