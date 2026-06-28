@@ -8,16 +8,14 @@ class BasicCameraScene < Conjuration::Scene
     cameras[:main].ui.group = :hud # the whole HUD is one navigable pane
     activate_navigation(:hud)
 
-    state.cells = []
+    @tiles = Conjuration::TileLayer.new(name: :grid, chunk_size: 400)
 
     (virtual_w / TILE_SIZE).to_i.times do |row|
       (virtual_h / TILE_SIZE).to_i.times do |column|
-        state.cells << {
-          x: column * TILE_SIZE,
-          y: row * TILE_SIZE,
-          w: TILE_SIZE,
-          h: TILE_SIZE,
-        }
+        cell = { x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE }
+
+        @tiles.add({ **cell, path: :pixel, r: 192, g: 192, b: 192, a: 192 })
+        @tiles.add({ **cell, primitive_marker: :border, r: 255, g: 255, b: 255, a: 192 })
       end
     end
 
@@ -81,31 +79,23 @@ class BasicCameraScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    hover = camera == focused_camera ? camera.to_world(**inputs.mouse.rect) : nil
-
-    state.cells.each do |cell|
-      focused = hover&.inside_rect?(cell)
-
-      camera.draw({
-        **cell,
-        path: :pixel,
-        r: 192,
-        g: focused ? 0 : 192,
-        b: focused ? 0 : 192,
-        a: focused ? 255 : 192
-      })
-
-      camera.draw({
-        **cell,
-        primitive_marker: :border,
-        r: 255,
-        g: 255,
-        b: 255,
-        a: 192
-      })
-    end
+    # Static grid: drawn from cached chunk textures, so the 2000x2000 world stays
+    # cheap even fully zoomed out and across multiple cameras.
+    @tiles.draw(camera)
 
     # The follow target (orange square).
     camera.draw({ **state.target, path: :pixel, r: 255, g: 140, b: 0 })
+
+    # Dynamic hover highlight, drawn immediately on top of the cached tiles.
+    return unless camera == focused_camera
+
+    point = camera.to_world(**inputs.mouse.rect)
+    column = (point.x / TILE_SIZE).floor
+    row = (point.y / TILE_SIZE).floor
+
+    return unless column.between?(0, (virtual_w / TILE_SIZE).to_i - 1)
+    return unless row.between?(0, (virtual_h / TILE_SIZE).to_i - 1)
+
+    camera.draw({ x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE, path: :pixel, r: 255, g: 0, b: 0, a: 128 })
   end
 end
