@@ -48,6 +48,8 @@ module Conjuration
       end
 
       UI.pressed_node = pressing? ? UI.focused_node : nil
+
+      scroll_focused
     end
 
     # Mouse wheel scrolls the overflow: :scroll container under the cursor.
@@ -58,6 +60,18 @@ module Conjuration
       return unless container
 
       container.scroll_offset = (container.scroll_offset - inputs.mouse.wheel.y * 20).clamp(0, container.max_scroll)
+    end
+
+    # The right thumbstick scrolls the focused scroll container (when this ui owns
+    # it), so a navigated-to scroll pane scrolls by default.
+    def scroll_focused
+      focused = UI.focused_node
+      return unless focused&.scroll? && ui.interactive_nodes.include?(focused)
+
+      delta = inputs.controller_one.right_analog_y_perc
+      return if delta.abs < 0.15
+
+      focused.scroll_offset = (focused.scroll_offset - delta * 14).clamp(0, focused.max_scroll)
     end
 
     def perform_update
@@ -140,7 +154,10 @@ module Conjuration
     def trigger_focused_node
       return unless ui.interactive_nodes.include?(UI.focused_node)
 
-      instance_exec(&UI.focused_node.object.action)
+      # A focusable node may have no action (e.g. a scroll container); confirm is
+      # a no-op on it.
+      action = UI.focused_node.object.action
+      instance_exec(&action) if action
     end
 
     # The built-in focus highlight, so keyboard/pad focus is always visible. nil

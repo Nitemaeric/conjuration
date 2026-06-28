@@ -2,7 +2,7 @@ class UIScene < Conjuration::Scene
   TILE_SIZE = 40
 
   # The scene owns the order panes cycle in — the framework doesn't switch groups.
-  NAV_GROUPS = [:hud, :party, :skills].freeze
+  NAV_GROUPS = [:hud, :party, :skills, :list].freeze
 
   def setup
     ui.node(grid.rect, id: :background, direction: :row) do
@@ -103,7 +103,7 @@ class UIScene < Conjuration::Scene
     end
 
     # A fixed-height panel whose contents overflow and scroll with the wheel.
-    ui.node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, anchor_x: 1, anchor_y: 0.5, path: :pixel, r: 30, g: 34, b: 44 }, id: :scroll_list, overflow: :scroll, padding: 12, gap: 8) do
+    ui.node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, anchor_x: 1, anchor_y: 0.5, path: :pixel, r: 30, g: 34, b: 44 }, id: :scroll_list, overflow: :scroll, padding: 12, gap: 8, group: :list) do
       16.times do |i|
         node({ text: "Scrollable item #{i + 1}", r: 230, g: 230, b: 240 })
       end

@@ -572,3 +572,13 @@ def test_scroll_content_height_and_max_scroll(args, assert)
   assert.equal!(scroller.max_scroll, 70, "content 170 - box 100")
   assert.equal!(scroller.scroll?, true, "overflow: :scroll marks it a scroll container")
 end
+
+def test_scroll_container_is_focusable(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 200, h: 200 }, id: :root) do
+    node({ x: 0, y: 0, w: 100, h: 100 }, id: :scroller, overflow: :scroll) do
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :item)
+    end
+  end
+
+  assert.equal!(ui.interactive_nodes.map(&:id), [:scroller], "a scroll container is focusable even without an action")
+end

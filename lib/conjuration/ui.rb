@@ -451,10 +451,13 @@ module Conjuration
       end
 
       def interactive?
-        # Cheap checks first: most nodes have no action, so short-circuit before
-        # the visible_in_tree? parent walk (this runs over every node, every tick,
-        # in interactive_nodes / navigation_groups).
-        has_key?(:action) && !disabled? && visible_in_tree?
+        # Cheap checks first: most nodes have neither an action nor scroll, so
+        # short-circuit before the visible_in_tree? parent walk (this runs over
+        # every node, every tick). A scroll container is focusable too, so it can
+        # be navigated to and scrolled with the right stick once focused.
+        return false unless has_key?(:action) || scroll?
+
+        !disabled? && visible_in_tree?
       end
 
       def renderable?
