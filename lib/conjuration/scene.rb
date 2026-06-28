@@ -75,6 +75,7 @@ module Conjuration
       # Relayout once per frame, after input/update have mutated + invalidated.
       # Clean subtrees early-out, so this is near-free when nothing changed.
       ui.calculate_layout
+      ui.render_scroll_targets
 
       outputs.primitives << ui.primitives
 
