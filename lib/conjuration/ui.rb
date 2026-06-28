@@ -63,10 +63,11 @@ module Conjuration
       attr_accessor :group
       attr_reader :overflow
       attr_accessor :scroll_offset
+      attr_reader :wrap
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -98,6 +99,9 @@ module Conjuration
         @overflow = overflow
         @scroll_offset = 0
 
+        # wrap: a max width that breaks this node's text across multiple lines.
+        @wrap = wrap
+
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
         @dirty = true
@@ -105,8 +109,8 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, wrap: wrap, **object, &block)
         element.parent = self
         children << element
         clear_structure_cache!
@@ -189,9 +193,58 @@ module Conjuration
         @measured_size
       end
 
-      # Resolve this node's own intrinsic size from its text, if any.
+      # Resolve this node's own intrinsic size from its text, if any. A wrap width
+      # breaks the text across lines and sizes the node to the wrapped block.
       def measure!
-        object.w, object.h = measure_text if object.has_key?(:text)
+        return unless object.has_key?(:text)
+
+        if wrap
+          object.w = wrap
+          object.h = wrap_lines.length * measure_text[1]
+        else
+          object.w, object.h = measure_text
+        end
+      end
+
+      def wrapped?
+        !wrap.nil? && object.has_key?(:text)
+      end
+
+      # Greedily break the text into lines no wider than `wrap`, on word
+      # boundaries (a word wider than wrap takes its own line). Memoized per text.
+      def wrap_lines
+        key = [object.text, wrap]
+        return @wrapped_lines if @wrapped_key == key
+
+        @wrapped_key = key
+        @wrapped_lines = build_wrapped_lines
+      end
+
+      def build_wrapped_lines
+        lines = []
+        line = ""
+
+        object.text.to_s.split(" ").each do |word|
+          candidate = line.empty? ? word : "#{line} #{word}"
+          if line.empty? || gtk.calcstringbox(candidate)[0] <= wrap
+            line = candidate
+          else
+            lines << line
+            line = word
+          end
+        end
+
+        lines << line unless line.empty?
+        lines
+      end
+
+      # One label primitive per wrapped line, stacked down from the node's top.
+      def wrapped_text_primitives
+        line_height = measure_text[1]
+
+        wrap_lines.each_with_index.map do |line, index|
+          { **styled_object, text: line, x: object.left, y: object.top - index * line_height, anchor_x: 0, anchor_y: 1 }
+        end
       end
 
       def calculate_layout(force: false)
@@ -264,6 +317,8 @@ module Conjuration
           # target (see render_scroll_target); the flat list gets the blit + bar.
           acc << scroll_sprite
           acc.concat(scrollbar_primitives)
+        elsif wrapped? && renderable?
+          acc.concat(wrapped_text_primitives)
         else
           acc << styled_object if renderable?
           children.each { |child| child.collect_primitives(acc) }
@@ -294,8 +349,8 @@ module Conjuration
 
         dx = -object.left
         dy = -object.bottom + scroll_offset
-        children.flat_map(&:nodes).select(&:renderable?).each do |node|
-          primitive = node.styled_object.dup
+        children.flat_map { |child| child.collect_primitives([]) }.each do |source|
+          primitive = source.dup
           primitive[:x]  += dx if primitive[:x]
           primitive[:y]  += dy if primitive[:y]
           primitive[:x2] += dx if primitive[:x2]
