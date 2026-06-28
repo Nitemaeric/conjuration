@@ -212,10 +212,17 @@ module Conjuration
         !wrap_width.nil?
       end
 
+      # How text breaks when its container wraps: :word (default, on spaces),
+      # :letter (anywhere, mid-word), or false (this text never wraps).
+      def break_mode
+        object.has_key?(:break) ? object[:break] : :word
+      end
+
       # The width this text node wraps to — its parent's content width when the
-      # parent set wrap: true, else nil. Coupling to the parent's width means the
-      # text reflows when the container resizes, instead of a fixed magic number.
+      # parent set wrap: true (and this text doesn't opt out with break: false),
+      # else nil. Coupling to the parent's width reflows the text when it resizes.
       def wrap_width
+        return nil if break_mode == false
         return nil unless object.has_key?(:text) && parent&.wrap
 
         parent.inner_width
@@ -226,30 +233,42 @@ module Conjuration
         object.w - padding_left - padding_right
       end
 
-      # Greedily break the text into lines no wider than the wrap width, on word
-      # boundaries (a word wider than the width takes its own line). Memoized.
+      # The text wrapped to width, per break_mode. Memoized per [text, width, mode].
       def wrap_lines
         width = wrap_width
         return [] unless width
 
-        key = [object.text, width]
+        key = [object.text, width, break_mode]
         return @wrapped_lines if @wrapped_key == key
 
         @wrapped_key = key
-        @wrapped_lines = build_wrapped_lines(width)
+        @wrapped_lines = break_mode == :letter ? break_by_letter(width) : break_by_word(width)
       end
 
-      def build_wrapped_lines(width)
+      # Greedy break on word boundaries; a word wider than the width takes its own
+      # line (and overflows rather than splitting).
+      def break_by_word(width)
+        accumulate_lines(object.text.to_s.split(" "), width) { |line, word| line.empty? ? word : "#{line} #{word}" }
+      end
+
+      # Greedy break anywhere — characters are packed until the line overflows.
+      def break_by_letter(width)
+        accumulate_lines(object.text.to_s.chars, width) { |line, char| line + char }
+      end
+
+      # Greedily pack tokens into lines no wider than width: each token joins the
+      # current line (via the block) if it fits, else it starts a new line.
+      def accumulate_lines(tokens, width)
         lines = []
         line = ""
 
-        object.text.to_s.split(" ").each do |word|
-          candidate = line.empty? ? word : "#{line} #{word}"
+        tokens.each do |token|
+          candidate = yield(line, token)
           if line.empty? || gtk.calcstringbox(candidate)[0] <= width
             line = candidate
           else
             lines << line
-            line = word
+            line = token
           end
         end
 
