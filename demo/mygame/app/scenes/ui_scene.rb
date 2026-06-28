@@ -102,6 +102,13 @@ class UIScene < Conjuration::Scene
       node({ text: "Clicking this button will print 'Button clicked!' to the console.", r: 255, g: 255, b: 255 })
     end
 
+    # A fixed-height panel whose contents overflow and scroll with the wheel.
+    ui.node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, anchor_x: 1, anchor_y: 0.5, path: :pixel, r: 30, g: 34, b: 44 }, id: :scroll_list, overflow: :scroll, padding: 12, gap: 8) do
+      16.times do |i|
+        node({ text: "Scrollable item #{i + 1}", r: 230, g: 230, b: 240 })
+      end
+    end
+
     ui.node({ x: grid.w / 2, y: 28, anchor_x: 0.5, text: "Use the keyboard or d-pad to navigate", r: 255, g: 255, b: 255 }, id: :nav_hint)
   end
 
