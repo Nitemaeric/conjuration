@@ -529,3 +529,15 @@ def test_spatial_navigate_restricts_to_candidates(args, assert)
   assert.equal!(c.spatial_navigate(a, right).id, :b, "unrestricted -> nearest neighbour b")
   assert.equal!(c.spatial_navigate(a, right, candidates: [a, cc]).id, :c, "candidates restrict the search, skipping b")
 end
+
+def test_a_root_group_names_the_whole_ui_as_one_pane(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 100, h: 100 }, id: :root) do
+    node({ x: 0, y: 0, w: 50, h: 50, action: -> {} }, id: :a)
+    node({ x: 0, y: 0, w: 50, h: 50, action: -> {} }, id: :b)
+  end
+  ui.group = :hud # set the group on the whole ui
+
+  groups = ui.navigation_groups
+  assert.equal!(groups.keys, [:hud], "the root group names the whole ui as one pane")
+  assert.equal!(groups[:hud].map(&:id), [:a, :b], "every interactive node inherits it")
+end

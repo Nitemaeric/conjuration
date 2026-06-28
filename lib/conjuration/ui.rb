@@ -60,7 +60,7 @@ module Conjuration
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
-      attr_reader :group
+      attr_accessor :group
 
       delegate :first, :last, to: :children
 

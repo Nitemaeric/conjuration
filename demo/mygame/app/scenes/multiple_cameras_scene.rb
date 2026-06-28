@@ -5,6 +5,8 @@ class MultipleCamerasScene < Conjuration::Scene
     self.virtual_w = self.virtual_h = 2000
 
     left_camera = add_camera(:left, x: 0, y: 0, w: grid.w / 2)
+    left_camera.ui.group = :hud # the Back button lives on the left camera's HUD
+    activate_navigation(:hud)
     add_camera(:left_minimap, x: left_camera.rect.right - 220, y: left_camera.rect.top - 120, w: 200, h: 100)
 
     right_camera = add_camera(:right, x: grid.w / 2, y: 0, w: grid.w / 2)

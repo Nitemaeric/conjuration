@@ -30,6 +30,8 @@ class HitStopScene < Conjuration::Scene
 
   def setup
     add_camera(:main)
+    cameras[:main].ui.group = :hud # the whole HUD is one navigable pane
+    activate_navigation(:hud)
 
     reset_crates
     state.particles = []
