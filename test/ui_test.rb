@@ -600,19 +600,23 @@ end
 
 def test_wrapped_text_breaks_into_lines(args, assert)
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
-    node({ x: 0, y: 0, text: "aa bb cc dd" }, id: :para, wrap: 48)
+    node({ x: 0, y: 0, w: 48, h: 100 }, id: :box, wrap: true) do
+      node({ text: "aa bb cc dd" }, id: :para)
+    end
   end
   para = ui.find(:para)
 
-  # The double measures width as length * 8: "aa bb" (5 chars) = 40 <= 48 fits;
-  # "aa bb cc" (8 chars) = 64 > 48, so it breaks.
-  assert.equal!(para.wrap_lines, ["aa bb", "cc dd"], "greedy word wrap to the width")
+  # box content width = 48 (no padding). The double measures width as length * 8:
+  # "aa bb" (5 chars) = 40 <= 48 fits; "aa bb cc" (8 chars) = 64 > 48, so it breaks.
+  assert.equal!(para.wrap_lines, ["aa bb", "cc dd"], "wraps to the parent's content width")
   assert.equal!([para.object.w, para.object.h], [48, 44], "sized to the wrap width and lines * line height (22)")
 end
 
 def test_wrapped_text_emits_one_label_per_line(args, assert)
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
-    node({ x: 0, y: 100, text: "aa bb cc dd", r: 1, g: 2, b: 3 }, id: :para, wrap: 48)
+    node({ x: 0, y: 100, w: 48, h: 100 }, id: :box, wrap: true) do
+      node({ text: "aa bb cc dd", r: 1, g: 2, b: 3 }, id: :para)
+    end
   end
 
   labels = ui.primitives.select { |p| p[:text] }

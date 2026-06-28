@@ -29,8 +29,8 @@ class UIScene < Conjuration::Scene
     end
 
     ui.node({ x: 5, y: grid.h / 2, w: 240, h: grid.h - 200, anchor_y: 0.5, path: "sprites/sidebar-container-background.png", r: 222, g: 222, b: 222 }, id: :party, justify: :center, align: :stretch, padding: 20, gap: 20, group: :party) do
-      node({ primitive_marker: :border, h: 200 }, id: :section_1, padding: 20) do
-        node({ text: "Text wrapping breaks a long line onto multiple rows so it fits inside the panel." }, id: :sub_section_1, wrap: 110)
+      node({ primitive_marker: :border, h: 200 }, id: :section_1, padding: 20, wrap: true) do
+        node({ text: "Text wrapping breaks a long line onto multiple rows so it fits inside the panel." }, id: :sub_section_1)
       end
 
       node({ h: 20 }, id: :section_2, align: :end) do

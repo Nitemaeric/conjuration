@@ -193,13 +193,15 @@ module Conjuration
         @measured_size
       end
 
-      # Resolve this node's own intrinsic size from its text, if any. A wrap width
-      # breaks the text across lines and sizes the node to the wrapped block.
+      # Resolve this node's own intrinsic size from its text, if any. When the
+      # parent opted into wrapping (wrap: true), the text breaks across lines to
+      # the parent's content width and the node sizes to the wrapped block.
       def measure!
         return unless object.has_key?(:text)
 
-        if wrap
-          object.w = wrap
+        width = wrap_width
+        if width
+          object.w = width
           object.h = wrap_lines.length * measure_text[1]
         else
           object.w, object.h = measure_text
@@ -207,26 +209,43 @@ module Conjuration
       end
 
       def wrapped?
-        !wrap.nil? && object.has_key?(:text)
+        !wrap_width.nil?
       end
 
-      # Greedily break the text into lines no wider than `wrap`, on word
-      # boundaries (a word wider than wrap takes its own line). Memoized per text.
+      # The width this text node wraps to — its parent's content width when the
+      # parent set wrap: true, else nil. Coupling to the parent's width means the
+      # text reflows when the container resizes, instead of a fixed magic number.
+      def wrap_width
+        return nil unless object.has_key?(:text) && parent&.wrap
+
+        parent.inner_width
+      end
+
+      # This node's content width — its box minus left/right padding.
+      def inner_width
+        object.w - padding_left - padding_right
+      end
+
+      # Greedily break the text into lines no wider than the wrap width, on word
+      # boundaries (a word wider than the width takes its own line). Memoized.
       def wrap_lines
-        key = [object.text, wrap]
+        width = wrap_width
+        return [] unless width
+
+        key = [object.text, width]
         return @wrapped_lines if @wrapped_key == key
 
         @wrapped_key = key
-        @wrapped_lines = build_wrapped_lines
+        @wrapped_lines = build_wrapped_lines(width)
       end
 
-      def build_wrapped_lines
+      def build_wrapped_lines(width)
         lines = []
         line = ""
 
         object.text.to_s.split(" ").each do |word|
           candidate = line.empty? ? word : "#{line} #{word}"
-          if line.empty? || gtk.calcstringbox(candidate)[0] <= wrap
+          if line.empty? || gtk.calcstringbox(candidate)[0] <= width
             line = candidate
           else
             lines << line
