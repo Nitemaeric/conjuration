@@ -1,6 +1,6 @@
 # Reactive UI (view reconciliation)
 
-Status: **accepted** — implementation phased below.
+Status: **proposed** — under review ([PR #12](https://github.com/Nitemaeric/conjuration/pull/12)); implementation phased below.
 
 ## Problem
 
@@ -43,7 +43,7 @@ derives the tree. One-way data flow:
 ```ruby
 class ClickerScene < Conjuration::Scene
   def setup
-    state.items = 8.times.map { { progress: 0, rate: 10 + rand * 30 } }
+    state.items = 8.times.map { |i| { id: i, progress: 0, rate: 10 + rand * 30 } }
   end
 
   def update
@@ -54,8 +54,9 @@ class ClickerScene < Conjuration::Scene
 
   def view
     node({ x: 20, y: 20.from_top, w: grid.w - 40, anchor_y: 1 }, gap: 8) do
-      state.items.each_with_index do |item, i|
-        node({ h: 20, path: :pixel, r: 40, g: 44, b: 52 }, id: "item_#{i}") do
+      state.items.each do |item|
+        # Key by item identity, never by list position — see Reconciliation.
+        node({ h: 20, path: :pixel, r: 40, g: 44, b: 52 }, id: "item_#{item[:id]}") do
           node({ w: (grid.w - 40) * item[:progress] / 100, h: 20, path: :pixel, r: 120, g: 200, b: 120 })
         end
       end
@@ -83,6 +84,22 @@ doesn't (imperative, exactly as today). The feature is opt-in per root, and the
 imperative API (`find` + `invalidate!`) remains as the escape hatch for
 non-view roots. Manual mutations inside a view-owned root are overwritten on
 the next frame — documented, by design.
+
+### Block binding and build context
+
+The current DSL evaluates nested blocks with `instance_exec` against the node
+being built — which is why today's demo blocks only ever touch constants and
+closured locals. The examples above do more: `state`, `grid`, and scene
+helpers inside nested blocks; component `call` bodies that need their own
+ivars *and* the node DSL. `instance_exec` cannot serve both selves.
+
+Decision: descriptor blocks are **not** `instance_exec`'d. `self` stays
+natural — the scene, or the component instance — and `node(...)` emits into a
+current build-context stack (`UI.current_builder`) that is pushed and popped
+as blocks open and close. Scenes and view classes include the builder module,
+so `node` inside any of them writes to whatever context is on top. This is the
+central Phase 1 implementation decision, and it is also what makes helper
+methods and components able to emit at all.
 
 ## Composition: nested views
 
@@ -209,6 +226,10 @@ Consequences:
 input → update → run view (descriptors) → reconcile → calculate_layout (dirty-gated) → primitives
 ```
 
+Descriptor build is pure and runs to completion before reconcile begins. An
+exception raised mid-`view` therefore leaves last frame's tree fully intact —
+two-phase atomicity, claimed as a tested guarantee, not an accident.
+
 ## Reconciliation
 
 Per parent, match descriptor children to retained children:
@@ -224,6 +245,19 @@ Per parent, match descriptor children to retained children:
   `clear_structure_cache!`, parent `mark_dirty!`.
 - **Unmatched retained node** → remove; if it (or a descendant) is
   `UI.focused_node`, clear focus so it can't dangle.
+
+Keying rules:
+
+- **Key by item identity, never by list position.** `id: item[:id]`, not
+  `id: index` — index keys prop-morph every later sibling on removal or
+  reorder. Index keys are tolerable only for fixed-size or append-only lists.
+- **Conditionals shift unkeyed siblings.** `node(...) if cond` emits nothing
+  when false — unlike JSX's `null`, it leaves no positional hole — so every
+  later unkeyed sibling shifts (and prop-morphs) when the conditional flips.
+  Any sibling group containing a conditional must be keyed; debug mode warns.
+- **Descriptor ids stay strings/integers — no `to_sym` on dynamic ids.** mruby
+  never garbage-collects symbols, so symbolizing `"enemy_#{n}"` per spawned
+  entity grows the symbol table for the life of the process.
 
 ### Diff against declared props, not the live object
 
@@ -245,32 +279,82 @@ all persist across frames.
 `action:` lambdas are recreated every view run and can't be meaningfully
 compared — they're treated as render-only (overwrite, never dirty).
 
+Views may also read retained runtime state — the tooltip pattern above
+(`ui.find(:button)&.focused?`) reads focus off the reconciled tree. This is a
+deliberate, documented exception to one-way data flow, and it reads the
+*previous* frame's tree: one frame stale by construction.
+
+## Mutation vs. equality
+
+Props-equality memoization assumes this frame's value can be compared against
+last frame's. React earns that assumption with immutable updates; Conjuration
+state is mutated in place (`item[:progress] += ...`), and a mutable collection
+compared against itself is always equal:
+
+```ruby
+MenuView(items: state.items)  # same Array object every frame — "unchanged"
+```
+
+A naive memo skips forever and the UI freezes. The cautionary tale: wrapping
+the progress bars in `memo(:bars, state.items.length)` skips while
+`item[:progress]` changes every frame — frozen bars.
+
+Rules:
+
+- **`memo` deps must be scalars** (numbers, strings, symbols, booleans) or
+  values the caller explicitly snapshots. Debug mode warns when a dep is a
+  Hash or Array.
+- **Collections use a version-bump convention**: mutate freely, bump
+  `state.shop_version` when something the UI shows changes, dep on the
+  version.
+- **Component memo is opt-in** (`memoize_props!`), never the default — the
+  same posture as `React.memo`, and the same scalar guidance applies to the
+  props of a memoized component.
+- **A memo skip skips everything inside the boundary**, including `render?` of
+  components within it.
+- **`memo` takes an explicit key** (its first argument) — a positional
+  placeholder among shifting siblings would be ambiguous, so memo identity
+  follows the same keying rule as everything structural.
+
+The non-memoized path is unaffected: the per-node `@declared` diff compares
+freshly computed scalar props (widths, texts, colours) — new values every
+frame — so in-place state mutation is fully supported everywhere else.
+Mutation only becomes visible at the moment you ask the framework to skip work
+based on equality.
+
 ## Performance
 
 Per-frame cost on a clean frame = one view run + one diff walk: roughly two
-hash allocations and a small hash-compare per node. For UI/HUD scale (50–300
-nodes) that should be sub-millisecond on desktop — but mruby allocation churn
-and GC pressure are the real risk, so this is a **measured gate, not an
-assumption**:
+hash allocations and a small hash-compare per node, plus one lambda allocation
+per `action:` node. For UI/HUD scale (50–300 nodes) that should be
+sub-millisecond — but mruby allocation churn and GC pressure are the real
+risk, so this is a **measured gate, not an assumption**:
 
-1. **Benchmark first**: extend the bench harness with a reconcile benchmark
-   (300-node tree; clean frame / 1-node change / list churn) and set a budget —
-   clean-frame reconcile ≤ 0.5 ms — before merging.
-2. **`memo` as the relief valve** — skip descriptor building for a subtree when
-   its inputs didn't change (the retained subtree is kept as-is):
+1. **Benchmark the real tree**: the demo UI scene is ~600 nodes counting its
+   checkerboard backdrop — bench that, not a synthetic 300-node tree (clean
+   frame / 1-node change / list churn). The budget — clean-frame reconcile
+   ≤ 0.5 ms — is defined on the weakest intended target (the web/wasm build),
+   not a desktop.
+2. **`memo(key, *deps)` as the relief valve** — skip descriptor building for a
+   subtree when its deps didn't change (the retained subtree is kept as-is):
 
    ```ruby
-   memo(state.items.length, state.wave) do
-     state.items.each_with_index { |item, i| ... }
+   memo(:shop, state.shop_version) do
+     state.shop_items.each { |item| ShopRowView(item: item) }
    end
    ```
 
    This is `useMemo`: most of what signals buy, with zero ceremony on the rest
-   of the game's state.
+   of the game's state. Deps follow the Mutation vs. equality rules (scalars
+   or version bumps — never a mutable collection). Real scenes need this
+   immediately, so a minimal memo lands in Phase 2, not Phase 3.
 3. **Pooling later if needed**: descriptor hashes are uniform and short-lived —
    a per-frame arena/pool is a mechanical follow-up if the benchmark says GC
    hurts. Not built speculatively.
-4. **Scope guard**: this is for UI/HUD. Non-UI game components are not expected
+4. **Static backdrops don't belong in a view-owned tree.** The demo's 576-node
+   checkerboard grid is TileLayer's job; converting the demo moves it there.
+   The UI tree is for UI.
+5. **Scope guard**: this is for UI/HUD. Non-UI game components are not expected
    users; the imperative path stays available for anything hotter.
 
 Fallback position if the benchmark fails its budget even with memo:
@@ -279,21 +363,26 @@ cheaper, less expressive. Not expected to be needed.
 
 ## Phases (each a PR)
 
-1. **Reconciler core** — `ui.view`, descriptor build, declared-props diffing,
-   stable trees only (no add/remove). Golden tests: every existing demo scene
-   converted must produce byte-identical primitives. Bench gate added.
+1. **Reconciler core** — `ui.view`, the build-context stack (no
+   `instance_exec` — see Block binding), descriptor build, declared-props
+   diffing, stable trees only (no add/remove). Two-phase atomicity test (an
+   exception mid-view leaves last frame's tree intact). Golden tests: every
+   converted demo scene must produce byte-identical primitives (backdrops move
+   to TileLayer as part of conversion). Bench gate added.
 2. **Structural reconcile** — keyed create/remove/reorder, conditional
-   rendering, focus/scroll preservation, unkeyed-list warning. Clicker-style
-   progress-bar demo scene (the acceptance test: the `update` loop touches only
-   `item[:progress]`).
+   rendering, focus/scroll preservation, debug warnings (unkeyed list changing
+   length, conditional among unkeyed siblings, mutable memo dep). Minimal
+   `memo(key, *deps)`. Clicker-style progress-bar demo scene (the acceptance
+   test: the `update` loop touches only `item[:progress]`).
 3. **Composition + `memo` + perf pass** — formal view classes
    (`SomeView(**props)` call syntax via `inherited`-defined builder methods,
    ViewComponent-style anatomy: `initialize` props contract, `#call` as the
    render method, `render?`, `content` blocks; `[key, component_class]`
-   identity, unmount/remount on type change), props-equality component memo,
-   lambda-as-component duck typing, bare `memo(deps)`, isolated
-   component tests, allocation measurement, pooling only if the numbers demand
-   it. (Method-extraction composition needs nothing and works from Phase 1.)
+   identity, unmount/remount on type change), opt-in component memo
+   (`memoize_props!` — see Mutation vs. equality), lambda-as-component duck
+   typing, isolated component tests, allocation measurement, pooling only if
+   the numbers demand it. (Method-extraction composition needs nothing and
+   works from Phase 1.)
 4. **Later / out of scope**: named slots (`renders_one` / `renders_many`),
    component-local state, extraction into a standalone UI lib (the reconciler
    deliberately lives under `lib/conjuration/ui/` with no scene dependencies,
