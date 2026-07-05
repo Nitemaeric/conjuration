@@ -116,13 +116,30 @@ class MenuView < Conjuration::UI::View
 end
 
 def view
-  render(state.nested ? NestedMenuView : MenuView, items: state.items)
+  state.nested ? NestedMenuView(items: state.items) : MenuView(items: state.items)
 end
 ```
 
-`render` records the class on the descriptor; the reconciler matches on
-`[key, component_class]`. Flipping the class tears the subtree down cleanly
-(focus cleared, scroll reset) and remounts.
+**Why a function call, not `MenuView.new(...)`:** the view DSL collects
+children by side effect — `node(...)` emits into the enclosing builder context
+— not by return value (return values must be droppable, e.g. inside `each`
+blocks). A bare `.new` constructs an object that nothing ever emits. A call
+site is a method on the builder, and the builder is exactly the thing that
+knows where to emit.
+
+The call syntax is automatic: `View.inherited(klass)` defines a builder method
+named after the class (uppercase method names are legal Ruby when called with
+parens — the `Kernel#Integer()` trick) on the shared builder module, which
+emits a component descriptor `[key, component_class, props]` into the current
+context. The reconciler matches on `[key, component_class]`; flipping the
+class tears the subtree down cleanly (focus cleared, scroll reset) and
+remounts. The call boundary is also where props-equality memo can skip the
+whole subtree without running the component's `view` at all.
+
+Caveat: namespaced components (`Menus::ItemView`) can't be invoked as
+`Foo::Bar(...)` — the auto-defined method uses the demodulized name
+(`ItemView(...)`), with a debug-mode warning on name collision. Flat component
+names are the expected common case in game code.
 
 Consequences:
 
@@ -221,10 +238,11 @@ cheaper, less expressive. Not expected to be needed.
    progress-bar demo scene (the acceptance test: the `update` loop touches only
    `item[:progress]`).
 3. **Composition + `memo` + perf pass** — formal view classes
-   (`render SomeView, **props`, `[key, component_class]` identity,
-   unmount/remount on type change), props-equality component memo, bare
-   `memo(deps)`, allocation measurement, pooling only if the numbers demand it.
-   (Method-extraction composition needs nothing and works from Phase 1.)
+   (`SomeView(**props)` call syntax via `inherited`-defined builder methods,
+   `[key, component_class]` identity, unmount/remount on type change),
+   props-equality component memo, bare `memo(deps)`, allocation measurement,
+   pooling only if the numbers demand it. (Method-extraction composition needs
+   nothing and works from Phase 1.)
 4. **Later / out of scope**: extraction into a standalone UI lib (the
    reconciler deliberately lives under `lib/conjuration/ui/` with no scene
    dependencies, so this stays cheap), list virtualization, signals (only if a
