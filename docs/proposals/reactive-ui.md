@@ -118,7 +118,7 @@ class MenuView < Conjuration::UI::View
 
   def render? = @items.any?               # self-gating conditional rendering
 
-  def view
+  def call
     node({ ... }, id: :menu) do
       node({ text: @title })
       @items.each { |item| menu_row(item) }
@@ -142,11 +142,19 @@ Borrowed from ViewComponent:
   helper method without argument threading; the signature documents the
   component's API. Instances are ephemeral — constructed fresh each time the
   component runs (stateless v1 holds).
+- **`#call` is the render method** (not `view`). `call` is Ruby's universal
+  invocation interface — procs, lambdas, and `Method` objects all respond to
+  it — and it disambiguates the two concepts: a scene *has* a `view` (the
+  hook); a component *is* a view, and `call` runs it. Consequence of the duck
+  type (`call` + optional `render?`): a bare lambda can serve as a stateless
+  anonymous component (`Divider = -> { node({ ... }) }`), with the caveat that
+  procs have no stable class identity — positional matching only; class
+  components remain the tool where `[key, component_class]` identity matters.
 - **`render?`** — the component self-gates. `render?` → false means emit
   nothing (unmount if previously mounted), so a common conditional-rendering
   pattern lives in the component instead of at every call site.
 - **Content blocks.** `MenuView(items:) do ... end` — the caller's block
-  children become `content`, placed wherever the component's `view` wants.
+  children become `content`, placed wherever the component's `call` wants.
   This is what makes wrapper components (panels, cards, modals) possible.
   Named slots (`renders_one` / `renders_many`) are the natural extension —
   later phase; single `content` covers most game UI.
@@ -186,7 +194,7 @@ Consequences:
 
 - **Component boundaries are natural memo boundaries.** Props are explicit at
   the call site, so `React.memo` comes almost free: props `==` last frame →
-  skip running the component's view and keep the retained subtree. This may end
+  skip running the component's `call` and keep the retained subtree. This may end
   up the primary memo API, with bare `memo(deps)` as the low-level tool.
 - **Components are stateless in v1**: pure `props → descriptors`. State lives
   in the scene (`state.*`) — no `useState`, no retained component instances
@@ -280,9 +288,10 @@ cheaper, less expressive. Not expected to be needed.
    `item[:progress]`).
 3. **Composition + `memo` + perf pass** — formal view classes
    (`SomeView(**props)` call syntax via `inherited`-defined builder methods,
-   ViewComponent-style anatomy: `initialize` props contract, `render?`,
-   `content` blocks; `[key, component_class]` identity, unmount/remount on
-   type change), props-equality component memo, bare `memo(deps)`, isolated
+   ViewComponent-style anatomy: `initialize` props contract, `#call` as the
+   render method, `render?`, `content` blocks; `[key, component_class]`
+   identity, unmount/remount on type change), props-equality component memo,
+   lambda-as-component duck typing, bare `memo(deps)`, isolated
    component tests, allocation measurement, pooling only if the numbers demand
    it. (Method-extraction composition needs nothing and works from Phase 1.)
 4. **Later / out of scope**: named slots (`renders_one` / `renders_many`),
