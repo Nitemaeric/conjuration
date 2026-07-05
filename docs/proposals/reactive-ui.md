@@ -106,13 +106,29 @@ when the conditional flips — reusing the retained node and its state, so
 React's rule fixes this: **the component type is part of the identity** —
 different type → unmount and remount, fresh subtree, state reset.
 
+The class anatomy borrows deliberately from GitHub's ViewComponent (components
+as plain Ruby classes; logic beside markup; no template compiler):
+
 ```ruby
 class MenuView < Conjuration::UI::View
-  def view(items:)
+  def initialize(items:, title: "Menu")   # the props contract
+    @items = items
+    @title = title
+  end
+
+  def render? = @items.any?               # self-gating conditional rendering
+
+  def view
     node({ ... }, id: :menu) do
-      items.each { |item| node({ text: item.name }, id: item.id) }
+      node({ text: @title })
+      @items.each { |item| menu_row(item) }
+      content                              # caller's block children, if given
     end
   end
+
+  private
+
+  def menu_row(item) = node({ text: item.name }, id: item.id)
 end
 
 def view
@@ -120,37 +136,62 @@ def view
 end
 ```
 
-**Why a function call, not `MenuView.new(...)`:** the view DSL collects
-children by side effect — `node(...)` emits into the enclosing builder context
-— not by return value (return values must be droppable, e.g. inside `each`
-blocks). A bare `.new` constructs an object that nothing ever emits. A call
-site is a method on the builder, and the builder is exactly the thing that
-knows where to emit.
+Borrowed from ViewComponent:
+
+- **`initialize` is the props contract.** Props become ivars, visible to every
+  helper method without argument threading; the signature documents the
+  component's API. Instances are ephemeral — constructed fresh each time the
+  component runs (stateless v1 holds).
+- **`render?`** — the component self-gates. `render?` → false means emit
+  nothing (unmount if previously mounted), so a common conditional-rendering
+  pattern lives in the component instead of at every call site.
+- **Content blocks.** `MenuView(items:) do ... end` — the caller's block
+  children become `content`, placed wherever the component's `view` wants.
+  This is what makes wrapper components (panels, cards, modals) possible.
+  Named slots (`renders_one` / `renders_many`) are the natural extension —
+  later phase; single `content` covers most game UI.
+- **Isolated testing.** A component is `props → descriptors` with no scene
+  coupling, so tests can instantiate one directly and assert on its descriptor
+  tree — no scene boot, no reconciler.
+
+Not borrowed: ViewComponent's `render(MenuView.new(...))` invocation style.
+The view DSL collects children by side effect — `node(...)` emits into the
+enclosing builder context — not by return value (return values must be
+droppable, e.g. inside `each` blocks). A bare `.new` constructs an object that
+nothing ever emits; a call site is a method on the builder, and the builder is
+exactly the thing that knows where to emit.
 
 The call syntax is automatic: `View.inherited(klass)` defines a builder method
 named after the class (uppercase method names are legal Ruby when called with
-parens — the `Kernel#Integer()` trick) on the shared builder module, which
-emits a component descriptor `[key, component_class, props]` into the current
-context. The reconciler matches on `[key, component_class]`; flipping the
-class tears the subtree down cleanly (focus cleared, scroll reset) and
-remounts. The call boundary is also where props-equality memo can skip the
-whole subtree without running the component's `view` at all.
+parens — the `Kernel#Integer()` trick; verified working in DR's mruby) on the
+shared builder module, which emits a component descriptor
+`[key, component_class, props, block]` into the current context — the
+reconciler instantiates lazily, so props-equality memo can skip a subtree
+before `initialize` ever runs. The reconciler matches on
+`[key, component_class]`; flipping the class tears the subtree down cleanly
+(focus cleared, scroll reset) and remounts.
 
-Caveat: namespaced components (`Menus::ItemView`) can't be invoked as
-`Foo::Bar(...)` — the auto-defined method uses the demodulized name
-(`ItemView(...)`), with a debug-mode warning on name collision. Flat component
-names are the expected common case in game code.
+Caveats:
+
+- Namespaced components (`Menus::ItemView`) can't be invoked as `Foo::Bar(...)`
+  — the auto-defined method uses the demodulized name (`ItemView(...)`), with a
+  debug-mode warning on name collision. Flat component names are the expected
+  common case in game code.
+- **Content blocks weaken memo.** A block captures its environment and can't
+  be compared frame-to-frame, so a component invoked with a block can't be
+  skipped by props equality alone — its children must re-run. Leaf components
+  without blocks memo cleanly.
 
 Consequences:
 
 - **Component boundaries are natural memo boundaries.** Props are explicit at
-  the `render` call, so `React.memo` comes almost free: props `==` last frame →
+  the call site, so `React.memo` comes almost free: props `==` last frame →
   skip running the component's view and keep the retained subtree. This may end
   up the primary memo API, with bare `memo(deps)` as the low-level tool.
 - **Components are stateless in v1**: pure `props → descriptors`. State lives
-  in the scene (`state.*`) — no `useState`, no retained component instances.
-  Component-local state is a real feature but a separate one; pure views keep
-  the reconciler simple and the data flow one-way.
+  in the scene (`state.*`) — no `useState`, no retained component instances
+  across frames. Component-local state is a real feature but a separate one;
+  pure views keep the reconciler simple and the data flow one-way.
 - View classes with no scene coupling are exactly the shape a standalone-lib
   extraction wants.
 
@@ -239,14 +280,16 @@ cheaper, less expressive. Not expected to be needed.
    `item[:progress]`).
 3. **Composition + `memo` + perf pass** — formal view classes
    (`SomeView(**props)` call syntax via `inherited`-defined builder methods,
-   `[key, component_class]` identity, unmount/remount on type change),
-   props-equality component memo, bare `memo(deps)`, allocation measurement,
-   pooling only if the numbers demand it. (Method-extraction composition needs
-   nothing and works from Phase 1.)
-4. **Later / out of scope**: extraction into a standalone UI lib (the
-   reconciler deliberately lives under `lib/conjuration/ui/` with no scene
-   dependencies, so this stays cheap), list virtualization, signals (only if a
-   real workload defeats memo — doubtful).
+   ViewComponent-style anatomy: `initialize` props contract, `render?`,
+   `content` blocks; `[key, component_class]` identity, unmount/remount on
+   type change), props-equality component memo, bare `memo(deps)`, isolated
+   component tests, allocation measurement, pooling only if the numbers demand
+   it. (Method-extraction composition needs nothing and works from Phase 1.)
+4. **Later / out of scope**: named slots (`renders_one` / `renders_many`),
+   component-local state, extraction into a standalone UI lib (the reconciler
+   deliberately lives under `lib/conjuration/ui/` with no scene dependencies,
+   so this stays cheap), list virtualization, signals (only if a real workload
+   defeats memo — doubtful).
 
 ## Decisions
 
