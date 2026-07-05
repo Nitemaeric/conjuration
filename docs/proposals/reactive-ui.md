@@ -84,6 +84,59 @@ imperative API (`find` + `invalidate!`) remains as the escape hatch for
 non-view roots. Manual mutations inside a view-owned root are overwritten on
 the next frame — documented, by design.
 
+## Composition: nested views
+
+Complex UIs compose in two tiers.
+
+**Tier 1 — method extraction (free, day one).** `view` is just Ruby, so a
+"component" is just a method that emits nodes:
+
+```ruby
+def view
+  hud_view
+  state.nested ? nested_menu_view : menu_view
+end
+```
+
+**Tier 2 — formal view classes.** Swapping whole views through a conditional
+exposes an identity problem: if `MenuView` and `NestedMenuView` both emit a
+root with `id: :menu`, key-only matching would *prop-morph* one into the other
+when the conditional flips — reusing the retained node and its state, so
+`NestedMenuView` would wake up wearing `MenuView`'s leftover scroll offset.
+React's rule fixes this: **the component type is part of the identity** —
+different type → unmount and remount, fresh subtree, state reset.
+
+```ruby
+class MenuView < Conjuration::UI::View
+  def view(items:)
+    node({ ... }, id: :menu) do
+      items.each { |item| node({ text: item.name }, id: item.id) }
+    end
+  end
+end
+
+def view
+  render(state.nested ? NestedMenuView : MenuView, items: state.items)
+end
+```
+
+`render` records the class on the descriptor; the reconciler matches on
+`[key, component_class]`. Flipping the class tears the subtree down cleanly
+(focus cleared, scroll reset) and remounts.
+
+Consequences:
+
+- **Component boundaries are natural memo boundaries.** Props are explicit at
+  the `render` call, so `React.memo` comes almost free: props `==` last frame →
+  skip running the component's view and keep the retained subtree. This may end
+  up the primary memo API, with bare `memo(deps)` as the low-level tool.
+- **Components are stateless in v1**: pure `props → descriptors`. State lives
+  in the scene (`state.*`) — no `useState`, no retained component instances.
+  Component-local state is a real feature but a separate one; pure views keep
+  the reconciler simple and the data flow one-way.
+- View classes with no scene coupling are exactly the shape a standalone-lib
+  extraction wants.
+
 ## Frame pipeline
 
 ```
@@ -96,6 +149,8 @@ Per parent, match descriptor children to retained children:
 
 - **Keyed** (`id:` present): match by id, regardless of position. `id:` is
   already the identity concept in the framework — it doubles as the React key.
+  Where a formal view class is in play, identity is `[key, component_class]` —
+  a type change never prop-morphs (see Composition).
 - **Unkeyed**: match by position among unkeyed siblings. Fine for static
   structure; dynamic lists should key (v1: warn in debug mode when an unkeyed
   sibling list changes length).
@@ -165,8 +220,11 @@ cheaper, less expressive. Not expected to be needed.
    rendering, focus/scroll preservation, unkeyed-list warning. Clicker-style
    progress-bar demo scene (the acceptance test: the `update` loop touches only
    `item[:progress]`).
-3. **`memo` + perf pass** — memo API, allocation measurement, pooling only if
-   the numbers demand it.
+3. **Composition + `memo` + perf pass** — formal view classes
+   (`render SomeView, **props`, `[key, component_class]` identity,
+   unmount/remount on type change), props-equality component memo, bare
+   `memo(deps)`, allocation measurement, pooling only if the numbers demand it.
+   (Method-extraction composition needs nothing and works from Phase 1.)
 4. **Later / out of scope**: extraction into a standalone UI lib (the
    reconciler deliberately lives under `lib/conjuration/ui/` with no scene
    dependencies, so this stays cheap), list virtualization, signals (only if a
