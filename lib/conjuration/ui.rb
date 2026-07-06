@@ -86,16 +86,60 @@ module Conjuration
     # Build a descriptor tree by running `block`. The block keeps its own self
     # (a scene or component), so node() reaches the current parent through this
     # stack rather than instance_exec — which would hide the caller's own methods
-    # (state, grid, helpers). Cleared on the way out even if the block raises, so
+    # (state, grid, helpers). `owner` (the view root) holds the memo cache that
+    # survives across frames. Cleared on the way out even if the block raises, so
     # a failed view can't strand the builder.
-    def self.build_tree(&block)
+    def self.build_tree(owner = nil, &block)
       @builder_stack = [Descriptor.new(nil, {})]
+      @memo_owner = owner
       begin
         block.call
         @builder_stack.first
       ensure
         @builder_stack = nil
+        @memo_owner = nil
       end
+    end
+
+    # Skip building a subtree when its inputs are unchanged: on a dep match the
+    # cached descriptors (the same objects as last frame) are re-emitted, so the
+    # block never runs — no fresh hashes, no string interpolation — and the
+    # reconciler's identity short-circuit skips the subtree entirely. `deps` must
+    # be scalars or explicitly-snapshotted values: a mutable collection compared
+    # against itself always looks unchanged (see the debug warning).
+    def self.memo(key, deps, &block)
+      warn(@memo_owner, "memo(#{key.inspect}) dep #{mutable_dep(deps).inspect} is a mutable collection — memo compares it by value, so in-place mutation looks unchanged; pass a scalar or a version counter") if mutable_dep(deps)
+
+      cache = @memo_owner.memo_cache
+      entry = cache[key]
+      parent = @builder_stack.last
+
+      if entry && entry[:deps] == deps
+        parent.children.concat(entry[:descriptors])
+      else
+        start = parent.children.length
+        block.call
+        cache[key] = { deps: deps, descriptors: parent.children[start..-1] }
+      end
+    end
+
+    # The first mutable-collection dep (Hash/Array), or nil — memo deps should be
+    # scalars or version counters, never a live collection.
+    def self.mutable_dep(deps)
+      deps.find { |dep| dep.is_a?(Hash) || dep.is_a?(Array) }
+    end
+
+    # Debug-mode reconciliation warnings (unkeyed structural churn, mutable memo
+    # deps). Collected into a bounded ring so tests can assert on them without a
+    # debug game; printed only when the owning node is in debug mode.
+    def self.warnings
+      @warnings ||= []
+    end
+
+    def self.warn(node, message)
+      warnings << message
+      warnings.shift while warnings.length > 100
+      puts "[conjuration] #{message}" if node&.debug?
     end
 
     # Emit one node() call as a descriptor under the current parent, then (when
@@ -124,6 +168,12 @@ module Conjuration
     module Builder
       def node(object_hash = nil, **opts, &block)
         UI.emit(object_hash, opts, &block)
+      end
+
+      # Memoize a subtree by a stable key plus dependency values — the block is
+      # skipped (and its subtree reused as-is) while the deps compare equal.
+      def memo(key, *deps, &block)
+        UI.memo(key, deps, &block)
       end
     end
 
@@ -213,21 +263,76 @@ module Conjuration
       def render_view
         return unless @view_block
 
-        reconcile_children(UI.build_tree(&@view_block))
+        reconcile_children(UI.build_tree(self, &@view_block))
       end
 
-      # Reconcile a descriptor's children onto this node's children. Phase 1 is
-      # stable-tree: children match by position, are created when the tree first
-      # builds, and trailing extras are pruned if the structure shrinks. Keyed
-      # matching, insertion, and reorder come in a later phase.
+      # Per-root, per-frame-surviving cache of memoized subtrees (see UI.memo).
+      def memo_cache
+        @memo_cache ||= {}
+      end
+
+      # Reconcile one descriptor onto this node. The identity short-circuit makes
+      # memoized (and any other reused) subtree free: if this is the very
+      # descriptor object we reconciled last frame, nothing in it can have
+      # changed, so apply + recursion are skipped entirely.
+      def reconcile(descriptor)
+        return if descriptor.equal?(@reconciled_descriptor)
+
+        @reconciled_descriptor = descriptor
+        apply_descriptor(descriptor)
+        reconcile_children(descriptor)
+      end
+
+      # Reconcile a descriptor's children onto this node's children. The common
+      # case — same keys in the same order — takes a positional fast path. When
+      # structure changes (a key added/removed, a conditional toggled, a reorder)
+      # the keyed path matches by id regardless of position: creating the new,
+      # discarding the gone (clearing focus so it can't dangle), and preserving
+      # retained state (scroll offset, measurement caches) on everything reused.
       def reconcile_children(descriptor)
-        descriptor.children.each_with_index do |child_descriptor, index|
-          child = children[index] || create_child(child_descriptor)
-          child.apply_descriptor(child_descriptor)
-          child.reconcile_children(child_descriptor)
+        descriptors = descriptor.children
+
+        if aligned?(descriptors)
+          descriptors.each_with_index { |child_descriptor, index| children[index].reconcile(child_descriptor) }
+          return
         end
 
-        prune_children!(descriptor.children.length)
+        keyed = {}
+        unkeyed = []
+        children.each { |child| child.id ? keyed[child.id] = child : unkeyed << child }
+
+        new_children = []
+        cursor = 0
+        created_unkeyed = 0
+
+        descriptors.each do |child_descriptor|
+          key = descriptor_key(child_descriptor)
+
+          child =
+            if key
+              keyed.delete(key)
+            else
+              match = unkeyed[cursor]
+              cursor += 1
+              match
+            end
+
+          if child.nil?
+            child = create_child(child_descriptor)
+            created_unkeyed += 1 unless key
+          end
+
+          child.reconcile(child_descriptor)
+          new_children << child
+        end
+
+        (keyed.values + unkeyed[cursor..-1].to_a).each { |orphan| discard_node!(orphan) }
+
+        if created_unkeyed.positive? || cursor < unkeyed.length
+          UI.warn(self, "unkeyed sibling list changed length under #{id.inspect} — give these nodes an id: so they reconcile by key, not position")
+        end
+
+        replace_children!(new_children)
       end
 
       # Write this frame's declared props onto the node, diffing against last
@@ -269,27 +374,55 @@ module Conjuration
         true
       end
 
-      # Create a retained node for a descriptor with no positional match. A fresh
-      # copy of the object means layout's computed geometry pollutes the node's
-      # own hash, never the descriptor's (which we diff against next frame);
-      # @declared seeds the pure declaration so the immediate apply_descriptor is
-      # a clean no-op.
+      # Create a retained node for a descriptor with no match. A fresh copy of the
+      # object means layout's computed geometry pollutes the node's own hash, not
+      # the descriptor's (which we diff against next frame); @declared seeds the
+      # pure declaration. Not appended here — reconcile_children assembles the
+      # final child order and replace_children! commits it.
       def create_child(descriptor)
         child = Node.new(descriptor.object.dup, **descriptor.opts)
         child.parent = self
         child.declared = descriptor.object.dup
-        children << child
-        clear_structure_cache!
-        invalidate!
         child
       end
 
-      def prune_children!(count)
-        return if children.length <= count
+      # Commit a reconciled child list. A no-op when the set and order are
+      # unchanged (the clean-frame path); otherwise it rebuilds the structure
+      # caches and re-dirties for relayout.
+      def replace_children!(new_children)
+        return if new_children == children
 
-        (children.length - count).times { children.pop }
+        @children = new_children
         clear_structure_cache!
         invalidate!
+      end
+
+      # A removed node leaves the tree: drop any focus/press pointing at it or a
+      # descendant so a stale global can't dangle. (Scroll offset and measurement
+      # caches ride along on reused nodes; a discarded node is simply dropped.)
+      def discard_node!(node)
+        node.nodes.each do |gone|
+          UI.focused_node = nil if UI.focused_node.equal?(gone)
+          UI.pressed_node = nil if UI.pressed_node.equal?(gone)
+        end
+      end
+
+      # Whether the descriptors line up 1:1 with the current children by id and
+      # order — the stable-tree case, reconciled positionally with no keyed maps.
+      def aligned?(descriptors)
+        return false unless descriptors.length == children.length
+
+        descriptors.each_with_index do |child_descriptor, index|
+          return false unless children[index].id == descriptor_key(child_descriptor)
+        end
+        true
+      end
+
+      # A descriptor's reconcile key: its id (symbolised to match Node#id), or nil
+      # when unkeyed.
+      def descriptor_key(descriptor)
+        key = descriptor.opts[:id]
+        key && key.to_sym
       end
 
       def find(id)
