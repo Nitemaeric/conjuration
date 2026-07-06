@@ -520,13 +520,17 @@ module Conjuration
 
       # Commit a reconciled child list. A no-op when the set and order are
       # unchanged (the clean-frame path); otherwise it rebuilds the structure
-      # caches and re-dirties for relayout.
+      # caches and forces relayout. It must force (mark_dirty!, not the
+      # change-aware invalidate!): swapping a child for a different one — or
+      # reordering — leaves the layout_signature untouched (child count is the
+      # same), so a signature check would wrongly skip the relayout and the new
+      # children would never be positioned.
       def replace_children!(new_children)
         return if new_children == children
 
         @children = new_children
         clear_structure_cache!
-        invalidate!
+        mark_dirty!
       end
 
       # A removed node leaves the tree: drop any focus/press pointing at it or a
