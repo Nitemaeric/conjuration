@@ -1,6 +1,8 @@
-# View components live under app/views and are required per scene.
-require_relative "../views/button_view"
-require_relative "../views/bar_view"
+# View components live under app/views and are required per scene. DragonRuby
+# resolves require paths from the game root (not the requiring file), so use the
+# app/-relative path rather than require_relative "../views/...".
+require "app/views/button_view.rb"
+require "app/views/bar_view.rb"
 
 # A reactive scene demonstrating the view reconciler. The HUD is declared once
 # as `view`, a pure function of state. update() only animates bar[:progress];
