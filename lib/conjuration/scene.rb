@@ -25,7 +25,7 @@ module Conjuration
     end
 
     def state
-      game.state["scene_#{name}"]
+      game.state["scene_#{name}"] ||= {}
     end
 
     # Screen-space output for HUD/backgrounds. World content is drawn through
