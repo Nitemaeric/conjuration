@@ -197,6 +197,15 @@ module Conjuration
       object = object_hash || opts.reject { |key, _| NODE_KEYWORDS.include?(key) }
       node_opts = opts.select { |key, _| NODE_KEYWORDS.include?(key) }
 
+      # A node keyword (direction, align, group, ...) placed inside the object
+      # hash is silently ignored — it's a render prop there, not layout. This is
+      # an easy mistake, so flag it. (Only when passed positionally; as a kwarg
+      # it's correctly extracted into node_opts above.)
+      if object_hash
+        stray = object_hash.keys.select { |key| NODE_KEYWORDS.include?(key) }
+        warn(@memo_owner, "node keyword(s) #{stray.join(', ')} are inside the object hash and will be ignored — pass them as keyword arguments: node({ ... }, #{stray.first}: ...)") if stray.any?
+      end
+
       descriptor = Descriptor.new(object, node_opts)
       @builder_stack.last.children << descriptor
 

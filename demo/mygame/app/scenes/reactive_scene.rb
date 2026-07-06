@@ -44,7 +44,7 @@ class ReactiveScene < Conjuration::Scene
   end
 
   def view
-    node({ x: 20, y: 20.from_top, anchor_y: 1, direction: :row, gap: 12 }, group: :controls) do
+    node({ x: 20, y: 20.from_top, anchor_y: 1 }, group: :controls, direction: :row, gap: 12) do
       ButtonView(id: :back, label: "Back", action: -> { change_scene(to: MenuScene.new(:main)) })
       ButtonView(id: :add, label: "Add bar", width: 140, action: -> { spawn })
     end
@@ -56,7 +56,7 @@ class ReactiveScene < Conjuration::Scene
       state.items.each do |item|
         # Each row is a view component, invoked as a function call. A fresh
         # on_remove lambda per frame is fine — the component isn't memoized.
-        BarView(item: item, width: PANEL_WIDTH - 40, on_remove: ->(id) { remove(id) })
+        BarView(item: item, on_remove: ->(id) { remove(id) })
       end
     end
   end

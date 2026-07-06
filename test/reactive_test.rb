@@ -364,3 +364,21 @@ def test_unkeyed_sibling_change_warns(args, assert)
 
   assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?("unkeyed sibling list") }, true, "an unkeyed sibling list changing length is flagged")
 end
+
+class StrayKeywordHost
+  include Conjuration::UI::Builder
+
+  def view
+    node({ w: 100, h: 20, direction: :row }, id: :oops) # direction belongs as a keyword
+  end
+end
+
+def test_layout_keyword_in_object_hash_warns(args, assert)
+  Conjuration::UI.warnings.clear
+  host = StrayKeywordHost.new
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+  root.render_view
+
+  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?("direction") && warning.include?("object hash") }, true, "a node keyword placed inside the object hash is flagged")
+end
