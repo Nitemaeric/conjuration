@@ -1,12 +1,37 @@
+# A view component for one progress bar row. Invoked as BarView(item:, ...) from
+# the scene's view. #call emits the row's nodes; clicking the row calls back into
+# the scene via the on_remove prop.
+class BarView < Conjuration::UI::View
+  BAR_MAX = 340
+
+  def initialize(item:, width:, on_remove:)
+    @item = item
+    @width = width
+    @on_remove = on_remove
+  end
+
+  def call
+    id = @item[:id]
+    progress = @item[:progress]
+    remove = @on_remove
+
+    node({ w: @width, h: 26, direction: :row, gap: 12, align: :center, action: -> { remove.call(id) } }, id: "row_#{id}") do
+      node({ w: 48, h: 26, justify: :center, align: :center }, id: "pct_#{id}") do
+        node({ text: "#{progress.to_i}%", r: 210, g: 210, b: 220 })
+      end
+      node({ w: BAR_MAX * progress / 100, h: 18, path: :pixel, r: 120, g: 200, b: 120 }, id: "fill_#{id}")
+    end
+  end
+end
+
 # A reactive scene demonstrating the view reconciler. The HUD is declared once
 # as `view`, a pure function of state. update() only animates bar[:progress];
 # adding a bar (Add button) and removing one (click a row) mutate state.items,
 # and the reconciler turns each frame's declaration into keyed create / remove /
 # reorder plus prop updates on the retained nodes — no ui.find, no invalidate!,
-# no manual geometry.
+# no manual geometry. Each row is a BarView component.
 class ReactiveScene < Conjuration::Scene
   PANEL_WIDTH = 520
-  BAR_MAX = 340
 
   def setup
     state.items = 3.times.map { |i| new_bar(i) }
@@ -53,12 +78,9 @@ class ReactiveScene < Conjuration::Scene
       node({ text: "No bars. Click Add bar.", r: 150, g: 150, b: 160 }, id: :empty) if state.items.empty?
 
       state.items.each do |item|
-        node({ w: PANEL_WIDTH - 40, h: 26, direction: :row, gap: 12, align: :center, action: -> { remove(item[:id]) } }, id: "row_#{item[:id]}") do
-          node({ w: 48, h: 26, justify: :center, align: :center }, id: "pct_#{item[:id]}") do
-            node({ text: "#{item[:progress].to_i}%", r: 210, g: 210, b: 220 })
-          end
-          node({ w: BAR_MAX * item[:progress] / 100, h: 18, path: :pixel, r: 120, g: 200, b: 120 }, id: "fill_#{item[:id]}")
-        end
+        # Each row is a view component, invoked as a function call. A fresh
+        # on_remove lambda per frame is fine — the component isn't memoized.
+        BarView(item: item, width: PANEL_WIDTH - 40, on_remove: ->(id) { remove(id) })
       end
     end
   end
