@@ -3,6 +3,7 @@ require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
 require_relative "zoom_scene"
 require_relative "hit_stop_scene"
+require_relative "reactive_scene"
 
 class MenuScene < Conjuration::Scene
   attr_reader :menu, :buttons
@@ -117,6 +118,19 @@ class MenuScene < Conjuration::Scene
             b: 255
           }
         )
+      end
+
+      node(
+        {
+          h: 46,
+          action: -> { change_scene(to: ReactiveScene.new(:reactive)) },
+          path: "sprites/button.png",
+        },
+        id: :reactive,
+        justify: :center,
+        align: :center
+      ) do
+        node(text: "Reactive", r: 255, g: 255, b: 255)
       end
 
       if gtk.can_close_window?

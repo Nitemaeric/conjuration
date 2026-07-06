@@ -1,5 +1,9 @@
 module Conjuration
   module UIManagement
+    # node() emits into the descriptor build context, so a scene's `view` (or a
+    # camera's `camera.ui.view { ... }`) can declare its tree with `self` intact.
+    include UI::Builder
+
     attr_reader :ui
 
     def initialize(...)
@@ -24,6 +28,11 @@ module Conjuration
     private
 
     def perform_setup
+      # A scene that defines `view` opts into the reactive path; the block keeps
+      # self = the scene, so `view` and its helpers resolve normally. Build the
+      # tree once here so it exists before the first render/input pass.
+      ui.view { view } if respond_to?(:view) && !ui.view?
+      ui.render_view
       ui.calculate_layout
       gtk.set_cursor(*UI.default_cursor) if UI.default_cursor
 
