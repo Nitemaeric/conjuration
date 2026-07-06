@@ -56,6 +56,77 @@ module Conjuration
       @active_navigation_group = group
     end
 
+    # Node-keyword arguments to node()/Node.new — everything else in a node()
+    # call is object (render/geometry) data. The descriptor builder uses this to
+    # split a call's keywords from its object props.
+    NODE_KEYWORDS = %i[
+      id direction justify align gap padding visible position
+      top right bottom left group overflow wrap text_break
+    ].freeze
+
+    # Node keywords that map to a writable attribute and can therefore change
+    # frame-to-frame under reconciliation. Structural keywords fixed at creation
+    # (overflow, wrap, text_break, the insets) are intentionally excluded.
+    RECONCILABLE_OPTS = %i[direction justify align gap padding visible position group].freeze
+
+    # A lightweight snapshot of one node() call: the resolved object hash, its
+    # node-keyword options, and child descriptors. The reconciler diffs these
+    # against the retained node tree instead of rebuilding Node objects, so a
+    # frame that changes nothing costs a hash compare per node and no layout.
+    class Descriptor
+      attr_reader :object, :opts, :children
+
+      def initialize(object, opts)
+        @object = object
+        @opts = opts
+        @children = []
+      end
+    end
+
+    # Build a descriptor tree by running `block`. The block keeps its own self
+    # (a scene or component), so node() reaches the current parent through this
+    # stack rather than instance_exec — which would hide the caller's own methods
+    # (state, grid, helpers). Cleared on the way out even if the block raises, so
+    # a failed view can't strand the builder.
+    def self.build_tree(&block)
+      @builder_stack = [Descriptor.new(nil, {})]
+      begin
+        block.call
+        @builder_stack.first
+      ensure
+        @builder_stack = nil
+      end
+    end
+
+    # Emit one node() call as a descriptor under the current parent, then (when
+    # the call has a block) descend so nested node() calls attach beneath it.
+    def self.emit(object_hash, opts, &block)
+      object = object_hash || opts.reject { |key, _| NODE_KEYWORDS.include?(key) }
+      node_opts = opts.select { |key, _| NODE_KEYWORDS.include?(key) }
+
+      descriptor = Descriptor.new(object, node_opts)
+      @builder_stack.last.children << descriptor
+
+      if block
+        @builder_stack.push(descriptor)
+        begin
+          block.call
+        ensure
+          @builder_stack.pop
+        end
+      end
+
+      descriptor
+    end
+
+    # Mixed into scene/camera (and later view components) so node() is available
+    # wherever a view block runs, emitting into the descriptor build context.
+    module Builder
+      def node(object_hash = nil, **opts, &block)
+        UI.emit(object_hash, opts, &block)
+      end
+    end
+
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
@@ -64,6 +135,7 @@ module Conjuration
       attr_reader :overflow
       attr_accessor :scroll_offset
       attr_reader :wrap, :text_break
+      attr_writer :declared
 
       delegate :first, :last, to: :children
 
@@ -120,6 +192,104 @@ module Conjuration
         clear_structure_cache!
         invalidate!
         element
+      end
+
+      # Register a declarative view: a block that emits this root's children via
+      # node() each frame. render_view rebuilds a descriptor tree and reconciles
+      # it against the retained nodes. A root is either view-driven or built
+      # imperatively via node() — not both.
+      def view(&block)
+        @view_block = block
+        self
+      end
+
+      def view?
+        !@view_block.nil?
+      end
+
+      # Run the view into a fresh descriptor tree, then reconcile onto this root's
+      # children. Two-phase: the descriptor build completes before any node is
+      # touched, so an exception mid-view leaves last frame's tree intact.
+      def render_view
+        return unless @view_block
+
+        reconcile_children(UI.build_tree(&@view_block))
+      end
+
+      # Reconcile a descriptor's children onto this node's children. Phase 1 is
+      # stable-tree: children match by position, are created when the tree first
+      # builds, and trailing extras are pruned if the structure shrinks. Keyed
+      # matching, insertion, and reorder come in a later phase.
+      def reconcile_children(descriptor)
+        descriptor.children.each_with_index do |child_descriptor, index|
+          child = children[index] || create_child(child_descriptor)
+          child.apply_descriptor(child_descriptor)
+          child.reconcile_children(child_descriptor)
+        end
+
+        prune_children!(descriptor.children.length)
+      end
+
+      # Write this frame's declared props onto the node, diffing against last
+      # frame's declaration (@declared) — never against object, which layout has
+      # polluted with computed geometry. Only a real change re-dirties the node
+      # (invalidate! is change-aware, so a render-only tweak like colour costs no
+      # layout — the next primitives pass reads it off object for free).
+      def apply_descriptor(descriptor)
+        declared = @declared || {}
+        incoming = descriptor.object
+
+        # An action lambda is a fresh object every frame and can't be compared —
+        # write it through unconditionally but keep it out of the change test, so
+        # a node whose only "change" is its recreated action stays clean.
+        object[:action] = incoming[:action] if incoming.key?(:action)
+
+        unless objects_equal?(incoming, declared)
+          (declared.keys - incoming.keys).each { |key| object.delete(key) }
+          incoming.each { |key, value| object[key] = value unless key == :action || declared[key] == value }
+          @declared = incoming.dup
+          invalidate!
+        end
+
+        descriptor.opts.each do |key, value|
+          next unless RECONCILABLE_OPTS.include?(key)
+          next if send(key) == value
+
+          send("#{key}=", value)
+          invalidate!
+        end
+      end
+
+      # Whether two declared-object hashes are equal ignoring :action (which holds
+      # an incomparable fresh lambda). Both directions so an added or removed key
+      # counts as a change.
+      def objects_equal?(a, b)
+        a.each { |key, value| next if key == :action; return false unless b.key?(key) && b[key] == value }
+        b.each_key { |key| next if key == :action; return false unless a.key?(key) }
+        true
+      end
+
+      # Create a retained node for a descriptor with no positional match. A fresh
+      # copy of the object means layout's computed geometry pollutes the node's
+      # own hash, never the descriptor's (which we diff against next frame);
+      # @declared seeds the pure declaration so the immediate apply_descriptor is
+      # a clean no-op.
+      def create_child(descriptor)
+        child = Node.new(descriptor.object.dup, **descriptor.opts)
+        child.parent = self
+        child.declared = descriptor.object.dup
+        children << child
+        clear_structure_cache!
+        invalidate!
+        child
+      end
+
+      def prune_children!(count)
+        return if children.length <= count
+
+        (children.length - count).times { children.pop }
+        clear_structure_cache!
+        invalidate!
       end
 
       def find(id)

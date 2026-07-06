@@ -72,8 +72,10 @@ module Conjuration
 
       render if respond_to?(:render)
 
-      # Relayout once per frame, after input/update have mutated + invalidated.
-      # Clean subtrees early-out, so this is near-free when nothing changed.
+      # Re-derive the tree from state (no-op unless a `view` is registered), then
+      # relayout once per frame. Reconcile writes only changed props, and clean
+      # subtrees early-out of layout — so this is near-free when nothing changed.
+      ui.render_view
       ui.calculate_layout
       ui.render_scroll_targets
 

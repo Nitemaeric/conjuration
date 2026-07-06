@@ -211,8 +211,10 @@ module Conjuration
       # The scene draws its world through us; only on-screen content is emitted.
       scene.draw_world(self)
 
-      # Camera HUD, positioned in viewport-local space. Relaid once per frame;
-      # clean subtrees early-out, so this is near-free when nothing changed.
+      # Camera HUD: re-derive from state (no-op unless camera.ui has a view),
+      # then relay once per frame. Clean subtrees early-out, so this is near-free
+      # when nothing changed.
+      ui.render_view
       ui.calculate_layout
       ui.render_scroll_targets
 
