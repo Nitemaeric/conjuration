@@ -1,12 +1,17 @@
+# View components live under app/views and are required per scene. DragonRuby
+# resolves require paths from the game root (not the requiring file), so use the
+# app/-relative path rather than require_relative "../views/...".
+require "app/views/button_view.rb"
+require "app/views/bar_view.rb"
+
 # A reactive scene demonstrating the view reconciler. The HUD is declared once
 # as `view`, a pure function of state. update() only animates bar[:progress];
 # adding a bar (Add button) and removing one (click a row) mutate state.items,
 # and the reconciler turns each frame's declaration into keyed create / remove /
 # reorder plus prop updates on the retained nodes — no ui.find, no invalidate!,
-# no manual geometry.
+# no manual geometry. Each row is a BarView component.
 class ReactiveScene < Conjuration::Scene
   PANEL_WIDTH = 520
-  BAR_MAX = 340
 
   def setup
     state.items = 3.times.map { |i| new_bar(i) }
@@ -39,13 +44,9 @@ class ReactiveScene < Conjuration::Scene
   end
 
   def view
-    node({ x: 20, y: 20.from_top, anchor_y: 1, direction: :row, gap: 12 }, group: :controls) do
-      node({ w: 100, h: 44, path: "sprites/button.png", action: -> { change_scene(to: MenuScene.new(:main)) } }, id: :back, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
-      end
-      node({ w: 140, h: 44, path: "sprites/button.png", action: -> { spawn } }, id: :add, justify: :center, align: :center) do
-        node({ text: "Add bar", r: 255, g: 255, b: 255 })
-      end
+    node({ x: 20, y: 20.from_top, anchor_y: 1 }, group: :controls, direction: :row, gap: 12) do
+      ButtonView(id: :back, label: "Back", action: -> { change_scene(to: MenuScene.new(:main)) })
+      ButtonView(id: :add, label: "Add bar", width: 140, action: -> { spawn })
     end
 
     node({ x: grid.w / 2, y: grid.h / 2, w: PANEL_WIDTH, h: 360, anchor_x: 0.5, anchor_y: 0.5, path: :pixel, r: 24, g: 26, b: 34 }, id: :panel, gap: 10, padding: 20, justify: :center) do
@@ -53,12 +54,9 @@ class ReactiveScene < Conjuration::Scene
       node({ text: "No bars. Click Add bar.", r: 150, g: 150, b: 160 }, id: :empty) if state.items.empty?
 
       state.items.each do |item|
-        node({ w: PANEL_WIDTH - 40, h: 26, direction: :row, gap: 12, align: :center, action: -> { remove(item[:id]) } }, id: "row_#{item[:id]}") do
-          node({ w: 48, h: 26, justify: :center, align: :center }, id: "pct_#{item[:id]}") do
-            node({ text: "#{item[:progress].to_i}%", r: 210, g: 210, b: 220 })
-          end
-          node({ w: BAR_MAX * item[:progress] / 100, h: 18, path: :pixel, r: 120, g: 200, b: 120 }, id: "fill_#{item[:id]}")
-        end
+        # Each row is a view component, invoked as a function call. A fresh
+        # on_remove lambda per frame is fine — the component isn't memoized.
+        BarView(item: item, on_remove: ->(id) { remove(id) })
       end
     end
   end

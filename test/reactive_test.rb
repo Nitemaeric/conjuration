@@ -364,3 +364,58 @@ def test_unkeyed_sibling_change_warns(args, assert)
 
   assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?("unkeyed sibling list") }, true, "an unkeyed sibling list changing length is flagged")
 end
+
+class StrayKeywordHost
+  include Conjuration::UI::Builder
+
+  def view
+    node({ w: 100, h: 20, direction: :row }, id: :oops) # direction belongs as a keyword
+  end
+end
+
+def test_layout_keyword_in_object_hash_warns(args, assert)
+  Conjuration::UI.warnings.clear
+  host = StrayKeywordHost.new
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+  root.render_view
+
+  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?("direction") && warning.include?("object hash") }, true, "a node keyword placed inside the object hash is flagged")
+end
+
+class SwapChildHost
+  include Conjuration::UI::Builder
+  attr_accessor :mode
+
+  def initialize
+    @mode = :a
+  end
+
+  # Always one child, but its identity changes — a structural change that keeps
+  # the child count the same.
+  def swap_view
+    node({ x: 0, y: 0, w: 200, h: 200 }, id: :panel, gap: 4) do
+      if mode == :a
+        node({ w: 100, h: 20, path: :pixel }, id: :a)
+      else
+        node({ w: 100, h: 20, path: :pixel }, id: :b)
+      end
+    end
+  end
+end
+
+def test_same_count_child_swap_relayouts(args, assert)
+  host = SwapChildHost.new
+  root = build_reactive(host, :swap_view)
+  a_y = root.find(:a).object.y
+
+  host.mode = :b
+  root.render_view
+
+  panel = root.find(:panel)
+  assert.equal!(panel.dirty?, true, "a same-count child swap forces the container dirty (a signature check would no-op — the child count is unchanged)")
+
+  root.calculate_layout
+  assert.equal!(root.find(:a), nil, "the old child is discarded")
+  assert.equal!(root.find(:b).object.y, a_y, "the swapped-in child is laid out into the old child's slot")
+end

@@ -75,6 +75,10 @@ module Conjuration
     # frame that changes nothing costs a hash compare per node and no layout.
     class Descriptor
       attr_reader :object, :opts, :children
+      # The view component that emitted this descriptor (nil for a plain node).
+      # Part of the reconcile identity so swapping component types at the same
+      # key remounts rather than prop-morphs.
+      attr_accessor :component_class
 
       def initialize(object, opts)
         @object = object
@@ -142,11 +146,65 @@ module Conjuration
       puts "[conjuration] #{message}" if node&.debug?
     end
 
+    # Emit a view component: instantiate it, gate on render?, run its #call to
+    # produce node descriptors, and tag those descriptors with the component
+    # class so a type swap at the same key remounts instead of prop-morphing.
+    # Memoized components (memoize_props! + a keyed prop, no content block) reuse
+    # their cached expansion while props compare equal — the block never runs.
+    def self.component(klass, props, &content)
+      parent = @builder_stack.last
+      start = parent.children.length
+
+      if klass.memoize_props? && props.key?(:id) && content.nil? && @memo_owner
+        warn(@memo_owner, "#{klass}(#{props[:id].inspect}) memoizes on a mutable prop #{mutable_dep(props.values).inspect} — pass a scalar or a version counter") if mutable_dep(props.values)
+        expand_memoized_component(klass, props, parent)
+      else
+        expand_component(klass, props, &content)
+      end
+
+      parent.children[start..-1].each { |descriptor| descriptor.component_class = klass }
+    end
+
+    def self.expand_component(klass, props, &content)
+      instance = klass.new(**props)
+      instance.content_block = content
+      instance.call if instance.render?
+    end
+
+    def self.expand_memoized_component(klass, props, parent)
+      key = [:component, props[:id]]
+      cache = @memo_owner.memo_cache
+      entry = cache[key]
+
+      if entry && entry[:props] == props
+        parent.children.concat(entry[:descriptors])
+      else
+        start = parent.children.length
+        expand_component(klass, props)
+        cache[key] = { props: props, descriptors: parent.children[start..-1] }
+      end
+    end
+
+    # Render a component to its descriptor children, no scene required — the
+    # basis for isolated component tests.
+    def self.render_component(klass, props = {}, &content)
+      build_tree { component(klass, props, &content) }.children
+    end
+
     # Emit one node() call as a descriptor under the current parent, then (when
     # the call has a block) descend so nested node() calls attach beneath it.
     def self.emit(object_hash, opts, &block)
       object = object_hash || opts.reject { |key, _| NODE_KEYWORDS.include?(key) }
       node_opts = opts.select { |key, _| NODE_KEYWORDS.include?(key) }
+
+      # A node keyword (direction, align, group, ...) placed inside the object
+      # hash is silently ignored — it's a render prop there, not layout. This is
+      # an easy mistake, so flag it. (Only when passed positionally; as a kwarg
+      # it's correctly extracted into node_opts above.)
+      if object_hash
+        stray = object_hash.keys.select { |key| NODE_KEYWORDS.include?(key) }
+        warn(@memo_owner, "node keyword(s) #{stray.join(', ')} are inside the object hash and will be ignored — pass them as keyword arguments: node({ ... }, #{stray.first}: ...)") if stray.any?
+      end
 
       descriptor = Descriptor.new(object, node_opts)
       @builder_stack.last.children << descriptor
@@ -177,6 +235,70 @@ module Conjuration
       end
     end
 
+    # Base class for view components (ViewComponent-inspired): subclass, take
+    # props in initialize, and define #call to emit nodes. Subclassing defines a
+    # builder method named after the class, so components read as function calls
+    # in a view:
+    #
+    #   class MenuView < Conjuration::UI::View
+    #     def initialize(items:)  = (@items = items)
+    #     def render?             = @items.any?
+    #     def call
+    #       node({ ... }, id: :menu) do
+    #         @items.each { |item| node({ text: item.name }, id: item.id) }
+    #         content   # the caller's block children, placed here
+    #       end
+    #     end
+    #   end
+    #
+    #   MenuView(items: state.items)    # invoke with parens (bareword = the class)
+    #   Panel(title: "x") { node(...) } # a block becomes the component's content
+    class View
+      include Builder
+
+      attr_writer :content_block
+
+      # Default props contract — subclasses override with their own keywords. This
+      # also lets a propless component be constructed with an empty kwargs splat.
+      def initialize(**_props); end
+
+      # Define a builder method named after each subclass (demodulised) so
+      # SomeView(**props) reads as a call — uppercase method names are legal Ruby
+      # when invoked with parens.
+      def self.inherited(subclass)
+        name = subclass.name
+        return unless name
+
+        method_name = name.split("::").last
+        UI.warn(nil, "component builder #{method_name} is already defined — namespaced components share a demodulised name") if Builder.method_defined?(method_name)
+
+        Builder.send(:define_method, method_name) do |**props, &content|
+          UI.component(subclass, props, &content)
+        end
+      end
+
+      # Opt into props-equality memoization: while a keyed component's props
+      # compare equal, its #call is skipped and last frame's subtree reused.
+      def self.memoize_props!
+        @memoize_props = true
+      end
+
+      def self.memoize_props?
+        @memoize_props ? true : false
+      end
+
+      # Emit nothing when false — conditional rendering owned by the component
+      # rather than repeated at every call site.
+      def render?
+        true
+      end
+
+      # The caller's block children, emitted wherever the component places this.
+      def content
+        @content_block&.call
+      end
+    end
+
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
       attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
@@ -186,6 +308,9 @@ module Conjuration
       attr_accessor :scroll_offset
       attr_reader :wrap, :text_break
       attr_writer :declared
+      # The view component this node was mounted for (nil for a plain node) —
+      # part of its reconcile identity, so a type swap at the same key remounts.
+      attr_accessor :component_class
 
       delegate :first, :last, to: :children
 
@@ -310,7 +435,13 @@ module Conjuration
 
           child =
             if key
-              keyed.delete(key)
+              candidate = keyed[key]
+              # A same-key node of a different component type is a type swap, not
+              # a reuse: leave it in the pool to be discarded, and mount fresh.
+              if candidate && candidate.component_class == child_descriptor.component_class
+                keyed.delete(key)
+                candidate
+              end
             else
               match = unkeyed[cursor]
               cursor += 1
@@ -383,18 +514,23 @@ module Conjuration
         child = Node.new(descriptor.object.dup, **descriptor.opts)
         child.parent = self
         child.declared = descriptor.object.dup
+        child.component_class = descriptor.component_class
         child
       end
 
       # Commit a reconciled child list. A no-op when the set and order are
       # unchanged (the clean-frame path); otherwise it rebuilds the structure
-      # caches and re-dirties for relayout.
+      # caches and forces relayout. It must force (mark_dirty!, not the
+      # change-aware invalidate!): swapping a child for a different one — or
+      # reordering — leaves the layout_signature untouched (child count is the
+      # same), so a signature check would wrongly skip the relayout and the new
+      # children would never be positioned.
       def replace_children!(new_children)
         return if new_children == children
 
         @children = new_children
         clear_structure_cache!
-        invalidate!
+        mark_dirty!
       end
 
       # A removed node leaves the tree: drop any focus/press pointing at it or a
@@ -413,7 +549,8 @@ module Conjuration
         return false unless descriptors.length == children.length
 
         descriptors.each_with_index do |child_descriptor, index|
-          return false unless children[index].id == descriptor_key(child_descriptor)
+          child = children[index]
+          return false unless child.id == descriptor_key(child_descriptor) && child.component_class == child_descriptor.component_class
         end
         true
       end
