@@ -90,29 +90,20 @@ def test_from_helpers_are_viewport_relative(args, assert)
   assert.equal!(cam.from_bottom(20), 20, "from_bottom is the distance")
 end
 
-# Parallax. `view_rect(parallax:)` scales the focal point by the factor, giving
-# a background layer its own view; culling and transforming happen against that
-# derived view. The exact bug a hand-rolled parallax has: it tests `visible?`
-# against the REAL view, so layer sprites near the edges cull wrongly.
-
 def test_parallax_culls_against_the_derived_view_not_the_real_view(args, assert)
-  # Camera far from the origin so the derived view diverges from the real one.
   # Real view spans x 1360..2640; the 0.5 parallax view spans 360..1640.
   cam = make_camera(current: { x: 2000, y: 360, zoom: 1 })
-  near = { x: 500,  y: 360, w: 40, h: 40 } # inside the parallax view, NOT the real view
-  far  = { x: 2600, y: 360, w: 40, h: 40 } # inside the real view, NOT the parallax view
+  near = { x: 500,  y: 360, w: 40, h: 40 }
+  far  = { x: 2600, y: 360, w: 40, h: 40 }
 
   assert.true!(cam.visible?(near, 0.5), "a sprite inside the parallax view is kept")
   assert.false!(cam.visible?(far, 0.5), "a sprite outside the parallax view is culled")
 
-  # The DIY bug: culling against the real view (factor 1.0) gets both backwards.
   assert.false!(cam.visible?(near), "the real view wrongly culls the near sprite (the DIY bug)")
   assert.true!(cam.visible?(far), "the real view wrongly keeps the far sprite (the DIY bug)")
 end
 
 def test_parallax_edge_inclusivity_matches_the_default_cull(args, assert)
-  # A sprite whose right edge just reaches the parallax view's left edge is out;
-  # nudged one unit right, it is in — same boundary rule as the default cull.
   cam = make_camera(current: { x: 2000, y: 360, zoom: 1 }) # parallax .5 view x = 360
   assert.false!(cam.visible?({ x: 320, y: 360, w: 40, h: 40 }, 0.5), "touching the edge does not overlap")
   assert.true!(cam.visible?({ x: 321, y: 360, w: 40, h: 40 }, 0.5), "one unit inside the edge overlaps")
@@ -128,8 +119,6 @@ end
 
 def test_view_rect_parallax_one_is_the_memoized_default(args, assert)
   cam = make_camera
-  # Factor 1.0 must return the very same object as the no-arg default — proving
-  # the no-parallax path allocates no new view and never touches the factor hash.
   assert.true!(cam.view_rect(parallax: 1.0).equal?(cam.view_rect), "factor 1.0 is the memoized default view")
 end
 
@@ -156,8 +145,6 @@ def test_draw_with_parallax_emits_via_the_derived_view(args, assert)
   cam = make_camera(current: { x: 2000, y: 360, zoom: 1 })
   cam.outputs.primitives.clear
 
-  # This sprite is offscreen for the real view but on for the 0.5 layer, so the
-  # naive path would drop it; parallax keeps and positions it.
   cam.draw({ x: 500, y: 360, w: 40, h: 40, tag: :hill }, parallax: 0.5)
 
   assert.equal!(cam.outputs.primitives.length, 1, "the parallax sprite is emitted, not culled")
@@ -165,8 +152,6 @@ def test_draw_with_parallax_emits_via_the_derived_view(args, assert)
 end
 
 def test_no_parallax_draw_never_creates_the_factor_cache(args, assert)
-  # Zero-cost acceptance: a frame that never passes `parallax:` must not allocate
-  # the per-factor view hash. It stays nil until a parallax draw needs it.
   cam = make_camera
   cam.outputs.primitives.clear
 

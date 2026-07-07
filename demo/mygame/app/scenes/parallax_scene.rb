@@ -1,21 +1,12 @@
 class ParallaxScene < Conjuration::Scene
-  # A wide side-scrolling world. The camera follows a hero walking left/right;
-  # each background layer scrolls at a fraction of that pan via
-  # `camera.draw(..., parallax:)`, so nearer layers slide past faster than
-  # distant ones — depth from motion, with correct edge culling per layer.
-  #
-  # Note on the vertical axis: parallax scales BOTH focal axes (only translation,
-  # never zoom). The camera is pinned vertically (a full-height view in a
-  # single-screen-tall world), so the y-scaling is a *constant* lift, not a
-  # scroll — it just seats each layer at its own height on the horizon. Layer
-  # positions below are authored with that in mind. Horizontal is the axis that
-  # actually parallaxes as you walk.
+  # Parallax scales both focal axes, but the camera is pinned vertically (a
+  # full-height view in a single-screen-tall world), so the y-scaling reads as a
+  # *constant* lift, not a scroll — it just seats each layer at its own height on
+  # the horizon. The layer positions below are authored with that in mind; the
+  # horizontal axis is the one that actually parallaxes as you walk.
   WORLD_W = 6000
-  GROUND_H = 120 # viewport height of the near ground strip (the horizon line)
+  GROUND_H = 120
 
-  # Factors far -> near, each with a z so they stack back-to-front regardless of
-  # draw order. Sky barely drifts; trees are the fastest background layer. The
-  # ground and hero draw at parallax 1.0 (the memoized fast path).
   SKY    = { parallax: 0.1, z: -400 }.freeze
   HILLS  = { parallax: 0.3, z: -300 }.freeze
   CLOUDS = { parallax: 0.5, z: -200 }.freeze
@@ -23,14 +14,12 @@ class ParallaxScene < Conjuration::Scene
 
   def setup
     self.virtual_w = WORLD_W
-    self.virtual_h = grid.h # one screen tall: the camera pans only horizontally
+    self.virtual_h = grid.h
 
     add_camera(:main, speed: 12)
     cameras[:main].ui.group = :hud
     activate_navigation(:hud)
 
-    # Deterministic scatter, authored once in world space and handed to the
-    # camera every frame; per-layer culling keeps only the on-screen elements.
     @hills  = build_hills
     @clouds = build_clouds
     @trees  = build_trees
@@ -46,8 +35,6 @@ class ParallaxScene < Conjuration::Scene
       node({ text: "layers parallax" }, id: :layer_label)
     end
 
-    # The hero walks the ground; the camera follows, so the world scrolls and the
-    # layers parallax against that motion.
     state.hero = { x: grid.w / 2, y: GROUND_H, w: 44, h: 72, facing: 1 }
     cameras[:main].follow(state.hero)
   end
@@ -66,16 +53,14 @@ class ParallaxScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    # Sky: one wide band drawn well past the view edges so the vertical lift and
-    # any zoom never expose a seam. Parallax 0.1 — almost fixed.
+    # Drawn well past the view edges so the vertical lift and any zoom never
+    # expose a seam.
     camera.draw({ x: 0, y: -400, w: WORLD_W, h: 1600, path: :pixel, r: 132, g: 196, b: 236 }, **SKY)
 
     @hills.each  { |hill|  camera.draw(hill,  **HILLS) }
     @clouds.each { |cloud| camera.draw(cloud, **CLOUDS) }
     @trees.each  { |tree|  camera.draw(tree,  **TREES) }
 
-    # Ground + hero: parallax 1.0 (omitted), the reference plane the layers slide
-    # against. The hero y-sorts above the ground band with z: -y.
     camera.draw({ x: 0, y: 0, w: WORLD_W, h: GROUND_H, path: :pixel, r: 74, g: 120, b: 84 })
 
     hero = state.hero
@@ -84,23 +69,18 @@ class ParallaxScene < Conjuration::Scene
 
   private
 
-  # Distant rolling hills: broad silhouettes seated high on the horizon (the
-  # vertical lift at parallax 0.3 raises them well above the ground line).
   def build_hills
     (0...WORLD_W).step(340).map do |x|
       { x: x, y: 0, w: 460, h: 210 + (x % 3) * 40, path: :pixel, r: 96, g: 150, b: 112, anchor_x: 0.5 }
     end
   end
 
-  # A drift of clouds high in the sky, varied in height and offset.
   def build_clouds
     (0...WORLD_W).step(520).map.with_index do |x, i|
       { x: x + (i % 2) * 160, y: 360 + (i % 3) * 70, w: 240, h: 70, path: :pixel, r: 245, g: 248, b: 252, a: 235 }
     end
   end
 
-  # Foreground tree canopies rooted into the ground; the fastest background
-  # layer, so they sweep past noticeably as the hero walks.
   def build_trees
     (0...WORLD_W).step(230).map do |x|
       { x: x, y: -30, w: 50, h: 190 + (x % 2) * 50, path: :pixel, r: 52, g: 84, b: 60, anchor_x: 0.5 }

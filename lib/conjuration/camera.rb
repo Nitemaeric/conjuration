@@ -90,17 +90,10 @@ module Conjuration
     # World-space rectangle this camera currently sees (pan, zoom, and any active
     # screen shake applied). Memoized per render frame.
     #
-    # `parallax` scales the focal point (a background layer at 0.3 scrolls at 30%
-    # of the camera's speed), giving that layer its own effective view. Culling
-    # and transforming against this derived view — rather than the real one — is
-    # the whole point of the built-in support: a hand-rolled parallax that tests
-    # `visible?` against the real view culls layer sprites near the edges
-    # wrongly. Zoom is applied un-scaled: only the translation parallaxes, so
-    # every layer stays at the same zoom (scaling zoom too would warp them apart).
-    #
-    # The default (1.0) path is memoized in `@view_rect`; other factors memoize
-    # in a small per-factor hash, allocated lazily so a frame with no parallax
-    # draw never creates it. Both are cleared in `perform_render`.
+    # A background layer is culled and transformed against its own derived view —
+    # the focal point scaled by `parallax` — not the real view. That is the point
+    # of the built-in support: a hand-rolled parallax tests `visible?` against the
+    # real view, so it culls layer sprites near the edges wrongly.
     def view_rect(parallax: 1.0)
       return (@view_rect ||= compute_view_rect(1.0)) if parallax == 1.0
 
@@ -154,12 +147,6 @@ module Conjuration
     # call. y-sorting is the usual convention: `z: -sprite[:y]`. Deferred draws
     # always render ON TOP of the immediate (no-`z:`) ones, which emit first;
     # equal-z draws keep their call order. Omit `z:` for the immediate fast path.
-    #
-    # Pass `parallax:` (< 1.0) for a background layer that scrolls slower than the
-    # camera — cull and transform happen against that layer's derived view, so
-    # edge sprites are kept/culled correctly (a DIY parallax against the real
-    # view gets this wrong). Composes with `z:`. `parallax:` is a keyword whose
-    # 1.0 default hits the memoized view, so the no-parallax path is unchanged.
     def draw(world_rect, z: nil, parallax: 1.0)
       return unless visible?(world_rect, parallax)
 
@@ -223,10 +210,9 @@ module Conjuration
       @draw_buffer.clear
     end
 
-    # The world-space view for a given parallax factor. Zoom (view size) is the
-    # same for every factor — only the focal-point translation scales — so
-    # layers share a zoom and never warp apart. Shake is a screen effect, applied
-    # un-scaled too.
+    # Only the focal-point translation scales by `parallax`; zoom (view size) is
+    # un-scaled, so every layer shares a zoom and they never warp apart as you
+    # zoom. Shake is a screen effect, applied un-scaled too.
     def compute_view_rect(parallax)
       shake_x, shake_y = shake_offset
 
