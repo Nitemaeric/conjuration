@@ -53,3 +53,71 @@ def test_chunk_renders_only_once(args, assert)
 
   assert.equal!($game.outputs["tile_layer_once_0_0"].primitives.length, 1, "chunk rendered once despite two draws")
 end
+
+def test_remove_drops_intersecting_primitive(args, assert)
+  layer = Conjuration::TileLayer.new(name: :rm_hit, chunk_size: 400)
+  layer.add({ x: 10, y: 10, w: 40, h: 40, path: :pixel }) # chunk (0,0)
+
+  layer.remove({ x: 20, y: 20, w: 5, h: 5 }) # sits inside the primitive
+
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  layer.draw(cam)
+
+  sprites = cam.outputs.primitives.select { |p| p[:path].to_s.start_with?("tile_layer_rm_hit_") }
+  assert.equal!(sprites.length, 0, "emptied chunk is dropped, nothing emitted")
+end
+
+def test_remove_ignores_primitives_it_does_not_touch(args, assert)
+  layer = Conjuration::TileLayer.new(name: :rm_miss, chunk_size: 400)
+  layer.add({ x: 10, y: 10, w: 40, h: 40, path: :pixel }) # chunk (0,0), world 10..50
+
+  layer.remove({ x: 200, y: 200, w: 20, h: 20 }) # nowhere near it
+
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  layer.draw(cam)
+
+  assert.equal!($game.outputs["tile_layer_rm_miss_0_0"].primitives.length, 1, "untouched primitive survives")
+end
+
+def test_remove_reinvalidates_only_affected_chunks(args, assert)
+  layer = Conjuration::TileLayer.new(name: :rm_scope, chunk_size: 400)
+  layer.add({ x: 10, y: 10, w: 40, h: 40, path: :pixel })   # A, chunk (0,0)
+  layer.add({ x: 100, y: 100, w: 40, h: 40, path: :pixel }) # B, chunk (0,0)
+  layer.add({ x: 450, y: 10, w: 40, h: 40, path: :pixel })  # C, chunk (1,0)
+
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  layer.draw(cam) # bakes both chunks
+
+  # A sentinel in each baked texture: a re-bake clears it, an untouched chunk keeps it.
+  t00 = $game.outputs["tile_layer_rm_scope_0_0"]
+  t10 = $game.outputs["tile_layer_rm_scope_1_0"]
+  t00.primitives << :sentinel
+  t10.primitives << :sentinel
+
+  layer.remove({ x: 0, y: 0, w: 60, h: 60 }) # hits A only; B and C untouched
+
+  layer.draw(cam)
+
+  assert.false!(t00.primitives.include?(:sentinel), "affected chunk (0,0) was re-baked (texture cleared)")
+  assert.equal!(t00.primitives.length, 1, "and holds only the surviving primitive B")
+  assert.true!(t10.primitives.include?(:sentinel), "untouched chunk (1,0) was not re-rendered")
+end
+
+def test_remove_drops_a_border_spanning_primitive_from_every_chunk(args, assert)
+  layer = Conjuration::TileLayer.new(name: :rm_span, chunk_size: 400)
+  layer.add({ x: 390, y: 10, w: 20, h: 20, path: :pixel }) # straddles chunks (0,0) and (1,0)
+
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  layer.draw(cam)
+  assert.equal!($game.outputs["tile_layer_rm_span_0_0"].primitives.length, 1, "filed into chunk (0,0)")
+  assert.equal!($game.outputs["tile_layer_rm_span_1_0"].primitives.length, 1, "filed into chunk (1,0)")
+
+  # A rect touching only the chunk (0,0) side must still evict the copy in (1,0).
+  layer.remove({ x: 392, y: 12, w: 2, h: 2 })
+
+  cam.outputs.primitives.clear # drop the first draw's sprites before re-checking
+  layer.draw(cam)
+
+  sprites = cam.outputs.primitives.select { |p| p[:path].to_s.start_with?("tile_layer_rm_span_") }
+  assert.equal!(sprites.length, 0, "both chunks emptied and dropped, nothing emitted")
+end
