@@ -63,8 +63,6 @@ class GameDouble
   def state; @state ||= {}; end
   def debug?; false; end
 
-  # Node delegates `inputs` here; tests that drive UIManagement's input pass set
-  # a stub. control_scheme mirrors the real Game: memoized, replaceable.
   attr_accessor :inputs
   attr_writer :control_scheme
 

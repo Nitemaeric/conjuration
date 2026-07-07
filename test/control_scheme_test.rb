@@ -1,12 +1,5 @@
-# The control-scheme seam: the one place framework UI reads raw input. Two
-# concerns are covered here —
-#   1. the default scheme preserves today's bindings (Enter/A, Space excluded);
-#   2. a drop-in double scheme drives UIManagement's navigation and confirm
-#      end-to-end, with zero changes to UIManagement (acceptance).
-
-# A nested-hash `inputs` double. The shims give Hash a method_missing so
-# `inputs.keyboard.key_down.enter` reads `[:keyboard][:key_down][:enter]`, which
-# is exactly the surface the default ControlScheme touches.
+# Relies on the Hash method_missing shim (test/support/shims.rb), so
+# `inputs.keyboard.key_down.enter` resolves nested keys.
 def make_inputs(enter_down: false, a_down: false, enter_held: false, a_held: false, space_down: false, nav: { x: 0, y: 0 })
   {
     keyboard: {
@@ -21,8 +14,6 @@ def make_inputs(enter_down: false, a_down: false, enter_held: false, a_held: fal
   }
 end
 
-# A library/user scheme stand-in — the same three methods, canned answers. That
-# it drives the UI unchanged is the whole point of the seam.
 class FakeControlScheme
   attr_accessor :vector, :confirm, :held
 
@@ -35,9 +26,8 @@ class FakeControlScheme
   def confirm_held?;     @held; end
 end
 
-# A Builder host (like the reconcile host) whose view is a two-button menu pane.
-# The action lambdas close over a local `log`, so they still record when
-# UIManagement instance_execs them with self rebound to the camera.
+# The action lambdas close over a local `log` because UIManagement instance_execs
+# them with self rebound to the camera, so `@log` would not resolve.
 class NavMenuHost
   include Conjuration::UI::Builder
 
@@ -56,8 +46,6 @@ class NavMenuHost
   end
 end
 
-# --- default scheme: today's bindings, verbatim -------------------------------
-
 def test_default_scheme_confirms_on_enter(args, assert)
   assert.true!(Conjuration::ControlScheme.new(make_inputs(enter_down: true)).confirm_down?, "Enter confirms")
 end
@@ -67,7 +55,6 @@ def test_default_scheme_confirms_on_controller_a(args, assert)
 end
 
 def test_default_scheme_excludes_space(args, assert)
-  # The deliberate exclusion: games bind Space, so confirming on it double-fires.
   assert.false!(Conjuration::ControlScheme.new(make_inputs(space_down: true)).confirm_down?, "Space does not confirm")
 end
 
@@ -81,8 +68,6 @@ def test_default_scheme_navigation_vector_passes_through(args, assert)
   scheme = Conjuration::ControlScheme.new(make_inputs(nav: { x: 1, y: 0 }))
   assert.equal!(scheme.navigation_vector, { x: 1, y: 0 }, "reads the raw directional vector")
 end
-
-# --- game seam: default, memoized, replaceable --------------------------------
 
 def test_game_defaults_to_the_framework_control_scheme(args, assert)
   game = Conjuration::Game.new(nil)
@@ -100,9 +85,6 @@ def test_game_control_scheme_is_replaceable(args, assert)
   assert.equal!(game.control_scheme.equal?(fake), true, "an assigned scheme replaces the default")
 end
 
-# --- end-to-end: a double scheme drives UIManagement, unchanged ---------------
-
-# Build a camera whose UI is the two-button menu pane, with navigation active.
 def menu_camera(host)
   camera = make_camera
   camera.ui.view(&host.method(:menu_view))
@@ -119,7 +101,7 @@ def test_double_scheme_drives_navigation(args, assert)
   $game.inputs = { last_active: :controller, mouse: { wheel: nil, held: false } }
   $game.control_scheme = FakeControlScheme.new(vector: { x: 1, y: 0 })
 
-  camera.send(:perform_input) # seeds focus into :left, then navigates right
+  camera.send(:perform_input)
 
   assert.equal!(Conjuration::UI.focused_node.id, :right, "the scheme's rightward vector moves focus to :right")
 ensure
