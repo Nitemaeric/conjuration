@@ -9,3 +9,6 @@ require 'vendor/conjuration/conjuration.rb'
 
 # frame-timer (github:owenbutler/dr-frame-timer)
 require 'vendor/frame-timer/frame-timer.rb'
+
+# draco (github:guitsaru/draco)
+require 'vendor/draco/draco.rb'

@@ -4,3 +4,6 @@ path = "../.."
 [dependencies.frame-timer]
 github = "owenbutler/dr-frame-timer"
 entrypoint = "frame-timer.rb"
+
+[dependencies.draco]
+github = "guitsaru/draco"
