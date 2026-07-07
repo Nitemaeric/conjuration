@@ -18,8 +18,18 @@ module Conjuration
     SHAKE_MAGNITUDE = 24
     SHAKE_DECAY = 0.04
 
-    def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: 1_000_000, zoom_speed: 0.1)
+    # Default pan/zoom speed: effectively instant. The per-tick approach in
+    # perform_update clamps the step to the remaining distance, so a speed this
+    # large snaps straight onto the target. Pass a smaller speed for a lag/ease.
+    SNAP = 1_000_000
+
+    def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
+
+      # Cache the render-target key: #outputs runs once per drawn primitive and
+      # the blit reuses it, so re-interpolating "camera_<name>" per call would
+      # allocate a string on the hottest path. name is set on the line above.
+      @output_key = "camera_#{name}"
 
       @current = FocalPoint.new(self, **current)
       @target = FocalPoint.new(self, **current)
@@ -43,9 +53,10 @@ module Conjuration
     end
 
     # Continuously centre the view on `object` (anything exposing x/y). The
-    # camera eases toward it each frame using `speed`, so a low speed gives a
-    # smooth, lagging follow and a high speed a rigid lock. Call #unfollow (or a
-    # positional #look_at) to stop.
+    # camera approaches it each frame at a constant `speed` (units/tick, clamped
+    # to the remaining distance — not an eased/proportional step), so a low speed
+    # gives a smooth, lagging follow and a high speed a rigid lock. Call #unfollow
+    # (or a positional #look_at) to stop.
     def follow(object)
       @following = object
     end
@@ -160,7 +171,7 @@ module Conjuration
     def from_top(distance);    h - distance; end
 
     def outputs
-      game.outputs["camera_#{name}"]
+      game.outputs[@output_key]
     end
 
     private
@@ -282,7 +293,7 @@ module Conjuration
         y: y,
         w: w,
         h: h,
-        path: "camera_#{name}"
+        path: @output_key
       }
     end
 
@@ -323,6 +334,15 @@ module Conjuration
 
       def zoom=(value)
         @zoom = value.clamp(0.1, 10)
+
+        # The pan clamp in x=/y= is zoom-dependent (the visible half-extent is
+        # w/2/zoom), so zooming out widens the view and can leave the current
+        # x/y out of bounds. Re-run the clamps here so zooming out at a world
+        # edge pulls the view back in-bounds immediately, rather than showing
+        # out-of-bounds space until the next pan. Guarded because zoom= may run
+        # before x/y are set during initialize.
+        self.x = @x unless @x.nil?
+        self.y = @y unless @y.nil?
       end
     end
   end

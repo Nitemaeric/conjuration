@@ -17,6 +17,10 @@ module Conjuration
     def initialize(name, **config)
       @name = name
 
+      # Cache the state key: #state runs on any scene-state read, and name is
+      # immutable, so there's no reason to re-interpolate the string each time.
+      @state_key = "scene_#{name}"
+
       super(
         config: config,
         w: grid.w,
@@ -25,7 +29,7 @@ module Conjuration
     end
 
     def state
-      game.state["scene_#{name}"] ||= {}
+      game.state[@state_key] ||= {}
     end
 
     # Screen-space output for HUD/backgrounds. World content is drawn through

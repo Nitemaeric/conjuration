@@ -301,7 +301,8 @@ module Conjuration
 
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
-      attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
+      attr_accessor :justify, :direction, :align, :gap, :padding, :position, :parent
+      attr_reader :visible
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
       attr_accessor :group
       attr_reader :overflow
@@ -474,6 +475,14 @@ module Conjuration
       def apply_descriptor(descriptor)
         declared = @declared || {}
         incoming = descriptor.object
+
+        # Interactive-ness keys off the action-key presence and the `disabled`
+        # flag (see #interactive?). Either flipping between frames must drop the
+        # cached interactive/navigation lists — and neither is in the layout
+        # signature, so the invalidate! below wouldn't catch it.
+        if declared.key?(:action) != incoming.key?(:action) || declared[:disabled] != incoming[:disabled]
+          clear_interactive_cache!
+        end
 
         # An action lambda is a fresh object every frame and can't be compared —
         # write it through unconditionally but keep it out of the change test, so
@@ -776,7 +785,21 @@ module Conjuration
       def clear_structure_cache!
         @nodes = nil
         @descendants = nil
+        @interactive_nodes = nil
+        @navigation_groups = nil
         parent&.clear_structure_cache!
+      end
+
+      # Interactive-ness (see #interactive?) also depends on non-structural state
+      # — a node's own `visible` and `disabled` — that leaves the node/descendant
+      # lists intact. Those paths clear only the derived interactive caches, so
+      # the heavier @nodes/@descendants memos survive a mere visibility or
+      # disabled flip. Walks up like clear_structure_cache!, since a descendant's
+      # change flips its ancestors' cached lists too.
+      def clear_interactive_cache!
+        @interactive_nodes = nil
+        @navigation_groups = nil
+        parent&.clear_interactive_cache!
       end
 
       def primitives
@@ -874,15 +897,21 @@ module Conjuration
         [{ x: object.right - 6, y: thumb_top - thumb, w: 4, h: thumb, path: :pixel, r: 70, g: 70, b: 70, a: 200 }]
       end
 
+      # Memoized: the input loop hits this (and navigation_groups) several times
+      # per frame — hover test, focus check, spatial nav, debug overlay — each a
+      # full-tree select with a per-node visible_in_tree? parent walk. Invalidated
+      # by clear_structure_cache! (add/remove) and clear_interactive_cache!
+      # (visibility/disabled flips), so a clean frame computes it at most once.
       def interactive_nodes
-        nodes.select(&:interactive?)
+        @interactive_nodes ||= nodes.select(&:interactive?)
       end
 
       # Interactive nodes bucketed by their navigation group — the nearest
       # ancestor's `group:`. Ungrouped nodes are omitted: groups are explicit and
-      # named, and the game decides which one is active.
+      # named, and the game decides which one is active. Memoized alongside
+      # interactive_nodes (same per-frame call pattern, same invalidation).
       def navigation_groups
-        accumulate_navigation_groups(nil, {})
+        @navigation_groups ||= accumulate_navigation_groups(nil, {})
       end
 
       # The group id a given interactive node belongs to (or nil if ungrouped).
@@ -996,6 +1025,17 @@ module Conjuration
       def renderable?
         return false unless visible_in_tree?
         return %i[solid label sprite line border].include?(primitive_marker)
+      end
+
+      # Toggling visibility changes which nodes are interactive (see
+      # #interactive?), so the cached interactive/navigation lists must drop.
+      # Layout already re-runs via invalidate! — visible is in the layout
+      # signature — so only the interactive caches need clearing here.
+      def visible=(value)
+        return if @visible == value
+
+        @visible = value
+        clear_interactive_cache!
       end
 
       # Visible only if this node and every ancestor is visible. Effective
@@ -1196,11 +1236,18 @@ module Conjuration
       end
 
       def normalized_padding
-        case padding
-        when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
-        when Hash  then { left: padding[:left] || 0, right: padding[:right] || 0, top: padding[:top] || 0, bottom: padding[:bottom] || 0 }
-        else            { left: padding, right: padding, top: padding, bottom: padding }
-        end
+        # Memoized keyed on the padding value: the four padding_* readers each
+        # call this, several times per child per layout pass, and each call would
+        # otherwise allocate a fresh hash. Rebuilt only when padding is reassigned.
+        return @normalized_padding if @normalized_padding && @normalized_padding_key == padding
+
+        @normalized_padding_key = padding
+        @normalized_padding =
+          case padding
+          when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
+          when Hash  then { left: padding[:left] || 0, right: padding[:right] || 0, top: padding[:top] || 0, bottom: padding[:bottom] || 0 }
+          else            { left: padding, right: padding, top: padding, bottom: padding }
+          end
       end
 
       def padding_left
