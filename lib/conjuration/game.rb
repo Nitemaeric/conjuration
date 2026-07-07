@@ -5,9 +5,16 @@ module Conjuration
 
     attr_accessor :debug
 
+    # Frames elapsed in game time: +1 per un-frozen update, so it holds still
+    # during a hit stop (and, later, while a scene is paused). Key easings and
+    # timers to this, not Kernel.tick_count — Kernel.tick_count keeps advancing
+    # through a freeze, so an easing keyed to it skips instead of holding.
+    attr_reader :clock
+
     def initialize(args)
       self.args = args
       self.debug = false
+      @clock = 0
     end
 
     # Freeze the game for `frames` ticks: input and update are skipped while
@@ -45,6 +52,9 @@ module Conjuration
     end
 
     def perform_update
+      # Only runs on un-frozen ticks (tick skips input+update during a hit stop),
+      # so advancing the clock here is what freezes game time with the freeze.
+      @clock += 1
       super
       update if respond_to?(:update)
     end

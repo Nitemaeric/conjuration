@@ -1,6 +1,14 @@
 class BasicCameraScene < Conjuration::Scene
   TILE_SIZE = 40
 
+  # Two pillars on the orbit's vertical crossings. The follow target weaves
+  # behind the far one and in front of the near one purely from z-ordering
+  # (z: -y), no manual layering — see #draw_world.
+  PILLARS = [
+    { x: 1000, y: 1240, w: 72, h: 190 },
+    { x: 1000, y: 760,  w: 72, h: 190 }
+  ].freeze
+
   def setup
     self.virtual_w = self.virtual_h = 2000
 
@@ -63,13 +71,16 @@ class BasicCameraScene < Conjuration::Scene
 
     if focused_camera && inputs.keyboard.key_down.space
       # Shake along the target's orbital velocity, for a directional impact.
-      angle = Kernel.tick_count * 0.02
+      angle = clock * 0.02
       focused_camera.shake(0.8, direction: { x: -Math.sin(angle), y: Math.cos(angle) })
     end
   end
 
   def update
-    angle = Kernel.tick_count * 0.02
+    # Key the orbit to game.clock, not Kernel.tick_count: clock holds still
+    # during a hit stop / pause, so the animation freezes with the game instead
+    # of skipping ahead when it thaws.
+    angle = clock * 0.02
     state.target.x = 1000 + Math.cos(angle) * 400
     state.target.y = 1000 + Math.sin(angle) * 400
 
@@ -83,19 +94,25 @@ class BasicCameraScene < Conjuration::Scene
     # cheap even fully zoomed out and across multiple cameras.
     @tiles.draw(camera)
 
-    # The follow target (orange square).
-    camera.draw({ **state.target, path: :pixel, r: 255, g: 140, b: 0 })
+    # Dynamic hover highlight: an immediate (no-z) draw, so it stays on the floor
+    # under the y-sorted entities below.
+    if camera == focused_camera
+      point = camera.to_world(**inputs.mouse.rect)
+      column = (point.x / TILE_SIZE).floor
+      row = (point.y / TILE_SIZE).floor
 
-    # Dynamic hover highlight, drawn immediately on top of the cached tiles.
-    return unless camera == focused_camera
+      if column.between?(0, (virtual_w / TILE_SIZE).to_i - 1) && row.between?(0, (virtual_h / TILE_SIZE).to_i - 1)
+        camera.draw({ x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE, path: :pixel, r: 255, g: 0, b: 0, a: 128 })
+      end
+    end
 
-    point = camera.to_world(**inputs.mouse.rect)
-    column = (point.x / TILE_SIZE).floor
-    row = (point.y / TILE_SIZE).floor
+    # Pillars + the follow target, y-sorted with z: -y (lower on screen draws in
+    # front). The orbiting target passes behind the far pillar and in front of
+    # the near one with no manual layering — depth falls out of the z buffer.
+    PILLARS.each do |pillar|
+      camera.draw({ **pillar, path: :pixel, r: 120, g: 90, b: 200 }, z: -pillar[:y])
+    end
 
-    return unless column.between?(0, (virtual_w / TILE_SIZE).to_i - 1)
-    return unless row.between?(0, (virtual_h / TILE_SIZE).to_i - 1)
-
-    camera.draw({ x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE, path: :pixel, r: 255, g: 0, b: 0, a: 128 })
+    camera.draw({ **state.target, path: :pixel, r: 255, g: 140, b: 0 }, z: -state.target.y)
   end
 end

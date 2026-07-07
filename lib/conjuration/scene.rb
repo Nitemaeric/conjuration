@@ -12,7 +12,7 @@ module Conjuration
 
     attr_reader :name
 
-    delegate :layout, :geometry, :gtk, :audio, :change_scene, to: :game
+    delegate :layout, :geometry, :gtk, :audio, :change_scene, :clock, to: :game
 
     def initialize(name, **config)
       @name = name

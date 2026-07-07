@@ -90,6 +90,98 @@ def test_from_helpers_are_viewport_relative(args, assert)
   assert.equal!(cam.from_bottom(20), 20, "from_bottom is the distance")
 end
 
+# Deferred z-ordering in Camera#draw. make_camera's view is (0,0,1280,720) at
+# zoom 1, so the small rects below are all visible. The camera's outputs double
+# accumulates across tests (shared $game), so each test clears it first.
+
+def test_draw_without_z_emits_immediately_in_call_order(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :a })
+  cam.draw({ x: 20, y: 20, w: 10, h: 10, tag: :b })
+
+  assert.equal!(cam.outputs.primitives.map { |p| p[:tag] }, [:a, :b], "no-z draws emit immediately, in call order")
+end
+
+def test_z_draws_are_deferred_until_flush(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :a }, z: 1)
+
+  assert.equal!(cam.outputs.primitives, [], "a z-draw does not emit until the flush")
+end
+
+def test_deferred_draws_flush_sorted_by_z(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :top }, z: 5)
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :bottom }, z: -5)
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :mid }, z: 0)
+  cam.send(:flush_ordered_draws)
+
+  assert.equal!(cam.outputs.primitives.map { |p| p[:tag] }, [:bottom, :mid, :top], "deferred draws flush in ascending z order")
+end
+
+def test_equal_z_preserves_call_order(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :first }, z: 1)
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :second }, z: 1)
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :third }, z: 1)
+  cam.send(:flush_ordered_draws)
+
+  assert.equal!(cam.outputs.primitives.map { |p| p[:tag] }, [:first, :second, :third], "equal-z draws keep call order (stable)")
+end
+
+def test_unordered_draws_render_under_all_ordered_draws(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :ground })        # immediate
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :hero }, z: -100) # deferred, very low z
+  cam.send(:flush_ordered_draws)
+
+  assert.equal!(cam.outputs.primitives.map { |p| p[:tag] }, [:ground, :hero], "unordered draws sit under all ordered draws, whatever their z")
+end
+
+def test_deferred_draw_still_culls_offscreen(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 5000, y: 5000, w: 10, h: 10, tag: :offscreen }, z: 1)
+  cam.send(:flush_ordered_draws)
+
+  assert.equal!(cam.outputs.primitives, [], "an offscreen z-draw is culled, never buffered")
+end
+
+def test_deferred_buffer_clears_between_flushes(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10, tag: :a }, z: 1)
+  cam.send(:flush_ordered_draws)
+  cam.outputs.primitives.clear
+  cam.send(:flush_ordered_draws) # buffer already drained
+
+  assert.equal!(cam.outputs.primitives, [], "the buffer is empty after a flush; a second flush emits nothing")
+end
+
+def test_deferred_draws_transform_like_immediate_draws(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 2 }) # view (320,180,640,360)
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 320, y: 180, w: 40, h: 40 }, z: 1)
+  cam.send(:flush_ordered_draws)
+  vp = cam.outputs.primitives.first
+
+  assert.close!(vp[:x], 0, "deferred draw is panned to the viewport like an immediate one")
+  assert.close!(vp[:w], 80, "deferred draw is zoom-scaled like an immediate one")
+end
+
 def test_follow_points_target_at_the_object_each_tick(args, assert)
   cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
   object = { x: 1000, y: 800 }
