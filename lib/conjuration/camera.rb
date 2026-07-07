@@ -23,6 +23,11 @@ module Conjuration
 
       @current = FocalPoint.new(self, **current)
       @target = FocalPoint.new(self, **current)
+
+      # Per-frame buffer of deferred, z-ordered draws: [z, emission_index,
+      # primitive]. Empty (and untouched) unless a draw passes `z:`, so the
+      # default draw path allocates nothing here.
+      @draw_buffer = []
     end
 
     def look_at(object)
@@ -128,8 +133,21 @@ module Conjuration
     # Cull + transform + emit a world-space primitive into this camera's
     # viewport. A no-op when the rect is outside the view, so a scene can hand
     # every object to every camera and only the visible ones are drawn.
-    def draw(world_rect)
-      outputs.primitives << to_viewport(world_rect) if visible?(world_rect)
+    #
+    # Pass `z:` to defer the draw into a per-frame buffer that is flushed, sorted
+    # by z, after the whole world pass — so an entity can be interleaved between
+    # tiles (player behind a tree, iso depth) without the scene ordering every
+    # call. y-sorting is the usual convention: `z: -sprite[:y]`. Deferred draws
+    # always render ON TOP of the immediate (no-`z:`) ones, which emit first;
+    # equal-z draws keep their call order. Omit `z:` for the immediate fast path.
+    def draw(world_rect, z: nil)
+      return unless visible?(world_rect)
+
+      if z
+        @draw_buffer << [z, @draw_buffer.length, to_viewport(world_rect)]
+      else
+        outputs.primitives << to_viewport(world_rect)
+      end
     end
 
     # Viewport-relative HUD coordinates. A camera's UI is drawn into its own
@@ -171,6 +189,20 @@ module Conjuration
       @trauma = [@trauma - SHAKE_DECAY, 0].max if @trauma && @trauma > 0
     end
 
+    # Emit the deferred draws, sorted by z then emission order, and clear the
+    # buffer for the next frame. Sorting on the emission index as the tie-breaker
+    # makes equal-z order deterministic (call order) regardless of whether the
+    # underlying sort is stable — mruby's is not — so equal-z primitives never
+    # flicker. The explicit comparator avoids the per-comparison array alloc a
+    # `[z, index] <=>` key would cost on this per-frame path.
+    def flush_ordered_draws
+      return if @draw_buffer.empty?
+
+      @draw_buffer.sort! { |a, b| a[0] == b[0] ? a[1] <=> b[1] : a[0] <=> b[0] }
+      @draw_buffer.each { |_, _, primitive| outputs.primitives << primitive }
+      @draw_buffer.clear
+    end
+
     # View offset for the current trauma, falling off with trauma squared. With a
     # shake direction set, the offset oscillates along that axis (impact shake);
     # otherwise it is omnidirectional.
@@ -209,7 +241,12 @@ module Conjuration
       end
 
       # The scene draws its world through us; only on-screen content is emitted.
+      # Immediate (no-`z:`) draws land in outputs.primitives here, in call order.
       scene.draw_world(self)
+
+      # Then flush the deferred draws on top of them, z-sorted. Nothing to do
+      # unless the scene used `z:`, so the plain path pays only an emptiness check.
+      flush_ordered_draws
 
       # Camera HUD: re-derive from state (no-op unless camera.ui has a view),
       # then relay once per frame. Clean subtrees early-out, so this is near-free

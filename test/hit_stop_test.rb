@@ -54,3 +54,37 @@ def test_runs_normally_without_a_hit_stop(args, assert)
   assert.equal!(scene.updates, 1, "update runs with no hit stop")
   assert.equal!(scene.inputs, 1, "input runs with no hit stop")
 end
+
+def test_clock_starts_at_zero(args, assert)
+  assert.equal!(hit_stop_game.clock, 0, "clock starts at zero before any tick")
+end
+
+def test_clock_advances_once_per_update(args, assert)
+  game = hit_stop_game
+
+  game.tick
+  game.tick
+  game.tick
+
+  assert.equal!(game.clock, 3, "clock advances once per un-frozen update")
+end
+
+def test_clock_freezes_during_hit_stop(args, assert)
+  game = hit_stop_game
+  game.hit_stop(2)
+
+  game.tick
+  game.tick
+
+  assert.equal!(game.clock, 0, "clock does not advance across a hit stop window")
+end
+
+def test_clock_resumes_after_hit_stop(args, assert)
+  game = hit_stop_game
+  game.hit_stop(1)
+
+  game.tick # consumes the one frozen frame — clock held
+  game.tick # resumes
+
+  assert.equal!(game.clock, 1, "clock resumes advancing once the freeze ends")
+end
