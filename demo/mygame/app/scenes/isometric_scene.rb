@@ -1,14 +1,3 @@
-# Isometric is not a camera feature. The camera works in continuous world space
-# and is projection-blind; so is TileLayer. All that makes this view "iso" is:
-#
-#   1. Projection::Isometric mapping grid (col, row) <-> world (x, y), and
-#   2. draw order — the merged `camera.draw(sprite, z:)` buffer, keyed here by the
-#      documented convention `z: col + row` (greater sum => nearer the viewer =>
-#      drawn on top).
-#
-# The diamond floor is an ordinary TileLayer of axis-aligned sprites (an iso tile
-# is still a rect — its bounding box). The knight weaving behind then in front of
-# the raised block is pure z-ordering over the projection: no manual layering.
 class IsometricScene < Conjuration::Scene
   TILE_W = 64
   TILE_H = 32
@@ -16,7 +5,6 @@ class IsometricScene < Conjuration::Scene
   GRID_COLS = 10
   GRID_ROWS = 10
 
-  # The raised block sits mid-grid; the knight walks the same row across it.
   RAISE_COL = 5
   RAISE_ROW = 5
 
@@ -29,16 +17,11 @@ class IsometricScene < Conjuration::Scene
     cameras[:main].ui.group = :hud
     activate_navigation(:hud)
 
-    # Centre the view on the middle of the grid up front (no ease-in from the
-    # default screen-centre focal point).
     centre = @iso.to_world(GRID_COLS / 2, GRID_ROWS / 2)
     camera = cameras[:main]
     camera.current.x = camera.target.x = centre[:x]
     camera.current.y = camera.target.y = centre[:y]
 
-    # The diamond floor, cached as chunk textures. Each cell is a single
-    # axis-aligned sprite placed by its bounding box (centre minus half-extents),
-    # tinted in a checkerboard so the diamonds read as a grid.
     @tiles = Conjuration::TileLayer.new(name: :iso_floor, chunk_size: 512)
     GRID_ROWS.times do |row|
       GRID_COLS.times do |col|
@@ -66,8 +49,7 @@ class IsometricScene < Conjuration::Scene
   end
 
   def update
-    # Ping-pong the knight across the grid along RAISE_ROW, keyed to game.clock so
-    # it holds through a hit stop. It passes the raised block at col == RAISE_COL.
+    # clock (not tick) so the walk holds through a hit stop.
     phase = (clock * 0.01) % 2.0
     state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
 
@@ -77,12 +59,9 @@ class IsometricScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    # Static diamond floor: drawn from cached chunk textures.
     @tiles.draw(camera)
 
-    # Hover highlight: pick the tile under the cursor by inverting the projection
-    # on the camera's world-space mouse point (true diamond hit-testing). Drawn
-    # immediately (no z:), so it stays on the floor under the entities.
+    # No z: so this immediate draw stays under the z-ordered entities.
     if camera == focused_camera
       point = camera.to_world(**inputs.mouse.rect)
       cell = @iso.to_grid(point[:x], point[:y])
@@ -103,9 +82,8 @@ class IsometricScene < Conjuration::Scene
 
   private
 
-  # The raised block: a darkened base diamond plus a stack of crates rising from
-  # it. Everything shares one depth bucket (z == its grid sum) so the whole block
-  # sorts against the knight as a single object.
+  # Every crate shares the base tile's z so the whole block sorts against the
+  # knight as a single object.
   def draw_raised_block(camera)
     base = @iso.to_world(RAISE_COL, RAISE_ROW)
     z = RAISE_COL + RAISE_ROW
@@ -115,8 +93,8 @@ class IsometricScene < Conjuration::Scene
       path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 96, g: 78, b: 150
     }, z: z)
 
-    # +y is up on screen (the camera doesn't flip y), so stacking crates upward in
-    # world y reads as a tile raised off the floor.
+    # +y is up (the camera doesn't flip y), so adding to y stacks crates upward
+    # off the floor.
     3.times do |i|
       camera.draw({
         x: base[:x], y: base[:y] + 6 + i * 26, w: 44, h: 44,
@@ -125,9 +103,6 @@ class IsometricScene < Conjuration::Scene
     end
   end
 
-  # The walking knight, depth-keyed by its own continuous grid position. As
-  # knight_col crosses RAISE_COL its z crosses the block's, so it passes behind
-  # then in front with no manual ordering.
   def draw_knight(camera)
     pos = @iso.to_world(state.knight_col, RAISE_ROW)
     camera.draw({
@@ -148,9 +123,6 @@ class IsometricScene < Conjuration::Scene
     in_bounds?(cell[:col], cell[:row]) ? "Tile: #{cell[:col]}, #{cell[:row]}" : "Tile: -"
   end
 
-  # Rasterise a white diamond tile into a reusable render target, once. Tinted per
-  # tile at draw time. Built in Ruby rather than shipped as a binary asset: it's
-  # scanline-filled (one 1px row per world-y), so it needs no image file.
   def build_tile_texture
     return if @tile_texture_built
 
@@ -160,7 +132,6 @@ class IsometricScene < Conjuration::Scene
 
     half_h = TILE_H / 2.0
     TILE_H.times do |yy|
-      # Diamond half-width tapers linearly to 0 at the top and bottom vertices.
       frac = 1.0 - ((yy + 0.5) - half_h).abs / half_h
       half = TILE_W * frac / 2.0
       target.primitives << { x: TILE_W / 2.0 - half, y: yy, w: half * 2, h: 1, path: :pixel, r: 255, g: 255, b: 255 }
