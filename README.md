@@ -31,6 +31,7 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
   - [x] Virtual scenes (worlds beyond the GPU texture limit)
   - [x] Viewport culling
   - [x] Chunked tile caching
+  - [x] Parallax scrolling layers
 - [x] UI & HUD Management
   - [ ] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
   - [ ] Interactive node management
@@ -104,3 +105,20 @@ Conjuration depends on [dragon_input](https://github.com/Nitemaeric/dragon_input
 
 - **Don't pump manually.** Conjuration calls `DragonInput.tick` once per frame inside `Game#tick`. The pump is gated on `DragonInput.config`, so a game that never uses input pays only a nil-check per tick.
 - **Escape hatch:** assign `game.input_source = your_source` (any object answering `just_pressed?(pad, action)` / `pressed?(pad, action)`) to bypass the DragonInput wrapper entirely. `game.ui_pad` (default `:one`) picks the logical pad the framework UI listens to.
+
+### Parallax — `camera.draw(layer, parallax:)`
+
+Pass `parallax:` (a factor below 1.0) to make a background layer scroll slower than the camera, for depth from motion:
+
+```ruby
+camera.draw(far_hills, parallax: 0.3)          # scrolls at 30% of camera speed
+camera.draw(clouds,    parallax: 0.5, z: -100) # composes with z-ordering
+```
+
+The camera culls and transforms each layer against its own *derived* view — the focal point scaled by the factor — not the real one. This is the reason it belongs in the framework: a hand-rolled parallax tests visibility against the real `view_rect` while drawing at the scaled position, so layer sprites near the view edges are culled (or kept) wrongly. `camera.draw` gets the boundary right.
+
+- The default path (`parallax: 1.0`, i.e. omitted) is the memoized fast path, unchanged and allocation-free — only layers that pass `parallax:` do any extra work.
+- Zoom applies **un-scaled**: only the translation parallaxes, so every layer stays at the same zoom and they never warp apart as you zoom.
+- `parallax:` composes with `z:` — layer your backgrounds with `z:` and scroll them with `parallax:` independently.
+
+See [parallax_scene.rb](demo/mygame/app/scenes/parallax_scene.rb) for a side-scroller with sky, hills, clouds, and tree layers over a 1:1 ground plane.
