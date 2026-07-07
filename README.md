@@ -32,6 +32,8 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
   - [x] Viewport culling
   - [x] Chunked tile caching
   - [x] Parallax scrolling layers
+  - [x] Deferred z-ordering (y-sort / depth)
+  - [x] Grid projections (isometric & top-down)
 - [x] UI & HUD Management
   - [ ] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
   - [ ] Interactive node management
@@ -122,3 +124,20 @@ The camera culls and transforms each layer against its own *derived* view — th
 - `parallax:` composes with `z:` — layer your backgrounds with `z:` and scroll them with `parallax:` independently.
 
 See [parallax_scene.rb](demo/mygame/app/scenes/parallax_scene.rb) for a side-scroller with sky, hills, clouds, and tree layers over a 1:1 ground plane.
+### Projections — grid ↔ world mapping (`Conjuration::Projection`)
+
+Isometric is **not a camera feature**. The camera works in continuous world space and is projection-blind; so is `TileLayer`. What makes a view isometric is only (a) how grid cells map to world positions and (b) draw order — and draw order is already handled by `camera.draw(sprite, z:)` above. So `Projection` is pure, stateless maths — no engine changes:
+
+```ruby
+iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
+
+iso.to_world(col, row)   # => { x:, y: }   the tile's CENTRE in world space
+iso.to_grid(x, y)        # => { col:, row: } which tile a world point falls in
+```
+
+- **`to_world` returns the tile centre**, so draw the tile sprite anchored there (`anchor_x: 0.5, anchor_y: 0.5`); for a `TileLayer`/rect entry the bounding box is `(x - tile_w/2, y - tile_h/2, tile_w, tile_h)`. An iso tile is still an axis-aligned world rect, so it chunks like any other sprite.
+- **`to_grid` is the exact inverse** and does true *diamond* hit-testing (not the sprite's bounding box), so picking is correct right up to tile edges and corners. Feed it a world point from `camera.to_world(inputs.mouse.rect)` to pick under the cursor.
+- **Depth is the convention `z: col + row`** — a greater `col + row` places a tile nearer the viewer (lower on screen) and draws it on top. It rides on the z-ordering above; it is not a separate feature.
+- `Projection::TopDown` is the identity mapping with the same contract, so isometric reads as one option in a family rather than a special case — swap the projection object and the same tile/pick code drives either view.
+
+See [isometric_scene.rb](demo/mygame/app/scenes/isometric_scene.rb): a diamond `TileLayer`, mouse-picked tile highlight, and a knight walking behind then in front of a raised block purely from `z: col + row`.
