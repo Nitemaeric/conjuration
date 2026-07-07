@@ -4,8 +4,6 @@ module Conjuration
       def delegate(*method_names, to:)
         method_names.each do |name|
           define_method(name) do |*args, **kwargs, &block|
-            # Forward keywords and any block (both were dropped before, so
-            # change_scene(to:) only worked via mruby's trailing-hash leniency).
             # Splat an empty **kwargs and this mruby build forwards a stray `{}`
             # positional, breaking zero-arg delegates like gtk — so only splat
             # when there are keywords.

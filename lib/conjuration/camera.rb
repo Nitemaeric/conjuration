@@ -26,9 +26,6 @@ module Conjuration
     def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
 
-      # Cache the render-target key: #outputs runs once per drawn primitive and
-      # the blit reuses it, so re-interpolating "camera_<name>" per call would
-      # allocate a string on the hottest path. name is set on the line above.
       @output_key = "camera_#{name}"
 
       @current = FocalPoint.new(self, **current)
@@ -335,11 +332,9 @@ module Conjuration
       def zoom=(value)
         @zoom = value.clamp(0.1, 10)
 
-        # The pan clamp in x=/y= is zoom-dependent (the visible half-extent is
-        # w/2/zoom), so zooming out widens the view and can leave the current
-        # x/y out of bounds. Re-run the clamps here so zooming out at a world
-        # edge pulls the view back in-bounds immediately, rather than showing
-        # out-of-bounds space until the next pan. Guarded because zoom= may run
+        # The pan clamp in x=/y= is zoom-dependent (half-extent is w/2/zoom), so
+        # zooming out can leave the current x/y out of bounds; re-run the clamps
+        # to pull the view back in immediately. Guarded because zoom= can run
         # before x/y are set during initialize.
         self.x = @x unless @x.nil?
         self.y = @y unless @y.nil?

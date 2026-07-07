@@ -41,9 +41,7 @@ def test_zoom_out_reclamps_focal_point_to_bounds(args, assert)
   cam.current.x = 5000
   assert.equal!(cam.current.x, 1680, "parked at the zoomed-in right edge")
 
-  # Zoom out to 1: half widens to 640, so the edge is now 2000 - 640 = 1360. The
-  # re-clamp in zoom= must pull x back in-bounds immediately (before this fix it
-  # stayed at 1680, showing out-of-bounds space until the next pan).
+  # Zoom out to 1: half widens to 640, so the edge is now 2000 - 640 = 1360.
   cam.current.zoom = 1
   assert.equal!(cam.current.x, 1360, "zooming out re-clamps x to the widened bound")
 end

@@ -28,11 +28,9 @@ module Conjuration
     end
 
     def perform_update
-      # Recompute focus from scratch each tick so it clears when the mouse leaves
-      # every camera (a retained value would keep the last camera focused with
-      # the pointer outside it). Cameras are visited in insertion order and the
-      # last hit wins, so where viewports overlap the topmost — the most recently
-      # added camera, which is also drawn last — takes focus.
+      # Reset each tick so focus clears when the pointer leaves every camera.
+      # Last hit wins, so on overlap the most-recently-added (last-drawn) camera
+      # takes focus.
       @focused_camera = nil
 
       cameras.each do |name, camera|

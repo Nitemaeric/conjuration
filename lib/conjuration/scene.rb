@@ -17,8 +17,6 @@ module Conjuration
     def initialize(name, **config)
       @name = name
 
-      # Cache the state key: #state runs on any scene-state read, and name is
-      # immutable, so there's no reason to re-interpolate the string each time.
       @state_key = "scene_#{name}"
 
       super(

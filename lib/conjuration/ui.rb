@@ -476,10 +476,9 @@ module Conjuration
         declared = @declared || {}
         incoming = descriptor.object
 
-        # Interactive-ness keys off the action-key presence and the `disabled`
-        # flag (see #interactive?). Either flipping between frames must drop the
-        # cached interactive/navigation lists — and neither is in the layout
-        # signature, so the invalidate! below wouldn't catch it.
+        # interactive? keys off action presence and `disabled`, neither of which
+        # is in the layout signature — so invalidate! below won't catch a flip;
+        # drop the interactive/navigation caches explicitly.
         if declared.key?(:action) != incoming.key?(:action) || declared[:disabled] != incoming[:disabled]
           clear_interactive_cache!
         end
@@ -790,12 +789,10 @@ module Conjuration
         parent&.clear_structure_cache!
       end
 
-      # Interactive-ness (see #interactive?) also depends on non-structural state
-      # — a node's own `visible` and `disabled` — that leaves the node/descendant
-      # lists intact. Those paths clear only the derived interactive caches, so
-      # the heavier @nodes/@descendants memos survive a mere visibility or
-      # disabled flip. Walks up like clear_structure_cache!, since a descendant's
-      # change flips its ancestors' cached lists too.
+      # Lighter counterpart to clear_structure_cache!: interactive-ness also
+      # depends on `visible`/`disabled`, which don't change the tree — so a flip
+      # drops only the derived caches and leaves the @nodes/@descendants memos
+      # intact. Walks up, since a descendant's flip changes ancestors' lists too.
       def clear_interactive_cache!
         @interactive_nodes = nil
         @navigation_groups = nil
@@ -897,19 +894,13 @@ module Conjuration
         [{ x: object.right - 6, y: thumb_top - thumb, w: 4, h: thumb, path: :pixel, r: 70, g: 70, b: 70, a: 200 }]
       end
 
-      # Memoized: the input loop hits this (and navigation_groups) several times
-      # per frame — hover test, focus check, spatial nav, debug overlay — each a
-      # full-tree select with a per-node visible_in_tree? parent walk. Invalidated
-      # by clear_structure_cache! (add/remove) and clear_interactive_cache!
-      # (visibility/disabled flips), so a clean frame computes it at most once.
       def interactive_nodes
         @interactive_nodes ||= nodes.select(&:interactive?)
       end
 
       # Interactive nodes bucketed by their navigation group — the nearest
       # ancestor's `group:`. Ungrouped nodes are omitted: groups are explicit and
-      # named, and the game decides which one is active. Memoized alongside
-      # interactive_nodes (same per-frame call pattern, same invalidation).
+      # named, and the game decides which one is active.
       def navigation_groups
         @navigation_groups ||= accumulate_navigation_groups(nil, {})
       end
@@ -1027,10 +1018,8 @@ module Conjuration
         return %i[solid label sprite line border].include?(primitive_marker)
       end
 
-      # Toggling visibility changes which nodes are interactive (see
-      # #interactive?), so the cached interactive/navigation lists must drop.
-      # Layout already re-runs via invalidate! — visible is in the layout
-      # signature — so only the interactive caches need clearing here.
+      # Only clears the interactive caches, not layout: `visible` is in the
+      # layout signature, so invalidate! already re-runs layout on its own.
       def visible=(value)
         return if @visible == value
 
@@ -1236,9 +1225,6 @@ module Conjuration
       end
 
       def normalized_padding
-        # Memoized keyed on the padding value: the four padding_* readers each
-        # call this, several times per child per layout pass, and each call would
-        # otherwise allocate a fresh hash. Rebuilt only when padding is reassigned.
         return @normalized_padding if @normalized_padding && @normalized_padding_key == padding
 
         @normalized_padding_key = padding
