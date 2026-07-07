@@ -122,7 +122,7 @@ module Conjuration
     # The cursor is left as-is here — a mouse affordance, irrelevant when
     # navigating by key/pad.
     def update_focus_by_navigation
-      direction = inputs.key_down.directional_vector
+      direction = game.control_scheme.navigation_vector
       return if direction.nil? || (direction.x == 0 && direction.y == 0)
 
       # Spatial nav stays within the active pane.
@@ -141,21 +141,21 @@ module Conjuration
       UI.focused_node = members.first
     end
 
-    # Space is intentionally excluded — games commonly bind it (the hit-stop demo
-    # swings with it), so confirming on it would double-fire.
+    # Confirm intent (edge). Bindings — including the deliberate Space exclusion —
+    # live in the control scheme, the one seam for raw input reads.
     def confirm_pressed?
-      inputs.keyboard.key_down.enter || inputs.controller_one.key_down.a
+      game.control_scheme.confirm_down?
     end
 
-    # Drives the :pressed state: the focused node held down (mouse over it with the
-    # button down, or a held confirm key).
+    # Drives the :pressed state: the focused node held down — mouse over it with
+    # the button down (a per-node, pointer read), or a held confirm from the
+    # control scheme.
     def pressing?
       focused = UI.focused_node
       return false unless focused
 
       (inputs.mouse.held && focused.intersect_rect?(inputs.mouse)) ||
-        inputs.keyboard.key_held.enter ||
-        inputs.controller_one.key_held.a
+        game.control_scheme.confirm_held?
     end
 
     # Only triggers if the focused node belongs to THIS ui: focus is a shared

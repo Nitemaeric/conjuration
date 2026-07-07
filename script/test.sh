@@ -27,6 +27,7 @@ preload=(
   lib/conjuration/base_lifecycle_methods.rb
   lib/conjuration/node.rb
   lib/conjuration/vector.rb
+  lib/conjuration/control_scheme.rb
   lib/conjuration/ui.rb
   lib/conjuration/ui_management.rb
   lib/conjuration/camera.rb

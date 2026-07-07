@@ -39,6 +39,17 @@ module Conjuration
       debug
     end
 
+    # The active input binding for framework UI (confirm/navigation). Framework
+    # code reads input only through here — never off `inputs` directly — so an
+    # input library replaces this object instead of being retrofitted across
+    # UIManagement. Memoized (one instance, not one per frame); assign your own
+    # scheme to rebind. Scenes/games may still read raw `inputs` freely.
+    def control_scheme
+      @control_scheme ||= ControlScheme.new(inputs)
+    end
+
+    attr_writer :control_scheme
+
     private
 
     def perform_setup

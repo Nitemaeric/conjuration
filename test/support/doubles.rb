@@ -62,6 +62,15 @@ class GameDouble
   def events; @events ||= EventsDouble.new; end
   def state; @state ||= {}; end
   def debug?; false; end
+
+  # Node delegates `inputs` here; tests that drive UIManagement's input pass set
+  # a stub. control_scheme mirrors the real Game: memoized, replaceable.
+  attr_accessor :inputs
+  attr_writer :control_scheme
+
+  def control_scheme
+    @control_scheme ||= Conjuration::ControlScheme.new(inputs)
+  end
 end
 
 # Stands in for a Conjuration::Scene where a camera only needs its world bounds.
