@@ -58,7 +58,7 @@ def test_remove_drops_intersecting_primitive(args, assert)
   layer = Conjuration::TileLayer.new(name: :rm_hit, chunk_size: 400)
   layer.add({ x: 10, y: 10, w: 40, h: 40, path: :pixel }) # chunk (0,0)
 
-  layer.remove({ x: 20, y: 20, w: 5, h: 5 }) # sits inside the primitive
+  layer.remove({ x: 20, y: 20, w: 5, h: 5 })
 
   cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
   layer.draw(cam)
@@ -71,7 +71,7 @@ def test_remove_ignores_primitives_it_does_not_touch(args, assert)
   layer = Conjuration::TileLayer.new(name: :rm_miss, chunk_size: 400)
   layer.add({ x: 10, y: 10, w: 40, h: 40, path: :pixel }) # chunk (0,0), world 10..50
 
-  layer.remove({ x: 200, y: 200, w: 20, h: 20 }) # nowhere near it
+  layer.remove({ x: 200, y: 200, w: 20, h: 20 })
 
   cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
   layer.draw(cam)
@@ -86,7 +86,7 @@ def test_remove_reinvalidates_only_affected_chunks(args, assert)
   layer.add({ x: 450, y: 10, w: 40, h: 40, path: :pixel })  # C, chunk (1,0)
 
   cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
-  layer.draw(cam) # bakes both chunks
+  layer.draw(cam)
 
   # A sentinel in each baked texture: a re-bake clears it, an untouched chunk keeps it.
   t00 = $game.outputs["tile_layer_rm_scope_0_0"]
@@ -94,7 +94,7 @@ def test_remove_reinvalidates_only_affected_chunks(args, assert)
   t00.primitives << :sentinel
   t10.primitives << :sentinel
 
-  layer.remove({ x: 0, y: 0, w: 60, h: 60 }) # hits A only; B and C untouched
+  layer.remove({ x: 0, y: 0, w: 60, h: 60 })
 
   layer.draw(cam)
 

@@ -39,31 +39,19 @@ module Conjuration
       end
     end
 
-    # Drop every stored primitive whose world-space bounds intersect +rect+ and
-    # invalidate only the chunks that lost something, so the next #draw re-bakes
-    # those textures and leaves the rest of the world's cached chunks untouched.
-    #
-    # Intersect, not contain: a primitive is removed if it overlaps +rect+ at
-    # all, matching how a destructible region ("blow a hole here") reads. A
-    # primitive filed into several chunks (it straddled their borders) is removed
-    # from every one of them, since each chunk holds a copy in its own local
-    # coordinates.
-    #
-    # This is an event-time operation, not a per-frame one — dynamic content
-    # still belongs in camera.draw. A layer that never calls #remove keeps its
-    # add/draw path byte-for-byte identical to a layer without this method.
+    # Removal is by intersection, not containment: a primitive goes if it
+    # overlaps +rect+ at all. A border-spanning primitive is stored as a copy in
+    # each chunk it straddles (in that chunk's local coordinates), so it must be
+    # dropped from every one of them, not just the chunk the rect touches.
     def remove(rect)
       rx = rect[:x]
       ry = rect[:y]
       rw = rect[:w] || 0
       rh = rect[:h] || 0
 
-      # The chunks the rect covers are the entry points: any primitive touching
-      # the rect has at least one copy here (its overlap with the rect lies
-      # inside one of them). From each removed primitive we fan out to its full
-      # chunk span, so copies that live in neighbouring chunks the rect doesn't
-      # itself cover are dropped too. `seen` keeps the walk from re-scanning a
-      # chunk; each chunk that loses a primitive is invalidated as we go.
+      # Any primitive touching the rect has a copy in a chunk the rect covers, so
+      # those chunks are complete entry points; from each hit we fan out to the
+      # primitive's other chunks to evict its sibling copies. `seen` bounds the walk.
       pending = []
       chunk_span(rx, rx + rw).each do |cx|
         chunk_span(ry, ry + rh).each do |cy|
@@ -93,7 +81,6 @@ module Conjuration
 
           removed_any = true
 
-          # Queue the primitive's other chunks so its sibling copies go with it.
           chunk_span(wx, wx + ww).each do |ox|
             chunk_span(wy, wy + wh).each do |oy|
               pending << [ox, oy] unless seen[[ox, oy]]
@@ -105,8 +92,6 @@ module Conjuration
 
         next unless removed_any
 
-        # Invalidate the texture so #draw re-bakes it; forget the chunk entirely
-        # once empty so it is never re-rendered or emitted again.
         @rendered.delete(key)
         @chunks.delete(key) if primitives.empty?
       end
@@ -140,8 +125,6 @@ module Conjuration
       (from / chunk_size).floor..(to / chunk_size).floor
     end
 
-    # AABB overlap on raw scalars — no hash allocation, so #remove stays cheap
-    # even when sweeping a rect across many stored primitives.
     def overlap?(ax, ay, aw, ah, bx, by, bw, bh)
       ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
     end
@@ -150,10 +133,9 @@ module Conjuration
       target = game.outputs[chunk_path(cx, cy)]
       target.width = chunk_size
       target.height = chunk_size
-      # Clear first so an invalidated (re-baked) chunk reflects only its current
-      # primitives. On the first bake this is a no-op; DragonRuby hands back a
-      # fresh per-tick primitives collection anyway, so unused layers are
-      # unaffected.
+      # A re-bake after #remove must not accumulate onto the stale primitives; on
+      # the first bake DragonRuby hands back a fresh collection, so clearing is a
+      # no-op there.
       target.primitives.clear
       @chunks[[cx, cy]].each { |primitive| target.primitives << primitive }
       @rendered[[cx, cy]] = true
