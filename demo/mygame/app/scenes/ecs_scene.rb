@@ -1,18 +1,3 @@
-# Roadmap PR 5 (D1): proves draco (an external ECS) integrates with Conjuration.
-#
-# The shape of the integration — the thing this scene exists to demonstrate:
-#   * simulation lives in a draco World, ticked ONCE per frame from #update;
-#   * rendering stays in #draw_world, which runs once PER CAMERA and reads
-#     components straight into camera.draw(..., z:).
-#
-# Keeping the World tick in #update (not #draw_world) is what makes the ECS
-# inherit Conjuration's game clock for free: #update is skipped during a hit
-# stop, so the whole simulation freezes with the game — see docs/ecs.md.
-#
-# draco is vendored via drenv (see drenv.toml / app/drenv_bundle.rb).
-
-# --- Components: plain data (see docs/ecs.md "components vs primitives") -------
-
 class Position < Draco::Component
   attribute :x, default: 0
   attribute :y, default: 0
@@ -30,11 +15,8 @@ class Sprite < Draco::Component
   attribute :g, default: 255
   attribute :b, default: 255
 
-  # The glue between an ECS component (an object) and camera.draw (a hash
-  # primitive). Built once here and mutated in place each frame in #draw_world,
-  # so the per-entity render path allocates nothing. It is NOT a draco
-  # `attribute`: attribute defaults are evaluated once and shared, so a `{}`
-  # default would hand every entity the SAME hash.
+  # Mutated in place each frame (zero-alloc render path); an attr_reader, not a
+  # draco attribute, whose `{}` default would be shared across every entity.
   attr_reader :primitive
 
   def after_initialize
@@ -48,10 +30,6 @@ class Critter < Draco::Entity
   component Sprite
 end
 
-# --- Systems: behaviour, mutating components. Run in declared order. ----------
-
-# Integrate position by velocity. `context` is whatever #update passes to
-# world.tick — here, the Scene, so systems can read world bounds off it.
 class MovementSystem < Draco::System
   filter Position, Velocity
 
@@ -63,8 +41,6 @@ class MovementSystem < Draco::System
   end
 end
 
-# Reflect velocity at the world edges. A three-component filter (needs Sprite
-# for the body size) — demonstrates draco's set-intersection filtering.
 class BounceSystem < Draco::System
   filter Position, Velocity, Sprite
 
@@ -114,14 +90,11 @@ class ECSScene < Conjuration::Scene
     cameras[:main].ui.group = :hud
     activate_navigation(:hud)
 
-    # The World is held in an instance variable, NOT in scene `state`: it is a
-    # live object graph (Sets, subscriptions, class refs) that Conjuration's
-    # serializable scene state should not try to round-trip. See docs/ecs.md.
+    # In an ivar, not scene `state`: a live object graph (Sets, subscriptions,
+    # class refs) that Conjuration's serializable state must not round-trip.
     @world = CritterWorld.new
     spawn(120)
 
-    # Cache the renderable set once here so #draw_world doesn't re-filter; it is
-    # rebuilt every #update (see below), so spawns are picked up next frame.
     refresh_renderables
 
     cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
@@ -141,23 +114,18 @@ class ECSScene < Conjuration::Scene
   end
 
   def update
-    # Tick the ECS once per frame. Because this runs in #update (not #render), it
-    # is skipped during a hit stop — the simulation freezes with the game.
+    # Ticked from #update, not #draw_world, so it's skipped during a hit stop
+    # and the simulation freezes with the game.
     @world.tick(self)
 
-    # Re-cache the renderable list ONCE per frame. #draw_world then iterates this
-    # cache for every camera instead of calling world.filter per camera, which
-    # would re-run draco's set intersection (and allocate a fresh Set) each time.
-    # See docs/ecs.md for the measured cost of skipping this.
+    # Filter once per frame here, not per camera in #draw_world, which would
+    # re-run draco's set intersection and allocate a fresh Set for each camera.
     refresh_renderables
 
     cameras[:main].ui.find(:count_label).object.text = "Critters: #{@renderables.length}"
   end
 
   def draw_world(camera)
-    # Runs once per camera. Reads components straight into the reusable primitive
-    # hash and hands it to camera.draw with a y-sorted z, so nothing allocates
-    # per critter and depth falls out of the z buffer.
     @renderables.each do |entity|
       position = entity.position
       primitive = entity.sprite.primitive
@@ -187,7 +155,8 @@ class ECSScene < Conjuration::Scene
     end
   end
 
-  # A non-zero speed in [-3, -1] u [1, 3]. Avoids Enumerable#sum / float traps.
+  # Signed magnitude built by hand: mruby has no Enumerable#sum, and integer
+  # division would truncate a float-based approach.
   def rand_speed
     magnitude = 1 + rand(3)
     rand(2).zero? ? magnitude : -magnitude
