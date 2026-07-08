@@ -6,3 +6,6 @@ require 'vendor/conjuration/conjuration.rb'
 
 # frame-timer (github:owenbutler/dr-frame-timer)
 require 'vendor/frame-timer/frame-timer.rb'
+
+# dragon_input (github:Nitemaeric/dragon_input)
+require 'vendor/dragon_input/dragon_input.rb'

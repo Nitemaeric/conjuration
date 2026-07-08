@@ -12,6 +12,7 @@ def tick args
   $frame_timer.start_tick(args)
   $game.args = args
   $game.perform_setup if Kernel.tick_count.zero?
+  DragonInput.tick(args) # pump the backend before UI reads input this frame
   $game.tick
   $frame_timer.end_tick(args)
 end

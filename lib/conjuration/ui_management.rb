@@ -122,13 +122,27 @@ module Conjuration
     # The cursor is left as-is here — a mouse affordance, irrelevant when
     # navigating by key/pad.
     def update_focus_by_navigation
-      direction = game.control_scheme.navigation_vector
-      return if direction.nil? || (direction.x == 0 && direction.y == 0)
+      direction = navigation_vector
+      return if direction.nil?
 
       # Spatial nav stays within the active pane.
       candidates = ui.navigation_groups[UI.active_navigation_group] || []
       target = ui.spatial_navigate(UI.focused_node, direction, candidates: candidates)
       UI.focused_node = target if target
+    end
+
+    # Compose the directional vector from the four reserved UI edges — nil when
+    # idle, matching DragonRuby's directional_vector. x/y stay unnormalized (both
+    # axes may fire for a diagonal); spatial_navigate only reads their signs.
+    def navigation_vector
+      source = game.input_source
+      pad = game.ui_pad
+
+      x = (source.just_pressed?(pad, :ui_right) ? 1 : 0) - (source.just_pressed?(pad, :ui_left) ? 1 : 0)
+      y = (source.just_pressed?(pad, :ui_up) ? 1 : 0) - (source.just_pressed?(pad, :ui_down) ? 1 : 0)
+      return nil if x == 0 && y == 0
+
+      { x: x, y: y }
     end
 
     # Seed focus into the active group when it isn't already there (e.g. right
@@ -142,7 +156,7 @@ module Conjuration
     end
 
     def confirm_pressed?
-      game.control_scheme.confirm_down?
+      game.input_source.just_pressed?(game.ui_pad, :ui_confirm)
     end
 
     def pressing?
@@ -150,7 +164,7 @@ module Conjuration
       return false unless focused
 
       (inputs.mouse.held && focused.intersect_rect?(inputs.mouse)) ||
-        game.control_scheme.confirm_held?
+        game.input_source.pressed?(game.ui_pad, :ui_confirm)
     end
 
     # Only triggers if the focused node belongs to THIS ui: focus is a shared

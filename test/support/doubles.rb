@@ -64,10 +64,24 @@ class GameDouble
   def debug?; false; end
 
   attr_accessor :inputs
-  attr_writer :control_scheme
 
-  def control_scheme
-    @control_scheme ||= Conjuration::ControlScheme.new(inputs)
+  def input_source
+    return @input_source if @input_source_assigned
+
+    @input_source ||= if Object.const_defined?(:DragonInput)
+      Conjuration::DragonInputSource.new
+    else
+      Conjuration::FallbackInputSource.new(inputs)
+    end
+  end
+
+  def input_source=(source)
+    @input_source_assigned = true
+    @input_source = source
+  end
+
+  def ui_pad
+    @ui_pad ||= :one
   end
 end
 

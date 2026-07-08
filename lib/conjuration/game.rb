@@ -39,13 +39,39 @@ module Conjuration
       debug
     end
 
-    def control_scheme
-      @control_scheme ||= ControlScheme.new(inputs)
+    # The object framework UI reads input through: it answers
+    # just_pressed?(pad, action) / pressed?(pad, action) for the reserved
+    # UI_ACTIONS names. Defaults implicitly — DragonInput when it's loaded,
+    # otherwise the raw-inputs fallback. Assigning one (see input_source=) opts
+    # out of all implicit behaviour.
+    def input_source
+      return @input_source if @input_source_assigned
+
+      @input_source ||= detect_input_source
     end
 
-    attr_writer :control_scheme
+    def input_source=(source)
+      @input_source_assigned = true
+      @input_source = source
+    end
+
+    # The logical pad framework UI listens to.
+    def ui_pad
+      @ui_pad ||= :one
+    end
+
+    attr_writer :ui_pad
 
     private
+
+    def detect_input_source
+      # const_defined?, not defined? — DragonRuby's mruby has no `defined?`.
+      if Object.const_defined?(:DragonInput)
+        DragonInputSource.new
+      else
+        FallbackInputSource.new(inputs)
+      end
+    end
 
     def perform_setup
       setup if respond_to?(:setup)
