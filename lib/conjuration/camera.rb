@@ -89,11 +89,6 @@ module Conjuration
 
     # World-space rectangle this camera currently sees (pan, zoom, and any active
     # screen shake applied). Memoized per render frame.
-    #
-    # A background layer is culled and transformed against its own derived view —
-    # the focal point scaled by `parallax` — not the real view. That is the point
-    # of the built-in support: a hand-rolled parallax tests `visible?` against the
-    # real view, so it culls layer sprites near the edges wrongly.
     def view_rect(parallax: 1.0)
       return (@view_rect ||= compute_view_rect(1.0)) if parallax == 1.0
 
@@ -103,9 +98,6 @@ module Conjuration
     # Whether a world-space rect overlaps the current view at all. Hand-rolled
     # AABB test with bracket access: this runs per object per camera per frame,
     # so it avoids method_missing and Geometry-call overhead.
-    #
-    # `parallax` is positional (not a keyword) to keep the per-object hot path
-    # free of a kwargs hash allocation; the default 1.0 hits the memoized view.
     def visible?(world_rect, parallax = 1.0)
       view = parallax == 1.0 ? view_rect : view_rect(parallax: parallax)
       rw = world_rect[:w] || 0
@@ -217,9 +209,6 @@ module Conjuration
       @draw_buffer.clear
     end
 
-    # Only the focal-point translation scales by `parallax`; zoom (view size) is
-    # un-scaled, so every layer shares a zoom and they never warp apart as you
-    # zoom. Shake is a screen effect, applied un-scaled too.
     def compute_view_rect(parallax)
       shake_x, shake_y = shake_offset
 
@@ -259,8 +248,6 @@ module Conjuration
 
     def perform_render
       @view_rect = nil
-      # Nil, not clear: a frame with no parallax draw never re-creates the hash,
-      # keeping the no-parallax path allocation-free.
       @parallax_view_rects = nil
 
       # Size the viewport target once. It stays viewport-sized (never world-sized)

@@ -1,9 +1,4 @@
 class ParallaxScene < Conjuration::Scene
-  # Parallax scales both focal axes, but the camera is pinned vertically (a
-  # full-height view in a single-screen-tall world), so the y-scaling reads as a
-  # *constant* lift, not a scroll — it just seats each layer at its own height on
-  # the horizon. The layer positions below are authored with that in mind; the
-  # horizontal axis is the one that actually parallaxes as you walk.
   WORLD_W = 6000
   GROUND_H = 120
 
@@ -54,8 +49,6 @@ class ParallaxScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    # Drawn well past the view edges so the vertical lift and any zoom never
-    # expose a seam.
     camera.draw({ x: 0, y: -400, w: WORLD_W, h: 1600, path: :pixel, r: 132, g: 196, b: 236 }, **SKY)
 
     @hills.each  { |hill|  camera.draw(hill,  **HILLS) }

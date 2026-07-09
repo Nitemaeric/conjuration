@@ -57,7 +57,7 @@ end
 
 def test_visible_accounts_for_anchors(args, assert)
   cam = make_camera(current: { x: 640, y: 360, zoom: 1 }) # view (0,0,1280,720)
-  # Centered on x=1400: visual bounds 1170..1630, so its left third is on screen.
+  # anchor 0.5, w 460 -> visual bounds 1170..1630
   assert.true!(cam.visible?({ x: 1400, y: 100, w: 460, h: 210, anchor_x: 0.5 }),
                "half-anchored sprite straddling the right edge is visible")
   assert.true!(!cam.visible?({ x: 1400, y: 100, w: 460, h: 210 }),
