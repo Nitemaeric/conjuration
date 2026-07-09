@@ -15,8 +15,7 @@ class Sprite < Draco::Component
   attribute :g, default: 255
   attribute :b, default: 255
 
-  # Mutated in place each frame (zero-alloc render path); an attr_reader, not a
-  # draco attribute, whose `{}` default would be shared across every entity.
+  # attr_reader, not a draco attribute: a `{}` default is shared across all entities.
   attr_reader :primitive
 
   def after_initialize
@@ -90,8 +89,6 @@ class ECSScene < Conjuration::Scene
     cameras[:main].ui.group = :hud
     activate_navigation(:hud)
 
-    # In an ivar, not scene `state`: a live object graph (Sets, subscriptions,
-    # class refs) that Conjuration's serializable state must not round-trip.
     @world = CritterWorld.new
     spawn(120)
 
@@ -114,12 +111,9 @@ class ECSScene < Conjuration::Scene
   end
 
   def update
-    # Ticked from #update, not #draw_world, so it's skipped during a hit stop
-    # and the simulation freezes with the game.
+    # Tick from #update, not #draw_world, so a hit stop freezes the sim too.
     @world.tick(self)
 
-    # Filter once per frame here, not per camera in #draw_world, which would
-    # re-run draco's set intersection and allocate a fresh Set for each camera.
     refresh_renderables
 
     cameras[:main].ui.find(:count_label).object.text = "Critters: #{@renderables.length}"
@@ -155,8 +149,6 @@ class ECSScene < Conjuration::Scene
     end
   end
 
-  # Signed magnitude built by hand: mruby has no Enumerable#sum, and integer
-  # division would truncate a float-based approach.
   def rand_speed
     magnitude = 1 + rand(3)
     rand(2).zero? ? magnitude : -magnitude
