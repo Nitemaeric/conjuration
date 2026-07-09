@@ -19,10 +19,11 @@ module Conjuration
 
   # The default input source (see Game#input_source): dragon_input is a hard
   # dependency, so this reads through the DragonInput facade. Because Conjuration
-  # can't control when the game calls DragonInput.setup, it LAZILY injects the
-  # reserved UI actions from UI_ACTIONS into every action set — filling only gaps,
-  # so a game's own :ui_* binding always wins. Injected actions are ordinary
-  # config entries, so rebinding and IGA export pick them up for free.
+  # can't control when — or whether — the game calls DragonInput.setup, it LAZILY
+  # injects the reserved UI actions from UI_ACTIONS into every action set (and
+  # bootstraps a minimal config on the first reserved query if setup never ran) —
+  # filling only gaps, so a game's own :ui_* binding always wins. Injected actions
+  # are ordinary config entries, so rebinding and IGA export pick them up for free.
   class DragonInputSource
     INACTIVE = { down: false, held: false, up: false, active: false }.freeze
 
@@ -38,9 +39,17 @@ module Conjuration
     private
 
     def digital(pad, action)
-      # setup may not have run yet — the game owns that timing. Until a config
-      # exists there is nothing to inject into or query, so read as "not pressed".
       config = DragonInput.config
+
+      # A game may never call DragonInput.setup, so the first reserved :ui_*
+      # query bootstraps a minimal config for injection to fill — that's what
+      # makes menus work with zero game wiring (and flips Game#tick's pump gate
+      # on). At query time, not load time: a game calling its own setup later in
+      # tick 0 replaces the config wholesale, and the identity re-scan below then
+      # re-injects into it. Only for reserved names — framework UI is the only
+      # mandate, so a game querying its own actions before its own setup keeps
+      # reading "not pressed" instead of getting a surprise config.
+      config = bootstrap_config if config.nil? && UI_ACTIONS.key?(action)
       return INACTIVE unless config
 
       ensure_injected(config)
@@ -55,6 +64,14 @@ module Conjuration
       end
 
       result
+    end
+
+    # One empty :ui set — action_set makes it the default set, and the injection
+    # pass fills it with UI_ACTIONS. setup returns the backend, not the config,
+    # so re-read the facade.
+    def bootstrap_config
+      DragonInput.setup { |c| c.action_set(:ui) }
+      DragonInput.config
     end
 
     def ensure_injected(config)

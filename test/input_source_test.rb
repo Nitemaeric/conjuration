@@ -157,13 +157,76 @@ end
 def test_dragon_input_injection_is_lazy(args, assert)
   # Source chosen before setup — mirrors Conjuration booting before the game
   # calls DragonInput.setup.
+  DragonInput.reset!
   source = Conjuration::DragonInputSource.new
-  assert.false!(source.just_pressed?(:one, :ui_confirm), "no config yet: not pressed, no raise")
+  assert.false!(source.just_pressed?(:one, :ui_confirm), "not pressed before setup, no raise")
 
   DragonInput.setup { |c| c.action_set(:menu) }
   source.just_pressed?(:one, :ui_confirm)
 
   assert.true!(!DragonInput.config.action_sets[:menu].action(:ui_confirm).nil?, "injects on first query after late setup")
+ensure
+  DragonInput.reset!
+end
+
+def test_ui_query_bootstraps_config_without_game_setup(args, assert)
+  DragonInput.reset!
+  source = Conjuration::DragonInputSource.new
+
+  assert.false!(source.just_pressed?(:one, :ui_confirm), "bootstrap query reads not-pressed")
+  assert.true!(!DragonInput.config.nil?, "first reserved query bootstraps a config")
+
+  ui_set = DragonInput.config.action_sets[:ui]
+  assert.true!(!ui_set.nil?, "bootstrap creates the :ui set")
+  Conjuration::UI_ACTIONS.each_key do |name|
+    assert.true!(!ui_set.action(name).nil?, ":ui set gets #{name}")
+  end
+
+  host = NavMenuHost.new
+  camera = menu_camera(host)
+  $game.inputs = { last_active: :controller, mouse: { wheel: nil, held: false } }
+  $game.input_source = source
+  DragonInput.press!(:one, :ui_right)
+
+  camera.send(:perform_input)
+
+  assert.equal!(Conjuration::UI.focused_node.id, :right, "navigation works with no game setup at all")
+ensure
+  Conjuration::UI.active_navigation_group = nil
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.pressed_node = nil
+  $game.input_source = nil
+  $game.inputs = nil
+  DragonInput.reset!
+end
+
+def test_game_setup_after_bootstrap_reinjects_and_wins(args, assert)
+  DragonInput.reset!
+  source = Conjuration::DragonInputSource.new
+  source.just_pressed?(:one, :ui_confirm)
+  bootstrapped = DragonInput.config
+
+  DragonInput.setup do |c|
+    c.action_set(:menu) { |s| s.digital(:ui_confirm, controller: :b, keyboard: :space) }
+  end
+  assert.true!(!DragonInput.config.equal?(bootstrapped), "game setup replaces the config wholesale")
+
+  source.just_pressed?(:one, :ui_up)
+
+  assert.true!(!DragonInput.config.action_sets[:menu].action(:ui_up).nil?, "re-injects into the new config")
+  binding = DragonInput.config.action_sets[:menu].action(:ui_confirm)
+  assert.equal!(binding[:controller], :b, "game's own binding wins after re-injection")
+ensure
+  DragonInput.reset!
+end
+
+def test_non_reserved_query_does_not_bootstrap(args, assert)
+  DragonInput.reset!
+  source = Conjuration::DragonInputSource.new
+
+  assert.false!(source.just_pressed?(:one, :attack), "not pressed")
+  assert.false!(source.pressed?(:one, :attack), "not held")
+  assert.nil!(DragonInput.config, "non-reserved queries never create a config")
 ensure
   DragonInput.reset!
 end
