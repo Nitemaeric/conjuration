@@ -15,6 +15,9 @@ class ButtonView < Conjuration::UI::View
   BRACKET_THICKNESS = 3
   BRACKET_REACH = 5
   BRACKET_INK = { path: :pixel, r: 245, g: 238, b: 220 }.freeze
+  # Two-tone: the cream ink vanishes on the cream card, so a dark underlay
+  # extends 1px past each arm to keep the bracket legible on any background.
+  BRACKET_OUTLINE = { path: :pixel, r: 60, g: 42, b: 24 }.freeze
 
   def initialize(id:, label:, action:, width: 100, height: HEIGHT, shortcut: nil, pad: nil)
     @id = id
@@ -62,6 +65,9 @@ class ButtonView < Conjuration::UI::View
 
     { tl: [:top, :left], tr: [:top, :right], bl: [:bottom, :left], br: [:bottom, :right] }.each do |corner, (vertical, horizontal)|
       insets = { vertical => -BRACKET_REACH, horizontal => -BRACKET_REACH }
+      outline_insets = { vertical => -(BRACKET_REACH + 1), horizontal => -(BRACKET_REACH + 1) }
+      node({ **BRACKET_OUTLINE, w: BRACKET_ARM + 2, h: BRACKET_THICKNESS + 2, a: glow }, id: "#{@id}_fbo_#{corner}_h", position: :absolute, **outline_insets)
+      node({ **BRACKET_OUTLINE, w: BRACKET_THICKNESS + 2, h: BRACKET_ARM + 2, a: glow }, id: "#{@id}_fbo_#{corner}_v", position: :absolute, **outline_insets)
       node({ **BRACKET_INK, w: BRACKET_ARM, h: BRACKET_THICKNESS, a: glow }, id: "#{@id}_fb_#{corner}_h", position: :absolute, **insets)
       node({ **BRACKET_INK, w: BRACKET_THICKNESS, h: BRACKET_ARM, a: glow }, id: "#{@id}_fb_#{corner}_v", position: :absolute, **insets)
     end
