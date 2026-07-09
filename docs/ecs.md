@@ -12,9 +12,37 @@ Component System — integrates with Conjuration **without any core changes**. T
 4. cache the filtered renderable list once per frame so per-camera rendering
    does not re-run draco's entity filter.
 
-None of these needs a change to `Camera`, `Scene`, or `Game`. The demo scene
-(`demo/mygame/app/scenes/ecs_scene.rb`) is the runnable proof; it is reachable
-from the demo main menu ("ECS (draco)").
+None of these needs a change to `Camera`, `Scene`, or `Game`. The runnable proof
+lives under `demo/mygame/app/ecs/` and `demo/mygame/app/scenes/ecs_scene.rb`
+(see [Recommended layout](#recommended-layout)); it is reachable from the demo
+main menu ("ECS (draco)").
+
+## Recommended layout
+
+A shipping game keeps components, entities, and systems in their own files, one
+class per file, rather than in a single scene:
+
+```
+demo/mygame/app/
+  ecs/
+    components/     position.rb, velocity.rb, sprite.rb
+    entities/       critter.rb
+    systems/        movement_system.rb, bounce_system.rb
+  scenes/
+    ecs_scene.rb    the only Conjuration-aware file: world setup, tick, render
+```
+
+This scales past a handful of systems; the small component and system files stay
+diff-friendly; and the scene stays the single Conjuration-aware file (world
+construction, ticking from `#update`, and the `camera.draw` render path), so ECS
+code and engine glue never bleed into one another.
+
+**Require order (DragonRuby-specific).** DR resolves `require "app/..."` from the
+game root but `require_relative` cannot traverse `..`, so cross-directory files
+use app-root requires: `entities/critter.rb` and each system `require
+"app/ecs/components/..."`, and `ecs_scene.rb` requires the entity plus both
+systems. `require` de-dupes by path, so shared components load once regardless of
+how many files ask for them.
 
 ## How draco is vendored
 
@@ -157,6 +185,7 @@ against that game's real access patterns instead of speculatively.
 **draco works with Conjuration, with glue — no core changes needed.** The glue
 is four scene-level conventions (tick in `#update`; map components to primitives
 with a reusable hash; keep the `World` in an ivar; cache the filtered list per
-frame), all demonstrated in `demo/mygame/app/scenes/ecs_scene.rb`. The
+frame), all demonstrated by the demo under `demo/mygame/app/ecs/` and
+`demo/mygame/app/scenes/ecs_scene.rb`. The
 conditional entity registry (D3) is **not** recommended at this time; revisit it
 only when a shipping game exercises the high-entity / multi-camera path.
