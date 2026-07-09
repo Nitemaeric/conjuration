@@ -55,6 +55,19 @@ def test_visible_culls_offscreen_rects(args, assert)
   assert.true!(!cam.visible?({ x: -100, y: 100, w: 40, h: 40 }), "rect left of view is culled")
 end
 
+def test_visible_accounts_for_anchors(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 }) # view (0,0,1280,720)
+  # anchor 0.5, w 460 -> visual bounds 1170..1630
+  assert.true!(cam.visible?({ x: 1400, y: 100, w: 460, h: 210, anchor_x: 0.5 }),
+               "half-anchored sprite straddling the right edge is visible")
+  assert.true!(!cam.visible?({ x: 1400, y: 100, w: 460, h: 210 }),
+               "same rect without anchor stays culled (bounds 1400..1860)")
+  assert.true!(cam.visible?({ x: 100, y: 750, w: 40, h: 80, anchor_y: 0.5 }),
+               "half-anchored sprite straddling the top edge is visible")
+  assert.true!(!cam.visible?({ x: -60, y: 100, w: 40, h: 40, anchor_x: 0.5 }),
+               "anchored sprite fully left of view is culled")
+end
+
 def test_visible_respects_zoomed_in_view(args, assert)
   cam = make_camera(current: { x: 640, y: 360, zoom: 2 }) # view (320,180,640,360)
   assert.true!(cam.visible?({ x: 330, y: 190, w: 10, h: 10 }), "inside the tighter zoomed view")
@@ -88,6 +101,90 @@ def test_from_helpers_are_viewport_relative(args, assert)
   assert.equal!(cam.from_right(20), 620, "from_right is viewport w - 20")
   assert.equal!(cam.from_left(20), 20, "from_left is the distance")
   assert.equal!(cam.from_bottom(20), 20, "from_bottom is the distance")
+end
+
+def test_parallax_culls_against_the_derived_view_not_the_real_view(args, assert)
+  # Real view spans x 1360..2640; the 0.5 parallax view spans 360..1640.
+  cam = make_camera(current: { x: 2000, y: 360, zoom: 1 })
+  near = { x: 500,  y: 360, w: 40, h: 40 }
+  far  = { x: 2600, y: 360, w: 40, h: 40 }
+
+  assert.true!(cam.visible?(near, 0.5), "a sprite inside the parallax view is kept")
+  assert.false!(cam.visible?(far, 0.5), "a sprite outside the parallax view is culled")
+
+  assert.false!(cam.visible?(near), "the real view wrongly culls the near sprite (the DIY bug)")
+  assert.true!(cam.visible?(far), "the real view wrongly keeps the far sprite (the DIY bug)")
+end
+
+def test_parallax_edge_inclusivity_matches_the_default_cull(args, assert)
+  cam = make_camera(current: { x: 2000, y: 360, zoom: 1 }) # parallax .5 view x = 360
+  assert.false!(cam.visible?({ x: 320, y: 360, w: 40, h: 40 }, 0.5), "touching the edge does not overlap")
+  assert.true!(cam.visible?({ x: 321, y: 360, w: 40, h: 40 }, 0.5), "one unit inside the edge overlaps")
+end
+
+def test_view_rect_scales_only_translation_not_zoom(args, assert)
+  cam = make_camera(current: { x: 2000, y: 360, zoom: 2 }) # zoomed view is 640x360
+  v = cam.view_rect(parallax: 0.5)
+  assert.equal!(v[:x], 2000 * 0.5 - 320, "focal x scaled by the factor")
+  assert.equal!(v[:w], 640, "width (zoom) is un-scaled by parallax")
+  assert.equal!(v[:h], 360, "height (zoom) is un-scaled by parallax")
+end
+
+def test_view_rect_parallax_one_is_the_memoized_default(args, assert)
+  cam = make_camera
+  assert.true!(cam.view_rect(parallax: 1.0).equal?(cam.view_rect), "factor 1.0 is the memoized default view")
+end
+
+def test_to_viewport_at_parallax_one_matches_the_default_transform(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 2 })
+  rect = { x: 320, y: 180, w: 40, h: 40, x2: 340, y2: 200, size_px: 30 }
+  base = cam.to_viewport(rect)
+  para = cam.to_viewport(rect, 1.0)
+
+  assert.equal!(para[:x], base[:x], "x matches the default transform")
+  assert.equal!(para[:y], base[:y], "y matches the default transform")
+  assert.equal!(para[:w], base[:w], "w matches the default transform")
+  assert.equal!(para[:x2], base[:x2], "x2 matches the default transform")
+  assert.equal!(para[:size_px], base[:size_px], "size_px matches the default transform")
+end
+
+def test_to_viewport_transforms_against_the_parallax_view(args, assert)
+  cam = make_camera(current: { x: 2000, y: 360, zoom: 1 }) # parallax .5 view x = 360
+  vp = cam.to_viewport({ x: 360, y: 360, w: 40, h: 40 }, 0.5)
+  assert.close!(vp[:x], 0, "a world point on the parallax view's left edge maps to viewport 0")
+end
+
+def test_draw_with_parallax_emits_via_the_derived_view(args, assert)
+  cam = make_camera(current: { x: 2000, y: 360, zoom: 1 })
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 500, y: 360, w: 40, h: 40, tag: :hill }, parallax: 0.5)
+
+  assert.equal!(cam.outputs.primitives.length, 1, "the parallax sprite is emitted, not culled")
+  assert.close!(cam.outputs.primitives.first[:x], 500 - 360, "emitted at its parallax-view position")
+end
+
+def test_no_parallax_draw_never_creates_the_factor_cache(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 10, y: 10, w: 10, h: 10 })
+  cam.draw({ x: 20, y: 20, w: 10, h: 10 }, z: 1)
+  assert.nil!(cam.instance_variable_get(:@parallax_view_rects), "no-parallax draws leave the factor cache unallocated")
+
+  cam.draw({ x: 30, y: 30, w: 10, h: 10 }, parallax: 0.5)
+  assert.true!(!cam.instance_variable_get(:@parallax_view_rects).nil?, "a parallax draw lazily creates the cache")
+end
+
+def test_parallax_composes_with_z_ordering(args, assert)
+  cam = make_camera(current: { x: 2000, y: 360, zoom: 1 })
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 500, y: 360, w: 40, h: 40, tag: :clouds }, parallax: 0.5, z: -100)
+  assert.equal!(cam.outputs.primitives, [], "a z + parallax draw defers like any z draw")
+
+  cam.send(:flush_ordered_draws)
+  assert.equal!(cam.outputs.primitives.map { |p| p[:tag] }, [:clouds], "it flushes through the derived view")
 end
 
 # Deferred z-ordering in Camera#draw. make_camera's view is (0,0,1280,720) at

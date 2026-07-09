@@ -89,31 +89,31 @@ module Conjuration
 
     # World-space rectangle this camera currently sees (pan, zoom, and any active
     # screen shake applied). Memoized per render frame.
-    def view_rect
-      @view_rect ||= begin
-        shake_x, shake_y = shake_offset
+    def view_rect(parallax: 1.0)
+      return (@view_rect ||= compute_view_rect(1.0)) if parallax == 1.0
 
-        {
-          x: current.x + shake_x - (w / current.zoom) / 2,
-          y: current.y + shake_y - (h / current.zoom) / 2,
-          w: w / current.zoom,
-          h: h / current.zoom
-        }
-      end
+      (@parallax_view_rects ||= {})[parallax] ||= compute_view_rect(parallax)
     end
 
     # Whether a world-space rect overlaps the current view at all. Hand-rolled
     # AABB test with bracket access: this runs per object per camera per frame,
     # so it avoids method_missing and Geometry-call overhead.
-    def visible?(world_rect)
-      view = view_rect
+    def visible?(world_rect, parallax = 1.0)
+      view = parallax == 1.0 ? view_rect : view_rect(parallax: parallax)
       rw = world_rect[:w] || 0
       rh = world_rect[:h] || 0
 
-      world_rect[:x]      < view[:x] + view[:w] &&
-        world_rect[:x] + rw > view[:x] &&
-        world_rect[:y]      < view[:y] + view[:h] &&
-        world_rect[:y] + rh > view[:y]
+      # DR renders anchored sprites offset by anchor * extent, so the visual
+      # bounds differ from the x/y/w/h rect; cull against what will be drawn.
+      ax = world_rect[:anchor_x]
+      ay = world_rect[:anchor_y]
+      left   = ax ? world_rect[:x] - ax * rw : world_rect[:x]
+      bottom = ay ? world_rect[:y] - ay * rh : world_rect[:y]
+
+      left        < view[:x] + view[:w] &&
+        left + rw > view[:x] &&
+        bottom        < view[:y] + view[:h] &&
+        bottom + rh > view[:y]
     end
 
     # World space -> this camera's viewport-local space, (0, 0)..(w, h). Handles
@@ -121,8 +121,8 @@ module Conjuration
     # primitive pans and scales with the camera. Anchors are unitless and carried
     # through unchanged. Bracket access keeps this allocation- and
     # method_missing-light on the hot path.
-    def to_viewport(world_rect)
-      view = view_rect
+    def to_viewport(world_rect, parallax = 1.0)
+      view = parallax == 1.0 ? view_rect : view_rect(parallax: parallax)
       zoom = current.zoom
 
       result = world_rect.dup
@@ -146,13 +146,13 @@ module Conjuration
     # call. y-sorting is the usual convention: `z: -sprite[:y]`. Deferred draws
     # always render ON TOP of the immediate (no-`z:`) ones, which emit first;
     # equal-z draws keep their call order. Omit `z:` for the immediate fast path.
-    def draw(world_rect, z: nil)
-      return unless visible?(world_rect)
+    def draw(world_rect, z: nil, parallax: 1.0)
+      return unless visible?(world_rect, parallax)
 
       if z
-        @draw_buffer << [z, @draw_buffer.length, to_viewport(world_rect)]
+        @draw_buffer << [z, @draw_buffer.length, to_viewport(world_rect, parallax)]
       else
-        outputs.primitives << to_viewport(world_rect)
+        outputs.primitives << to_viewport(world_rect, parallax)
       end
     end
 
@@ -209,6 +209,17 @@ module Conjuration
       @draw_buffer.clear
     end
 
+    def compute_view_rect(parallax)
+      shake_x, shake_y = shake_offset
+
+      {
+        x: current.x * parallax + shake_x - (w / current.zoom) / 2,
+        y: current.y * parallax + shake_y - (h / current.zoom) / 2,
+        w: w / current.zoom,
+        h: h / current.zoom
+      }
+    end
+
     # View offset for the current trauma, falling off with trauma squared. With a
     # shake direction set, the offset oscillates along that axis (impact shake);
     # otherwise it is omnidirectional.
@@ -237,6 +248,7 @@ module Conjuration
 
     def perform_render
       @view_rect = nil
+      @parallax_view_rects = nil
 
       # Size the viewport target once. It stays viewport-sized (never world-sized)
       # so an arbitrarily large world can't exceed the GPU texture limit, and DR

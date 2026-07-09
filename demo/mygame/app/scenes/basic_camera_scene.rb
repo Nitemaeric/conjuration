@@ -1,3 +1,5 @@
+require "app/views/prompt_view.rb"
+
 class BasicCameraScene < Conjuration::Scene
   TILE_SIZE = 40
 
@@ -30,38 +32,40 @@ class BasicCameraScene < Conjuration::Scene
     # A target that orbits the world for the camera to follow.
     state.target = { x: 1000, y: 1000, w: 80, h: 80 }
 
-    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
-      end
-    end
-
-    cameras[:main].ui.node({ x: 0, y: grid.h / 2, w: 256, h: 400, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
-      node(h: 70, gap: 5, align: :center) do
-        node({ text: "WASD to pan" })
-        node({ text: "SPACE to shake" })
-        node({ text: "RMB to destroy tile" })
+    cameras[:main].ui.view do
+      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
+        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+          node({ text: "Back", r: 255, g: 255, b: 255 })
+        end
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
-        node({ text: "Point A", r: 255, g: 255, b: 255 })
+      node({ x: 0, y: grid.h / 2, w: 256, h: 420, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
+        node({ h: 84 }, gap: 6, align: :center) do
+          PromptView(id: :pan, keys: [:w, :a, :s, :d], controller: :left_analog, label: "pan", pad: game.ui_pad)
+          PromptView(id: :shake, keys: [:space], controller: :b, label: "shake", pad: game.ui_pad)
+          node({ text: "RMB to destroy tile" })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
+          node({ text: "Point A", r: 255, g: 255, b: 255 })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 640, y: 600) }}, justify: :center, align: :center) do
+          node({ text: "Point B", r: 255, g: 255, b: 255 })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 400) }}, justify: :center, align: :center) do
+          node({ text: "Point C", r: 255, g: 255, b: 255 })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.following ? camera.unfollow : camera.follow(scene.state.target) }}, justify: :center, align: :center) do
+          node({ text: "Follow", r: 255, g: 255, b: 255 })
+        end
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 640, y: 600) }}, justify: :center, align: :center) do
-        node({ text: "Point B", r: 255, g: 255, b: 255 })
+      node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
+        node({ text: camera_readout }, id: :camera_label)
       end
-
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 400) }}, justify: :center, align: :center) do
-        node({ text: "Point C", r: 255, g: 255, b: 255 })
-      end
-
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.following ? camera.unfollow : camera.follow(scene.state.target) }}, justify: :center, align: :center) do
-        node({ text: "Follow", r: 255, g: 255, b: 255 })
-      end
-    end
-
-    cameras[:main].ui.node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
-      node({ text: "Camera" }, id: :camera_label)
     end
   end
 
@@ -94,10 +98,12 @@ class BasicCameraScene < Conjuration::Scene
     angle = clock * 0.02
     state.target.x = 1000 + Math.cos(angle) * 400
     state.target.y = 1000 + Math.sin(angle) * 400
+  end
 
+  # Re-derived each frame by the camera HUD view.
+  def camera_readout
     camera = cameras[:main]
-    label = camera.following ? "Following target" : "Camera: #{camera.current.x.round}, #{camera.current.y.round}"
-    camera.ui.find(:camera_label).object.text = label
+    camera.following ? "Following target" : "Camera: #{camera.current.x.round}, #{camera.current.y.round}"
   end
 
   def draw_world(camera)

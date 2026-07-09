@@ -1,3 +1,5 @@
+require "app/views/prompt_view.rb"
+
 class ZoomScene < Conjuration::Scene
   TILE_SIZE = 40
 
@@ -19,33 +21,35 @@ class ZoomScene < Conjuration::Scene
       end
     end
 
-    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
-      end
-    end
-
-    cameras[:main].ui.node({ x: 0, y: grid.h / 2, w: 256, h: cameras[:main].h / 2, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
-      node(h: 50, gap: 5, align: :center) do
-        node({ text: "WASD / arrows to pan" })
-        node({ text: "Scroll wheel to zoom" })
+    cameras[:main].ui.view do
+      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
+        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+          node({ text: "Back", r: 255, g: 255, b: 255 })
+        end
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }}, justify: :center, align: :center) do
-        node({ text: "Zoom In", r: 255, g: 255, b: 255 })
+      node({ x: 0, y: grid.h / 2, w: 256, h: cameras[:main].h / 2, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
+        node({ h: 56 }, gap: 6, align: :center) do
+          PromptView(id: :pan, keys: [:w, :a, :s, :d], controller: :left_analog, label: "pan", pad: game.ui_pad)
+          node({ text: "Scroll wheel to zoom" })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }}, justify: :center, align: :center) do
+          node({ text: "Zoom In", r: 255, g: 255, b: 255 })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }}, justify: :center, align: :center) do
+          node({ text: "Zoom Out", r: 255, g: 255, b: 255 })
+        end
+
+        node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(zoom: 1) }}, justify: :center, align: :center) do
+          node({ text: "Reset", r: 255, g: 255, b: 255 })
+        end
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }}, justify: :center, align: :center) do
-        node({ text: "Zoom Out", r: 255, g: 255, b: 255 })
+      node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
+        node({ text: "Zoom: #{cameras[:main].current.zoom.round(2)}" }, id: :zoom_label)
       end
-
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(zoom: 1) }}, justify: :center, align: :center) do
-        node({ text: "Reset", r: 255, g: 255, b: 255 })
-      end
-    end
-
-    cameras[:main].ui.node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
-      node({ text: "Zoom" }, id: :zoom_label)
     end
   end
 
@@ -62,10 +66,6 @@ class ZoomScene < Conjuration::Scene
     if inputs.mouse.wheel
       focused_camera.look_at(zoom: focused_camera.target.zoom + inputs.mouse.wheel.y * 0.1)
     end
-  end
-
-  def update
-    cameras[:main].ui.find(:zoom_label).object.text = "Zoom: #{cameras[:main].current.zoom.round(2)}"
   end
 
   def draw_world(camera)

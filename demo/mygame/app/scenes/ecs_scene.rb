@@ -1,6 +1,7 @@
 require "app/entities/critter.rb"
 require "app/systems/movement_system.rb"
 require "app/systems/bounce_system.rb"
+require "app/views/prompt_view.rb"
 
 class CritterWorld < Draco::World
   systems MovementSystem, BounceSystem
@@ -25,15 +26,17 @@ class ECSScene < Conjuration::Scene
 
     refresh_renderables
 
-    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) } }, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
+    cameras[:main].ui.view do
+      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
+        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) } }, justify: :center, align: :center) do
+          node({ text: "Back", r: 255, g: 255, b: 255 })
+        end
       end
-    end
 
-    cameras[:main].ui.node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, direction: :column, justify: :end, align: :end, gap: 6) do
-      node({ text: "SPACE to spawn 50", r: 255, g: 255, b: 255 })
-      node({ text: "Critters: 0", r: 255, g: 255, b: 255 }, id: :count_label)
+      node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, direction: :column, justify: :end, align: :end, gap: 6) do
+        PromptView(id: :spawn, keys: [:space], controller: :b, label: "spawn 50", pad: game.ui_pad, color: { r: 255, g: 255, b: 255 })
+        node({ text: "Critters: #{@renderables.length}", r: 255, g: 255, b: 255 }, id: :count_label)
+      end
     end
   end
 
@@ -46,8 +49,6 @@ class ECSScene < Conjuration::Scene
     @world.tick(self)
 
     refresh_renderables
-
-    cameras[:main].ui.find(:count_label).object.text = "Critters: #{@renderables.length}"
   end
 
   def draw_world(camera)
