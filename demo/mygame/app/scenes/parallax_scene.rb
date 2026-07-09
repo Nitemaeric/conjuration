@@ -69,20 +69,23 @@ class ParallaxScene < Conjuration::Scene
 
   private
 
+  # DR's mruby has no Range#step; index-based construction instead.
   def build_hills
-    (0...WORLD_W).step(340).map do |x|
+    Array.new((WORLD_W / 340.0).ceil) do |i|
+      x = i * 340
       { x: x, y: 0, w: 460, h: 210 + (x % 3) * 40, path: :pixel, r: 96, g: 150, b: 112, anchor_x: 0.5 }
     end
   end
 
   def build_clouds
-    (0...WORLD_W).step(520).map.with_index do |x, i|
-      { x: x + (i % 2) * 160, y: 360 + (i % 3) * 70, w: 240, h: 70, path: :pixel, r: 245, g: 248, b: 252, a: 235 }
+    Array.new((WORLD_W / 520.0).ceil) do |i|
+      { x: i * 520 + (i % 2) * 160, y: 360 + (i % 3) * 70, w: 240, h: 70, path: :pixel, r: 245, g: 248, b: 252, a: 235 }
     end
   end
 
   def build_trees
-    (0...WORLD_W).step(230).map do |x|
+    Array.new((WORLD_W / 230.0).ceil) do |i|
+      x = i * 230
       { x: x, y: -30, w: 50, h: 190 + (x % 2) * 50, path: :pixel, r: 52, g: 84, b: 60, anchor_x: 0.5 }
     end
   end
