@@ -1,8 +1,4 @@
 module Conjuration
-  # Both projections anchor on the tile CENTRE, so to_grid is a clean inverse (a
-  # centre always picks back to its own tile; a shared corner would be ambiguous)
-  # and tile sprites are drawn with anchor_x/anchor_y 0.5 (a TileLayer rect is
-  # x - tile_w/2, y - tile_h/2, tile_w, tile_h).
   module Projection
     class Isometric
       attr_reader :tile_w, :tile_h
@@ -11,15 +7,12 @@ module Conjuration
         @tile_w = tile_w
         @tile_h = tile_h
 
-        # Forced to float so the math is unaffected by the host's integer-division
-        # rule (CRuby's `1/2 == 0`; DR's patched mruby `== 0.5`).
+        # / 2.0 forces float: DR's mruby has 1/2 == 0.5, CRuby has 1/2 == 0.
         @half_w = tile_w / 2.0
         @half_h = tile_h / 2.0
       end
 
-      # y is negated so a higher (col + row) sits lower on screen and reads as
-      # nearer the viewer — the same ordering that makes `z: col + row` the
-      # correct depth key for the camera.
+      # y negated so a greater (col + row) sits lower on screen, nearer the viewer.
       def to_world(col, row)
         {
           x: (col - row) * @half_w,
@@ -34,9 +27,7 @@ module Conjuration
         col = (sum + diff) / 2.0
         row = (sum - diff) / 2.0
 
-        # Round to the nearest lattice point via `(v + 0.5).floor` rather than
-        # round: it stays well defined for negatives and resolves points on a
-        # shared edge/corner to a single deterministic owner (half-values up).
+        # (v + 0.5).floor rounds half up and stays defined for negatives, unlike round.
         {
           col: (col + 0.5).floor,
           row: (row + 0.5).floor

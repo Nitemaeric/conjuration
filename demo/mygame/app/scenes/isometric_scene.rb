@@ -49,7 +49,6 @@ class IsometricScene < Conjuration::Scene
   end
 
   def update
-    # clock (not tick) so the walk holds through a hit stop.
     phase = (clock * 0.01) % 2.0
     state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
 
@@ -61,7 +60,6 @@ class IsometricScene < Conjuration::Scene
   def draw_world(camera)
     @tiles.draw(camera)
 
-    # No z: so this immediate draw stays under the z-ordered entities.
     if camera == focused_camera
       point = camera.to_world(**inputs.mouse.rect)
       cell = @iso.to_grid(point[:x], point[:y])
@@ -82,8 +80,6 @@ class IsometricScene < Conjuration::Scene
 
   private
 
-  # Every crate shares the base tile's z so the whole block sorts against the
-  # knight as a single object.
   def draw_raised_block(camera)
     base = @iso.to_world(RAISE_COL, RAISE_ROW)
     z = RAISE_COL + RAISE_ROW
@@ -93,8 +89,6 @@ class IsometricScene < Conjuration::Scene
       path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 96, g: 78, b: 150
     }, z: z)
 
-    # +y is up (the camera doesn't flip y), so adding to y stacks crates upward
-    # off the floor.
     3.times do |i|
       camera.draw({
         x: base[:x], y: base[:y] + 6 + i * 26, w: 44, h: 44,

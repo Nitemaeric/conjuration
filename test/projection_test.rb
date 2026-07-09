@@ -1,6 +1,3 @@
-# Integer-vs-float division is a live hazard here (MEMORY: DR's mruby
-# `1/2 == 0.5`), so tile sizes with odd halves are used on purpose.
-
 def test_iso_to_world_places_origin_tile_at_the_origin(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
   w = iso.to_world(0, 0)
@@ -21,8 +18,6 @@ def test_iso_columns_go_right_and_down_rows_left_and_down(args, assert)
 end
 
 def test_iso_depth_key_increases_toward_the_viewer(args, assert)
-  # Guards `z: col + row`: only correct if a higher (col + row) sits lower on
-  # screen. Pins the convention so it can't drift out of sync with the maths.
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
   near = iso.to_world(3, 3)
   far  = iso.to_world(1, 1)
@@ -32,7 +27,6 @@ end
 def test_iso_round_trips_a_spread_of_tiles(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
 
-  # Negatives included: floor-based rounding must hold on both sides of zero.
   [[0, 0], [1, 0], [0, 1], [3, 2], [5, 5], [-1, 0], [0, -1], [-3, -4], [7, -2]].each do |(col, row)|
     world = iso.to_world(col, row)
     back = iso.to_grid(world[:x], world[:y])
@@ -41,8 +35,6 @@ def test_iso_round_trips_a_spread_of_tiles(args, assert)
 end
 
 def test_iso_round_trips_with_odd_tile_dimensions(args, assert)
-  # Odd width/height give half-extents of x.5 — exactly where integer division
-  # would corrupt the maths if a `/ 2` slipped in for a `/ 2.0`.
   iso = Conjuration::Projection::Isometric.new(tile_w: 65, tile_h: 33)
 
   [[2, 3], [4, 1], [-2, 5]].each do |(col, row)|
@@ -65,8 +57,6 @@ end
 def test_iso_shared_edge_resolves_to_one_owner(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
 
-  # The midpoint of (0,0) and (1,0)'s centres lies on their shared edge;
-  # round-half-up must resolve it deterministically to the higher neighbour (1,0).
   a = iso.to_world(0, 0)
   b = iso.to_world(1, 0)
   midpoint = iso.to_grid((a[:x] + b[:x]) / 2.0, (a[:y] + b[:y]) / 2.0)
@@ -76,8 +66,6 @@ end
 def test_iso_shared_corner_resolves_to_one_owner(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
 
-  # Averaging all four tiles' centres lands on their shared corner (a vertex of
-  # four diamonds); round-half-up must still resolve it to one owner, (1,1).
   centres = [[0, 0], [1, 0], [0, 1], [1, 1]].map { |(c, r)| iso.to_world(c, r) }
   cx = (centres[0][:x] + centres[1][:x] + centres[2][:x] + centres[3][:x]) / 4.0
   cy = (centres[0][:y] + centres[1][:y] + centres[2][:y] + centres[3][:y]) / 4.0
@@ -108,10 +96,6 @@ def test_topdown_round_trips(args, assert)
     assert.equal!([back[:col], back[:row]], [col, row], "top-down tile (#{col},#{row}) round-trips")
   end
 end
-
-# Pins the premise that an iso tile sprite is an axis-aligned world rect (the
-# diamond's bounding box) so it chunks like any other sprite — iso's use of the
-# cached TileLayer depends on it.
 
 def test_iso_tile_bounding_box_is_axis_aligned_and_chunks(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
