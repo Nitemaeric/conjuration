@@ -1,6 +1,6 @@
-require "app/ecs/entities/critter.rb"
-require "app/ecs/systems/movement_system.rb"
-require "app/ecs/systems/bounce_system.rb"
+require "app/entities/critter.rb"
+require "app/systems/movement_system.rb"
+require "app/systems/bounce_system.rb"
 
 class CritterWorld < Draco::World
   systems MovementSystem, BounceSystem

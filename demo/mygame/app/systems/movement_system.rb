@@ -1,5 +1,5 @@
-require "app/ecs/components/position.rb"
-require "app/ecs/components/velocity.rb"
+require "app/components/position.rb"
+require "app/components/velocity.rb"
 
 class MovementSystem < Draco::System
   filter Position, Velocity

@@ -1,6 +1,6 @@
-require "app/ecs/components/position.rb"
-require "app/ecs/components/velocity.rb"
-require "app/ecs/components/sprite.rb"
+require "app/components/position.rb"
+require "app/components/velocity.rb"
+require "app/components/sprite.rb"
 
 class BounceSystem < Draco::System
   filter Position, Velocity, Sprite
