@@ -10,6 +10,8 @@
 # resume exactly where they froze — see the note in #update.
 #
 # Sprites: Kenney "Tiny Dungeon" (CC0) — see sprites/kenney-tiny-dungeon-license.txt
+require "app/views/prompt_view.rb"
+
 class HitStopScene < Conjuration::Scene
   KNIGHT = { x: 480, y: 360, size: 96 }.freeze
 
@@ -43,14 +45,17 @@ class HitStopScene < Conjuration::Scene
     state.swing_started_at = nil # clock tick the current swing began (nil = idle)
     state.idle_since = clock      # clock tick we've been idle since (drives auto-swing)
 
-    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
+    cameras[:main].ui.view do
+      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
+        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+          node({ text: "Back", r: 255, g: 255, b: 255 })
+        end
       end
-    end
 
-    cameras[:main].ui.node({ x: grid.w / 2, y: cameras[:main].from_top(30), w: 700, anchor_x: 0.5, anchor_y: 1 }, align: :center) do
-      node({ text: "Knight auto-swings — SPACE to swing now", r: 255, g: 255, b: 255 })
+      node({ x: grid.w / 2, y: cameras[:main].from_top(30), anchor_x: 0.5, anchor_y: 1 }, direction: :row, justify: :center, align: :center, gap: 12) do
+        node({ text: "Knight auto-swings —", r: 255, g: 255, b: 255 })
+        PromptView(id: :swing, keys: [:space], controller: :b, label: "swing now", pad: game.ui_pad, color: { r: 255, g: 255, b: 255 })
+      end
     end
   end
 
