@@ -103,11 +103,11 @@ class MenuScene < Conjuration::Scene
     entries << { id: :quit, label: "Quit", action: -> { gtk.request_quit } } if gtk.can_close_window?
 
     # Two columns keep the list inside the 480px card as demo scenes accumulate.
-    node({ x: grid.w / 2, y: grid.h / 2 + 140, w: 440, anchor_x: 0.5, anchor_y: 1 }, id: :menu, gap: 14, group: :menu) do
+    node({ x: grid.w / 2, y: grid.h / 2 + 140, w: 440, anchor_x: 0.5, anchor_y: 1 }, id: :menu, align: :stretch, gap: 14, group: :menu) do
       row = 0
       while row * 2 < entries.length
         pair = entries[row * 2, 2]
-        node({}, id: "menu_row_#{row}", direction: :row, justify: :center, gap: 14) do
+        node({ h: 46 }, id: "menu_row_#{row}", direction: :row, justify: :center, gap: 14) do
           pair.each do |entry|
             node({ w: 213, h: 46, path: "sprites/button.png", action: entry[:action] }, id: entry[:id], justify: :center, align: :center) do
               node({ text: entry[:label], r: 255, g: 255, b: 255 }, id: "#{entry[:id]}_label")
