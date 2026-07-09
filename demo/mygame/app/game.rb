@@ -26,6 +26,7 @@ class Game < Conjuration::Game
   def input
     if inputs.keyboard.key_held?(:meta) && inputs.keyboard.key_up?(:d)
       self.debug = !debug
+      debug? ? $frame_timer.enable : $frame_timer.disable
     end
   end
 
