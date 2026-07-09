@@ -185,7 +185,10 @@ class IsometricScene < Conjuration::Scene
       path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0
     }
     prim[:dbg] = "knight" if @dump_requested
-    camera.draw(prim, z: state.knight_col.round + KNIGHT_ROW)
+    # ceil, not round: mid-stride the sprite straddles two columns, and the
+    # deeper one (z+1) would otherwise flush after him and paint over his
+    # leading half — engine dump at col 5.49 showed cube (6,5) 15px over his feet.
+    camera.draw(prim, z: state.knight_col.ceil + KNIGHT_ROW)
   end
 
   # Ground truth for the clip investigation: the camera's deferred buffer, in
@@ -202,7 +205,7 @@ class IsometricScene < Conjuration::Scene
     lines << "const TILE_W=#{TILE_W} TILE_H=#{TILE_H} ELEVATION_STEP=#{ELEVATION_STEP} DRAW_W=#{DRAW_W} DRAW_H=#{DRAW_H} TILE_ANCHOR_X=#{TILE_ANCHOR_X} TILE_ANCHOR_Y=#{TILE_ANCHOR_Y} KNIGHT_W=#{KNIGHT_W} KNIGHT_H=#{KNIGHT_H} STEP_RAMP=#{STEP_RAMP}"
     lines << "camera x=#{camera.current.x} y=#{camera.current.y} zoom=#{camera.current.zoom} w=#{camera.w} h=#{camera.h}"
     lines << "view x=#{view[:x]} y=#{view[:y]} w=#{view[:w]} h=#{view[:h]}"
-    lines << "knight col=#{state.knight_col} row=#{KNIGHT_ROW} z=#{state.knight_col.round + KNIGHT_ROW} walk_height=#{walk_height(state.knight_col, KNIGHT_ROW)}"
+    lines << "knight col=#{state.knight_col} row=#{KNIGHT_ROW} z=#{state.knight_col.ceil + KNIGHT_ROW} walk_height=#{walk_height(state.knight_col, KNIGHT_ROW)}"
 
     flushed.each_with_index do |(z, em, prim), idx|
       lines << "prim idx=#{idx} z=#{z} em=#{em} x=#{prim[:x]} y=#{prim[:y]} w=#{prim[:w]} h=#{prim[:h]} ax=#{prim[:anchor_x]} ay=#{prim[:anchor_y]} path=#{prim[:path]} dbg=#{prim[:dbg]}"

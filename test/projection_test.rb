@@ -250,10 +250,10 @@ def test_iso_walking_knight_sorts_with_his_occupied_cell_at_every_step(args, ass
   heights = [0, 1, 2, 1, 0]
   map = [heights]
 
-  # The full terrace walk, including every mid-transition quarter-step: the
-  # knight must flush after every cube of his occupied cell and before every
-  # cube of any strictly nearer cell — at x.5 exactly, with the ramp at halfway,
-  # he commits to the entered cell (Ruby rounds half away from zero).
+  # The full terrace walk, including every mid-transition quarter-step. Mid-
+  # stride the sprite straddles two columns, so the knight takes the DEEPER
+  # band (ceil): both straddled cells flush before him — the engine dump showed
+  # the entered cell painting over his leading half under the old round rule.
   Array.new(17) { |i| i * 0.25 }.each do |col|
     cam.outputs.primitives.clear
 
@@ -265,12 +265,12 @@ def test_iso_walking_knight_sorts_with_his_occupied_cell_at_every_step(args, ass
     end
 
     k = iso.to_world(col, 0, walk_height_ref(map, col, 0))
-    cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0 }, z: col.round)
+    cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0 }, z: col.ceil)
 
     cam.send(:flush_ordered_draws)
     order = cam.outputs.primitives.map { |p| p[:path] }
     knight_at = order.index(:knight)
-    occupied = col.round
+    occupied = col.ceil
 
     heights.each_with_index do |h, c|
       (0..h).each do |level|
@@ -278,7 +278,7 @@ def test_iso_walking_knight_sorts_with_his_occupied_cell_at_every_step(args, ass
         next unless cube_at
 
         if c <= occupied
-          assert.true!(cube_at < knight_at, "col #{col}: cube (#{c},#{level}) of cell <= occupied #{occupied} draws before the knight")
+          assert.true!(cube_at < knight_at, "col #{col}: cube (#{c},#{level}) of straddled band <= #{occupied} draws before the knight")
         else
           assert.true!(cube_at > knight_at, "col #{col}: cube (#{c},#{level}) of nearer cell #{c} draws after the knight")
         end
@@ -302,7 +302,7 @@ def test_iso_knight_sorts_between_its_cell_and_the_nearer_cell(args, assert)
   # The knight stands on the middle cell (1,1), emitted AFTER its block at the
   # same z: equal-z ties break on emission order.
   k = iso.to_world(1.0, 1, 1)
-  cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0.2 }, z: 1.0.round + 1)
+  cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0.2 }, z: 1.0.ceil + 1)
 
   cam.send(:flush_ordered_draws)
   order = cam.outputs.primitives.map { |p| p[:path] }
