@@ -1,3 +1,4 @@
+require "app/views/shortcut_badge_view.rb"
 require_relative "basic_camera_scene"
 require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
@@ -121,8 +122,9 @@ class MenuScene < Conjuration::Scene
     end
 
     node({ x: 10.from_right, y: 10.from_top, anchor_x: 1, anchor_y: 1 }, id: :mute_bar, direction: :row, justify: :end, gap: 20, group: :menu) do
-      node({ w: 120, h: 40, path: "sprites/button.png", action: -> { toggle_mute } }, id: :mute_button, justify: :center, align: :center) do
+      node({ w: 120, h: 40, path: "sprites/button.png", action: -> { toggle_mute } }, id: :mute_button, justify: :center, align: :center, shortcut: { keyboard: :m, controller: :y }) do
         node({ text: mute_label, r: 255, g: 255, b: 255 }, id: :mute_button_text)
+        ShortcutBadgeView(id: :mute_badge, shortcut: { keyboard: :m, controller: :y }, height: 40, pad: game.ui_pad)
       end
     end
   end

@@ -1,4 +1,5 @@
 require "app/views/prompt_view.rb"
+require "app/views/shortcut_badge_view.rb"
 
 class BasicCameraScene < Conjuration::Scene
   TILE_SIZE = 40
@@ -38,8 +39,9 @@ class BasicCameraScene < Conjuration::Scene
 
   def hud(camera)
     node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, shortcut: { keyboard: :escape, controller: :b }, justify: :center, align: :center) do
         node({ text: "Back", r: 255, g: 255, b: 255 })
+        ShortcutBadgeView(id: :back_badge, shortcut: { keyboard: :escape, controller: :b }, height: 50, pad: game.ui_pad)
       end
     end
 
@@ -71,8 +73,19 @@ class BasicCameraScene < Conjuration::Scene
   end
 
   def input
-    if focused_camera && (!inputs.up_down.zero? || !inputs.left_right.zero?)
-      focused_camera.look_at(x: focused_camera.current.x + inputs.left_right * 10, y: focused_camera.current.y + inputs.up_down * 10)
+    # WASD/arrows pan as before; when they're neutral the :pan action's analog
+    # side pans with the left stick (the right stick stays on HUD selection).
+    pan_x = inputs.left_right
+    pan_y = inputs.up_down
+
+    if pan_x.zero? && pan_y.zero?
+      stick = DragonInput.axis(game.ui_pad, :pan)
+      pan_x = stick[:x]
+      pan_y = stick[:y]
+    end
+
+    if focused_camera && (!pan_x.zero? || !pan_y.zero?)
+      focused_camera.look_at(x: focused_camera.current.x + pan_x * 10, y: focused_camera.current.y + pan_y * 10)
     end
 
     if focused_camera && inputs.mouse.button_right

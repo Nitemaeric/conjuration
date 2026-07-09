@@ -18,3 +18,26 @@ class BounceSystem; end
 # DragonRuby exposes the runtime as the $gtk global too; PromptView measures
 # label text through it.
 $gtk = $game.gtk
+
+# DR numeric conveniences the demo layouts use (dragon/numeric.rb in contrib).
+class Numeric
+  def from_top
+    $game.grid.h - self
+  end
+
+  def from_right
+    $game.grid.w - self
+  end
+
+  def to_radians
+    self * Math::PI / 180
+  end
+end
+
+# The scenes' derived values key off game.clock; a frozen clock keeps them
+# deterministic under the harness.
+class GameDouble
+  def clock
+    0
+  end
+end

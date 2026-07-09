@@ -790,3 +790,68 @@ def test_widthless_justify_end_row_anchors_off_the_trailing_edge(args, assert)
   assert.equal!([mute.object.x, mute.object.anchor_x], [1270, 1], "child's right edge anchors at the container's right edge")
   assert.equal!(Conjuration::UI.warnings.empty?, true, ":end without a width is legitimate — no warning")
 end
+
+# --- shortcut display stays out of core + reconcile ---
+
+def build_shortcut_ui
+  Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container) do
+      node({ w: 100, h: 44, primitive_marker: :solid, action: -> {} }, id: :with, shortcut: { keyboard: :escape, controller: :b })
+      node({ w: 100, h: 44, primitive_marker: :solid, action: -> {} }, id: :without)
+    end
+  end
+end
+
+def test_core_emits_no_primitives_for_a_shortcut(args, assert)
+  DragonInput.setup { |c| c.action_set(:menu) }
+  ui = build_shortcut_ui
+  source = Conjuration::DragonInputSource.new
+  ui.shortcut_nodes.each { |node| source.shortcut_just_pressed?(:one, node.shortcut_action_name, node.shortcut) }
+
+  assert.equal!(ui.primitives.length, 2, "a shortcut adds nothing to the primitives — display is game code")
+ensure
+  DragonInput.reset!
+end
+
+def test_shortcut_action_name_is_deterministic_and_public(args, assert)
+  ui = build_shortcut_ui
+
+  assert.equal!(ui.find(:with).shortcut_action_name, :ui_shortcut_with, "display code can key glyph lookups off the injected action's name")
+end
+
+class ShortcutReconcileHost
+  include Conjuration::UI::Builder
+
+  attr_accessor :shortcut
+
+  def initialize
+    @shortcut = nil
+  end
+
+  def view
+    node({ w: 100, h: 44, primitive_marker: :solid, action: -> {} }, id: :btn, shortcut: @shortcut)
+  end
+end
+
+def test_shortcut_reconciles_like_a_node_opt(args, assert)
+  DragonInput.setup { |c| c.action_set(:menu) }
+  host = ShortcutReconcileHost.new
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+  root.render_view
+  root.calculate_layout
+  assert.equal!(root.shortcut_nodes.length, 0, "no shortcut node before one is declared")
+
+  host.shortcut = { keyboard: :escape, controller: :b }
+  root.render_view
+  root.calculate_layout
+  assert.equal!(root.shortcut_nodes.map(&:id), [:btn], "adding a shortcut re-enters the cached list")
+  assert.equal!(root.find(:btn).shortcut, { keyboard: :escape, controller: :b }, "the value is written onto the retained node")
+
+  host.shortcut = nil
+  root.render_view
+  root.calculate_layout
+  assert.equal!(root.shortcut_nodes.length, 0, "removing it drops the node from the list")
+ensure
+  DragonInput.reset!
+end

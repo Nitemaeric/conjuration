@@ -58,7 +58,27 @@ module Conjuration
 
       UI.pressed_node = pressing? ? UI.focused_node : nil
 
+      trigger_shortcuts
+
       scroll_focused
+    end
+
+    # Fire any interactive node whose declared shortcut edge-pressed this frame,
+    # regardless of focus or whether a navigation group is active — a global
+    # accelerator. Bound by the cached shortcut list (rebuilt only with the
+    # structure caches), so a ui with no shortcuts costs one array read.
+    def trigger_shortcuts
+      nodes = ui.shortcut_nodes
+      return if nodes.empty?
+
+      source = game.input_source
+      pad = game.ui_pad
+      nodes.each do |node|
+        next unless source.shortcut_just_pressed?(pad, node.shortcut_action_name, node.shortcut)
+
+        action = node.object.action
+        instance_exec(&action) if action
+      end
     end
 
     # Mouse wheel scrolls the overflow: :scroll container under the cursor.
@@ -132,13 +152,20 @@ module Conjuration
     end
 
     # Left unnormalized (a diagonal fires both axes); spatial_navigate reads only
-    # the signs.
+    # the signs. The digital arrows drive it directly; when they're neutral, the
+    # right stick contributes one flick step (sources that don't implement it —
+    # e.g. a raw keyboard-only source — simply don't).
     def navigation_vector
       source = game.input_source
       pad = game.ui_pad
 
       x = (source.just_pressed?(pad, :ui_right) ? 1 : 0) - (source.just_pressed?(pad, :ui_left) ? 1 : 0)
       y = (source.just_pressed?(pad, :ui_up) ? 1 : 0) - (source.just_pressed?(pad, :ui_down) ? 1 : 0)
+
+      if x == 0 && y == 0 && source.respond_to?(:navigation_flick)
+        return source.navigation_flick(pad)
+      end
+
       return nil if x == 0 && y == 0
 
       { x: x, y: y }

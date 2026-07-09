@@ -10,7 +10,7 @@ module DragonInput
   end
 
   class FakeActionSet
-    attr_reader :name, :digitals
+    attr_reader :name, :digitals, :analogs
 
     def initialize(name)
       @name = name
@@ -64,11 +64,17 @@ module DragonInput
     def reset!
       @config = nil
       @pressed = {}
+      @axes = {}
       @glyph_style = nil
     end
 
     def press!(pad, action)
       (@pressed ||= {})["#{pad}/#{action}"] = true
+    end
+
+    # Set an analog axis reading for a pad/action, for the flick-navigation tests.
+    def deflect!(pad, action, x, y)
+      (@axes ||= {})["#{pad}/#{action}"] = { x: x, y: y }
     end
 
     def digital(pad, action)
@@ -79,6 +85,38 @@ module DragonInput
 
       down = @pressed && @pressed["#{pad}/#{action}"] ? true : false
       { down: down, held: false, up: false, active: true }
+    end
+
+    def axis(pad, action)
+      raise "DragonInput.setup must be called before use" unless @config
+
+      set = @config.action_sets[@config.default_set]
+      return { x: 0.0, y: 0.0, active: false } unless set && set.action(action)
+
+      vec = (@axes ||= {})["#{pad}/#{action}"] || { x: 0.0, y: 0.0 }
+      { x: vec[:x], y: vec[:y], active: true }
+    end
+
+    def glyph_style(_pad)
+      @glyph_style || :keyboard
+    end
+
+    def glyph_style=(style)
+      @glyph_style = style
+    end
+
+    # Action-level glyph, mirroring the real resolution shape: the action's
+    # binding for the current style names a <style>/<button>.png path.
+    def glyph(pad, action)
+      raise "DragonInput.setup must be called before use" unless @config
+
+      set = @config.action_sets[@config.default_set]
+      binding = set && set.action(action)
+      return nil unless binding
+
+      style = glyph_style(pad)
+      button = style == :keyboard ? binding[:keyboard] : binding[:controller]
+      button && "sprites/dragon_input/glyphs/#{style}/#{button}.png"
     end
 
     def just_pressed?(pad, action)
