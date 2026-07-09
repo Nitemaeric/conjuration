@@ -39,19 +39,12 @@ module Conjuration
       end
     end
 
-    # Removal is by intersection, not containment: a primitive goes if it
-    # overlaps +rect+ at all. A border-spanning primitive is stored as a copy in
-    # each chunk it straddles (in that chunk's local coordinates), so it must be
-    # dropped from every one of them, not just the chunk the rect touches.
     def remove(rect)
       rx = rect[:x]
       ry = rect[:y]
       rw = rect[:w] || 0
       rh = rect[:h] || 0
 
-      # Any primitive touching the rect has a copy in a chunk the rect covers, so
-      # those chunks are complete entry points; from each hit we fan out to the
-      # primitive's other chunks to evict its sibling copies. `seen` bounds the walk.
       pending = []
       chunk_span(rx, rx + rw).each do |cx|
         chunk_span(ry, ry + rh).each do |cy|
@@ -81,6 +74,7 @@ module Conjuration
 
           removed_any = true
 
+          # A border-spanning primitive has a copy in every chunk it straddles; evict them all.
           chunk_span(wx, wx + ww).each do |ox|
             chunk_span(wy, wy + wh).each do |oy|
               pending << [ox, oy] unless seen[[ox, oy]]
@@ -133,9 +127,7 @@ module Conjuration
       target = game.outputs[chunk_path(cx, cy)]
       target.width = chunk_size
       target.height = chunk_size
-      # A re-bake after #remove must not accumulate onto the stale primitives; on
-      # the first bake DragonRuby hands back a fresh collection, so clearing is a
-      # no-op there.
+      # A re-bake after #remove accumulates onto the target's kept primitives unless cleared.
       target.primitives.clear
       @chunks[[cx, cy]].each { |primitive| target.primitives << primitive }
       @rendered[[cx, cy]] = true

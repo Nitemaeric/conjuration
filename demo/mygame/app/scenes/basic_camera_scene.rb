@@ -70,8 +70,6 @@ class BasicCameraScene < Conjuration::Scene
       focused_camera.look_at(x: focused_camera.current.x + inputs.left_right * 10, y: focused_camera.current.y + inputs.up_down * 10)
     end
 
-    # Right button so tile destruction never fights the left-click HUD buttons
-    # drawn over the world.
     if focused_camera && inputs.mouse.button_right
       point = focused_camera.to_world(**inputs.mouse.rect)
       column = (point.x / TILE_SIZE).floor
