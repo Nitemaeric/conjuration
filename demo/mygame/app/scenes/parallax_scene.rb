@@ -2,6 +2,10 @@ class ParallaxScene < Conjuration::Scene
   WORLD_W = 6000
   GROUND_H = 120
 
+  # A factor-f layer's derived view sweeps f * camera.x +- half a screen, which
+  # goes negative near the world's left edge — layers must extend past x: 0.
+  LAYER_MARGIN = 1280
+
   SKY    = { parallax: 0.1, z: -400 }.freeze
   HILLS  = { parallax: 0.3, z: -300 }.freeze
   CLOUDS = { parallax: 0.5, z: -200 }.freeze
@@ -49,37 +53,37 @@ class ParallaxScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    camera.draw({ x: 0, y: -400, w: WORLD_W, h: 1600, path: :pixel, r: 132, g: 196, b: 236 }, **SKY)
+    camera.draw({ x: -LAYER_MARGIN, y: -400, w: WORLD_W + LAYER_MARGIN * 2, h: 1600, path: :pixel, r: 132, g: 196, b: 236 }, **SKY)
 
     @hills.each  { |hill|  camera.draw(hill,  **HILLS) }
     @clouds.each { |cloud| camera.draw(cloud, **CLOUDS) }
     @trees.each  { |tree|  camera.draw(tree,  **TREES) }
 
-    camera.draw({ x: 0, y: 0, w: WORLD_W, h: GROUND_H, path: :pixel, r: 74, g: 120, b: 84 })
+    camera.draw({ x: 0, y: 0, w: WORLD_W, h: GROUND_H, path: :pixel, r: 74, g: 120, b: 84 }, z: 0)
 
     hero = state.hero
-    camera.draw({ **hero.slice(:x, :y, :w, :h), path: :pixel, r: 40, g: 40, b: 56, anchor_x: 0.5 }, z: -hero.y)
+    camera.draw({ **hero.slice(:x, :y, :w, :h), path: :pixel, r: 40, g: 40, b: 56, anchor_x: 0.5 }, z: 0)
   end
 
   private
 
   # DR's mruby has no Range#step; index-based construction instead.
   def build_hills
-    Array.new((WORLD_W / 340.0).ceil) do |i|
-      x = i * 340
+    Array.new(((WORLD_W + LAYER_MARGIN) / 340.0).ceil) do |i|
+      x = i * 340 - LAYER_MARGIN
       { x: x, y: 0, w: 460, h: 210 + (x % 3) * 40, path: :pixel, r: 96, g: 150, b: 112, anchor_x: 0.5 }
     end
   end
 
   def build_clouds
-    Array.new((WORLD_W / 520.0).ceil) do |i|
-      { x: i * 520 + (i % 2) * 160, y: 360 + (i % 3) * 70, w: 240, h: 70, path: :pixel, r: 245, g: 248, b: 252, a: 235 }
+    Array.new(((WORLD_W + LAYER_MARGIN) / 520.0).ceil) do |i|
+      { x: i * 520 - LAYER_MARGIN + (i % 2) * 160, y: 360 + (i % 3) * 70, w: 240, h: 70, path: :pixel, r: 245, g: 248, b: 252, a: 235 }
     end
   end
 
   def build_trees
-    Array.new((WORLD_W / 230.0).ceil) do |i|
-      x = i * 230
+    Array.new(((WORLD_W + LAYER_MARGIN) / 230.0).ceil) do |i|
+      x = i * 230 - LAYER_MARGIN
       { x: x, y: -30, w: 50, h: 190 + (x % 2) * 50, path: :pixel, r: 52, g: 84, b: 60, anchor_x: 0.5 }
     end
   end
