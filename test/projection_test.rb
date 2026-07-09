@@ -146,6 +146,76 @@ def test_iso_probe_finds_the_top_of_a_stack(args, assert)
   assert.equal!([flat[:col], flat[:row]], [0, 1], "probe falls through to a ground tile when nothing taller occludes it")
 end
 
+# The surface-height lookup a character stands on: round the fractional column
+# to the cell under his feet centre, then index [row][col]. Mirrors the demo's
+# height lookup — the reference that would have caught the buried-knight bug.
+def surface_height(heightmap, col_exact, row)
+  return 0 if row < 0 || row >= heightmap.length
+
+  col = col_exact.round
+  cells = heightmap[row]
+  return 0 if col < 0 || col >= cells.length
+
+  cells[col]
+end
+
+def test_iso_surface_height_rounds_to_the_feet_centre_cell(args, assert)
+  # Non-square and non-symmetric on purpose: a [row][col] vs [col][row] swap
+  # changes the answers, and floor-vs-round at a boundary changes which cell the
+  # feet occupy — so both flavours of the bug fail this test.
+  heightmap = [
+    [0, 1, 2],
+    [3, 0, 0]
+  ]
+
+  assert.equal!(surface_height(heightmap, 1.0, 0), 1, "cell (1,0) reads its own height")
+  assert.equal!(surface_height(heightmap, 2.0, 0), 2, "cell (2,0) reads its own height")
+  assert.equal!(surface_height(heightmap, 0.0, 1), 3, "indexed [row][col], not swapped: (col 0,row 1) is 3, not 1")
+
+  # Feet centre past the half-way line belongs to the NEXT cell; floor would
+  # report the lower cell and bury the knight a block deep (the regression).
+  assert.equal!(surface_height(heightmap, 1.6, 0), 2, "col 1.6 rounds up to cell 2 (feet centre), not floored to 1")
+  assert.equal!(surface_height(heightmap, 0.4, 0), 0, "col 0.4 rounds down to cell 0")
+end
+
+def test_iso_feet_ride_the_top_face_lifted_by_height(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32, elevation_step: 24)
+
+  [[4, 5, 2], [3, 5, 1], [7, 2, 3]].each do |(col, row, h)|
+    ground   = iso.to_world(col, row, 0)
+    feet     = iso.to_world(col, row, h) # the knight standing centred on the cell
+    top_face = iso.to_world(col, row, h) # that cell's top face
+
+    assert.close!(feet[:y], top_face[:y], "feet y == top-face y at height #{h}")
+    assert.close!(feet[:y], ground[:y] + h * 24, "top face sits h*step above the ground plane (h=#{h})")
+    assert.close!(feet[:x], ground[:x], "elevation leaves x unchanged (h=#{h})")
+  end
+end
+
+def test_iso_knight_sorts_between_its_cell_and_the_nearer_cell(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
+  cam = make_camera(current: { x: 0, y: -32, zoom: 1 })
+  cam.outputs.primitives.clear
+
+  # A diagonal of raised cells: z = col + row = 0, 2, 4.
+  paths = { [0, 0] => :block_far, [1, 1] => :block_mid, [2, 2] => :block_near }
+  paths.each do |(col, row), path|
+    c = iso.to_world(col, row, 1)
+    cam.draw({ x: c[:x], y: c[:y], w: 64, h: 48, path: path, anchor_x: 0.5, anchor_y: 0.5 }, z: col + row)
+  end
+
+  # The knight stands on the middle cell (1,1), emitted AFTER its block at the
+  # same z: equal-z ties break on emission order.
+  k = iso.to_world(1.0, 1, 1)
+  cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0.2 }, z: 1.0.round + 1)
+
+  cam.send(:flush_ordered_draws)
+  order = cam.outputs.primitives.map { |p| p[:path] }
+
+  assert.true!(order.index(:block_mid) < order.index(:knight), "knight sorts after his own cell's block (same z, later emission)")
+  assert.true!(order.index(:knight) < order.index(:block_near), "knight sorts before the strictly-nearer cell's block")
+end
+
 def test_topdown_to_world_ignores_height(args, assert)
   td = Conjuration::Projection::TopDown.new(tile_w: 40, tile_h: 40)
   flat = td.to_world(2, 3)

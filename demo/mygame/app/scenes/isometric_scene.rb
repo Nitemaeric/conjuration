@@ -8,6 +8,13 @@ class IsometricScene < Conjuration::Scene
   KNIGHT_ROW = 5
   MAX_HEIGHT = 2
 
+  # Chunky, clearly-stepped columns (the lib default of tile_h/2 reads thin here).
+  ELEVATION_STEP = 24
+
+  # One hue; the baked block textures carry three grey shades that this tint
+  # multiplies into three shades of the same colour (lit top, mid + dark faces).
+  BLOCK_TINT = [120, 165, 120].freeze
+
   # Hand-authored terrain: a height-2 plateau with a height-1 apron. Row 5 (the
   # knight's path) reads 0 0 0 1 2 2 2 1 0 0 — a ramp up, a plateau, a ramp down.
   HEIGHTMAP = [
@@ -24,9 +31,10 @@ class IsometricScene < Conjuration::Scene
   ].freeze
 
   def setup
-    @iso = Conjuration::Projection::Isometric.new(tile_w: TILE_W, tile_h: TILE_H)
+    @iso = Conjuration::Projection::Isometric.new(tile_w: TILE_W, tile_h: TILE_H, elevation_step: ELEVATION_STEP)
 
     build_tile_texture
+    build_block_textures
 
     add_camera(:main, speed: 30)
     cameras[:main].ui.group = :hud
@@ -68,7 +76,10 @@ class IsometricScene < Conjuration::Scene
     phase = (clock * 0.01) % 2.0
     state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
 
-    target = height_at(state.knight_col.floor, KNIGHT_ROW)
+    # Round, not floor: the occupied cell is the one under his feet centre, not
+    # the one his sprite's back edge overhangs — flooring buries him a block deep
+    # on every ascent.
+    target = height_at(state.knight_col.round, KNIGHT_ROW)
     state.knight_height += (target - state.knight_height) * 0.2
 
     label = cameras[:main].ui.find(:hover_label)
@@ -98,32 +109,26 @@ class IsometricScene < Conjuration::Scene
 
   private
 
-  # Raised columns are deferred (z: col + row), not baked into the static floor
-  # TileLayer, so the moving knight z-interleaves with the terrain it walks past.
+  # One baked block-column sprite per raised cell: lit top diamond + two side
+  # faces. Deferred (z: col + row, height never touches z), not baked into the
+  # static floor TileLayer, so the moving knight z-interleaves with the terrain.
   def draw_terrain(camera)
+    half_h = TILE_H / 2.0
+
     GRID_ROWS.times do |row|
       GRID_COLS.times do |col|
         h = HEIGHTMAP[row][col]
         next if h.zero?
 
-        base = @iso.to_world(col, row)
-        z = col + row
-
-        # Dark diamonds stacked at half-block steps read as a solid cliff face:
-        # each is 32px tall but offset 8px, so only its lower band stays visible.
-        (1..(h * 2)).each do |i|
-          camera.draw({
-            x: base[:x], y: base[:y] + i * (@iso.elevation_step / 2.0),
-            w: TILE_W, h: TILE_H,
-            path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 72, g: 64, b: 92
-          }, z: z)
-        end
-
         top = @iso.to_world(col, row, h)
+        depth = h * @iso.elevation_step
+        tex_h = TILE_H + depth
+
         camera.draw({
-          x: top[:x], y: top[:y], w: TILE_W, h: TILE_H,
-          path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 150, g: 138, b: 168
-        }, z: z)
+          x: top[:x], y: top[:y], w: TILE_W, h: tex_h,
+          path: :"iso_block_#{h}", anchor_x: 0.5, anchor_y: (depth + half_h) / tex_h,
+          r: BLOCK_TINT[0], g: BLOCK_TINT[1], b: BLOCK_TINT[2]
+        }, z: col + row)
       end
     end
   end
@@ -133,7 +138,7 @@ class IsometricScene < Conjuration::Scene
     camera.draw({
       x: pos[:x], y: pos[:y], w: 30, h: 42,
       path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0.2
-    }, z: state.knight_col + KNIGHT_ROW)
+    }, z: state.knight_col.round + KNIGHT_ROW)
   end
 
   # Probe from the tallest possible stack down: the first candidate height whose
@@ -185,6 +190,37 @@ class IsometricScene < Conjuration::Scene
     end
 
     @tile_texture_built = true
+  end
+
+  # Rasterise one block-column texture per distinct height, column by column: a
+  # lit top diamond over two side faces (SW dark, SE mid). Baked in greyscale so
+  # the per-cell BLOCK_TINT multiplies into three shades of a single colour.
+  def build_block_textures
+    return if @block_textures_built
+
+    half_w = TILE_W / 2.0
+    half_h = TILE_H / 2.0
+
+    (1..MAX_HEIGHT).each do |h|
+      depth = h * @iso.elevation_step
+      tex_h = TILE_H + depth
+
+      target = outputs[:"iso_block_#{h}"]
+      target.width = TILE_W
+      target.height = tex_h
+
+      TILE_W.times do |xx|
+        col_frac = 1.0 - ((xx + 0.5) - half_w).abs / half_w
+        dh = half_h * col_frac
+        y_centre = depth + half_h
+        shade = xx < half_w ? 105 : 175
+
+        target.primitives << { x: xx, y: y_centre - dh, w: 1, h: dh * 2, path: :pixel, r: 255, g: 255, b: 255 }
+        target.primitives << { x: xx, y: y_centre - dh - depth, w: 1, h: depth, path: :pixel, r: shade, g: shade, b: shade }
+      end
+    end
+
+    @block_textures_built = true
   end
 
   def build_hud
