@@ -39,6 +39,15 @@ class ParallaxScene < Conjuration::Scene
 
   GROUND_TILE_W = 600
 
+  # Kenney Toon Characters frames are 96x128; feet sit flush on the frame's
+  # bottom edge, so the default bottom anchor puts them on the ground line.
+  HERO_W = 90
+  HERO_H = 120
+  WALK_SPEED = 5
+  WALK_FRAMES = 8
+  WALK_FRAME_DIV = 5
+  HERO_IDLE = "sprites/parallax/hero/idle.png"
+
   def setup
     self.virtual_w = WORLD_W
     self.virtual_h = grid.h
@@ -52,6 +61,7 @@ class ParallaxScene < Conjuration::Scene
     @clouds = build_clouds
     @trees  = build_trees
     @ground = build_ground
+    @hero_walk = Array.new(WALK_FRAMES) { |i| "sprites/parallax/hero/walk#{i}.png" }
 
     cameras[:main].ui.view do
       node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
@@ -66,13 +76,14 @@ class ParallaxScene < Conjuration::Scene
       end
     end
 
-    state.hero = { x: grid.w / 2, y: GROUND_H, w: 96, h: 96, facing: 1 }
+    state.hero = { x: grid.w / 2, y: GROUND_H, w: HERO_W, h: HERO_H, facing: 1, moving: false }
     cameras[:main].follow(state.hero)
   end
 
   def input
     hero = state.hero
-    dx = inputs.left_right * 6
+    dx = inputs.left_right * WALK_SPEED
+    hero.moving = !dx.zero?
     return if dx.zero?
 
     hero.x = (hero.x + dx).clamp(hero.w / 2, WORLD_W - hero.w / 2)
@@ -89,7 +100,8 @@ class ParallaxScene < Conjuration::Scene
     @ground.each { |tile| camera.draw(tile, z: 0) }
 
     hero = state.hero
-    camera.draw({ x: hero.x, y: hero.y, w: hero.w, h: hero.h, path: "sprites/knight.png", anchor_x: 0.5, flip_horizontally: hero.facing.negative? }, z: 0)
+    path = hero.moving ? @hero_walk[clock.idiv(WALK_FRAME_DIV) % WALK_FRAMES] : HERO_IDLE
+    camera.draw({ x: hero.x, y: hero.y, w: hero.w, h: hero.h, path: path, anchor_x: 0.5, flip_horizontally: hero.facing.negative? }, z: 0)
   end
 
   private
