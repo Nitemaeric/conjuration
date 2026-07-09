@@ -39,6 +39,58 @@ module Conjuration
       end
     end
 
+    def remove(rect)
+      rx = rect[:x]
+      ry = rect[:y]
+      rw = rect[:w] || 0
+      rh = rect[:h] || 0
+
+      pending = []
+      chunk_span(rx, rx + rw).each do |cx|
+        chunk_span(ry, ry + rh).each do |cy|
+          pending << [cx, cy]
+        end
+      end
+
+      seen = {}
+      until pending.empty?
+        key = pending.pop
+        next if seen[key]
+
+        seen[key] = true
+        primitives = @chunks[key]
+        next unless primitives
+
+        cx, cy = key
+        removed_any = false
+
+        primitives.reject! do |local|
+          wx = local[:x] + cx * chunk_size
+          wy = local[:y] + cy * chunk_size
+          ww = local[:w] || 0
+          wh = local[:h] || 0
+
+          next false unless overlap?(wx, wy, ww, wh, rx, ry, rw, rh)
+
+          removed_any = true
+
+          # A border-spanning primitive has a copy in every chunk it straddles; evict them all.
+          chunk_span(wx, wx + ww).each do |ox|
+            chunk_span(wy, wy + wh).each do |oy|
+              pending << [ox, oy] unless seen[[ox, oy]]
+            end
+          end
+
+          true
+        end
+
+        next unless removed_any
+
+        @rendered.delete(key)
+        @chunks.delete(key) if primitives.empty?
+      end
+    end
+
     # Emit each visible, populated chunk as a sprite into the camera, rendering
     # any chunk whose texture isn't cached yet.
     def draw(camera)
@@ -67,10 +119,16 @@ module Conjuration
       (from / chunk_size).floor..(to / chunk_size).floor
     end
 
+    def overlap?(ax, ay, aw, ah, bx, by, bw, bh)
+      ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
+    end
+
     def render_chunk(cx, cy)
       target = game.outputs[chunk_path(cx, cy)]
       target.width = chunk_size
       target.height = chunk_size
+      # A re-bake after #remove accumulates onto the target's kept primitives unless cleared.
+      target.primitives.clear
       @chunks[[cx, cy]].each { |primitive| target.primitives << primitive }
       @rendered[[cx, cy]] = true
     end

@@ -37,9 +37,10 @@ class BasicCameraScene < Conjuration::Scene
     end
 
     cameras[:main].ui.node({ x: 0, y: grid.h / 2, w: 256, h: 400, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
-      node(h: 50, gap: 5, align: :center) do
+      node(h: 70, gap: 5, align: :center) do
         node({ text: "WASD to pan" })
         node({ text: "SPACE to shake" })
+        node({ text: "RMB to destroy tile" })
       end
 
       node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
@@ -67,6 +68,16 @@ class BasicCameraScene < Conjuration::Scene
   def input
     if focused_camera && (!inputs.up_down.zero? || !inputs.left_right.zero?)
       focused_camera.look_at(x: focused_camera.current.x + inputs.left_right * 10, y: focused_camera.current.y + inputs.up_down * 10)
+    end
+
+    if focused_camera && inputs.mouse.button_right
+      point = focused_camera.to_world(**inputs.mouse.rect)
+      column = (point.x / TILE_SIZE).floor
+      row = (point.y / TILE_SIZE).floor
+
+      if column.between?(0, (virtual_w / TILE_SIZE).to_i - 1) && row.between?(0, (virtual_h / TILE_SIZE).to_i - 1)
+        @tiles.remove({ x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE })
+      end
     end
 
     if focused_camera && inputs.keyboard.key_down.space
