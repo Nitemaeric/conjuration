@@ -74,8 +74,9 @@ class IsometricScene < Conjuration::Scene
     build_highlight_texture
 
     add_camera(:main, speed: 30)
+    # No activate_navigation: WASD pans the camera; activating would let
+    # ensure_focus_in_active_group steal the arrows for the HUD.
     cameras[:main].ui.group = :hud
-    activate_navigation(:hud)
 
     centre = @iso.to_world(GRID_COLS / 2, GRID_ROWS / 2)
     camera = cameras[:main]
