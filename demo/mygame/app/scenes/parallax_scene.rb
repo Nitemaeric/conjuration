@@ -17,8 +17,9 @@ class ParallaxScene < Conjuration::Scene
     self.virtual_h = grid.h
 
     add_camera(:main, speed: 12)
+    # No activate_navigation: A/D and the arrows belong to walking; activating
+    # would let ensure_focus_in_active_group steal them for the HUD.
     cameras[:main].ui.group = :hud
-    activate_navigation(:hud)
 
     @hills  = build_hills
     @clouds = build_clouds
