@@ -178,17 +178,24 @@ def test_iso_surface_height_rounds_to_the_feet_centre_cell(args, assert)
   assert.equal!(surface_height(heightmap, 0.4, 0), 0, "col 0.4 rounds down to cell 0")
 end
 
-def test_iso_feet_ride_the_top_face_lifted_by_height(args, assert)
+# FFTA unit convention: feet plant at the top face's NEAR corner (centre y minus
+# tile_h/2) — the point shared with the front-diagonal neighbour's far corner —
+# so no same-elevation neighbour's art can rise above the feet line. Feet at the
+# diamond CENTRE would let a front neighbour legitimately cover everything below
+# the centre line (the waist-deep-clip regression).
+def test_iso_feet_plant_at_the_top_face_near_corner(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32, elevation_step: 24)
 
   [[4, 5, 2], [3, 5, 1], [7, 2, 3]].each do |(col, row, h)|
     ground   = iso.to_world(col, row, 0)
-    feet     = iso.to_world(col, row, h) # the knight standing centred on the cell
-    top_face = iso.to_world(col, row, h) # that cell's top face
+    top_face = iso.to_world(col, row, h)
+    feet_y   = top_face[:y] - 32 / 2.0
 
-    assert.close!(feet[:y], top_face[:y], "feet y == top-face y at height #{h}")
-    assert.close!(feet[:y], ground[:y] + h * 24, "top face sits h*step above the ground plane (h=#{h})")
-    assert.close!(feet[:x], ground[:x], "elevation leaves x unchanged (h=#{h})")
+    neighbour_far_corner_y = iso.to_world(col + 1, row + 1, h)[:y] + 32 / 2.0
+    assert.close!(feet_y, neighbour_far_corner_y, "feet sit on the corner shared with the front neighbour (h=#{h})")
+
+    assert.close!(top_face[:y], ground[:y] + h * 24, "top face sits h*step above the ground plane (h=#{h})")
+    assert.close!(top_face[:x], ground[:x], "elevation leaves x unchanged (h=#{h})")
   end
 end
 

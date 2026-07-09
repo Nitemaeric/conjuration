@@ -25,6 +25,16 @@ class IsometricScene < Conjuration::Scene
   TILE_ANCHOR_X = 0.5
   TILE_ANCHOR_Y = (SPRITE_H - TOP_FACE_PY) / SPRITE_H.to_f
 
+  # FFTA unit convention: feet plant at the top face's NEAR corner — the point
+  # shared with the front neighbour's far corner — so a same-elevation neighbour
+  # can never rise above the feet line. Anchored at the diamond centre instead,
+  # the neighbour's art legitimately covers everything below the centre line
+  # (half the diamond + the old 0.15 feet sink ≈ 60% of the sprite: the
+  # waist-deep clip). Constant offset, so the walking lerp is untouched.
+  KNIGHT_FEET_OFFSET = TILE_H / 2.0
+  KNIGHT_H = TILE_H * 1.5
+  KNIGHT_W = KNIGHT_H * 48 / 68.0
+
   DIRT = "sprites/isometric/dirt_center.png".freeze
   GRASS = "sprites/isometric/grass_center.png".freeze
 
@@ -152,8 +162,8 @@ class IsometricScene < Conjuration::Scene
   def draw_knight(camera)
     pos = @iso.to_world(state.knight_col, KNIGHT_ROW, state.knight_height)
     camera.draw({
-      x: pos[:x], y: pos[:y], w: 48, h: 68,
-      path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0.15
+      x: pos[:x], y: pos[:y] - KNIGHT_FEET_OFFSET, w: KNIGHT_W, h: KNIGHT_H,
+      path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0
     }, z: state.knight_col.round + KNIGHT_ROW)
   end
 
