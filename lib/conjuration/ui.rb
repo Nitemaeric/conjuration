@@ -1086,8 +1086,18 @@ module Conjuration
         end
       end
 
+      # Every justify but :start divides by the node's main-axis size; when that
+      # size is unresolved (nil) mruby dies with an opaque "non float value"
+      # TypeError, so degrade to :start and record why.
+      def effective_justify(size, axis, index)
+        return justify if justify == :start || size
+
+        UI.warn(self, "justify: #{justify.inspect} on #{id.inspect} needs a #{axis}; falling back to :start") if index.zero?
+        :start
+      end
+
       def calculate_column_justify(child, children, index)
-        case justify
+        case effective_justify(object.h, "height", index)
         when :start
           child.object.anchor_y = 1
           child.object.y = index.zero? ? object.top - padding_top : children[index - 1].object.bottom - gap
@@ -1133,7 +1143,7 @@ module Conjuration
       end
 
       def calculate_row_justify(child, children, index)
-        case justify
+        case effective_justify(object.w, "width", index)
         when :start
           child.object.anchor_x = 0
           child.object.x = index.zero? ? object.left + padding_left : children[index - 1].object.right + gap

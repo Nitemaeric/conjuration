@@ -646,3 +646,41 @@ def test_break_false_disables_wrapping(args, assert)
   assert.equal!(para.wrapped?, false, "text_break: false opts out even under a wrapping parent")
   assert.equal!(para.object.w, 64, "stays a single line (8 chars * 8px)")
 end
+
+# --- justify without a resolved main-axis size ---
+
+def test_widthless_justify_center_row_falls_back_to_start(args, assert)
+  Conjuration::UI.warnings.clear
+
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container, direction: :column) do
+      node({ h: 100 }, id: :toolbar, direction: :row, justify: :center) do
+        node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1)
+        node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2)
+      end
+    end
+  end
+
+  n1, n2 = ui.find(:n1), ui.find(:n2)
+  assert.equal!([n1.object.x, n1.object.anchor_x], [0, 0], "n1 laid out as justify: :start")
+  assert.equal!(n2.object.x, 100, "n2 stacked to the right of n1")
+  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":toolbar") && warning.include?("width") }, true, "the missing width is flagged")
+end
+
+def test_heightless_justify_center_column_falls_back_to_start(args, assert)
+  Conjuration::UI.warnings.clear
+
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container, direction: :row) do
+      node({ w: 100 }, id: :sidebar, direction: :column, justify: :center) do
+        node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1)
+        node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2)
+      end
+    end
+  end
+
+  n1, n2 = ui.find(:n1), ui.find(:n2)
+  assert.equal!([n1.object.y, n1.object.anchor_y], [400, 1], "n1 laid out as justify: :start")
+  assert.equal!(n2.object.y, 300, "n2 stacked below n1")
+  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":sidebar") && warning.include?("height") }, true, "the missing height is flagged")
+end
