@@ -61,13 +61,13 @@ module Conjuration
     # split a call's keywords from its object props.
     NODE_KEYWORDS = %i[
       id direction justify align gap padding visible position
-      top right bottom left group overflow wrap text_break
+      top right bottom left group overflow wrap text_break shortcut
     ].freeze
 
     # Node keywords that map to a writable attribute and can therefore change
     # frame-to-frame under reconciliation. Structural keywords fixed at creation
     # (overflow, wrap, text_break, the insets) are intentionally excluded.
-    RECONCILABLE_OPTS = %i[direction justify align gap padding visible position group].freeze
+    RECONCILABLE_OPTS = %i[direction justify align gap padding visible position group shortcut].freeze
 
     # A lightweight snapshot of one node() call: the resolved object hash, its
     # node-keyword options, and child descriptors. The reconciler diffs these
@@ -308,6 +308,7 @@ module Conjuration
       attr_reader :overflow
       attr_accessor :scroll_offset
       attr_reader :wrap, :text_break
+      attr_reader :shortcut
       attr_writer :declared
       # The view component this node was mounted for (nil for a plain node) —
       # part of its reconcile identity, so a type swap at the same key remounts.
@@ -315,7 +316,7 @@ module Conjuration
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -354,6 +355,12 @@ module Conjuration
         # on spaces), :letter (anywhere, mid-word), or false (never wrap).
         @text_break = text_break
 
+        # shortcut: { keyboard:, controller: } — an accelerator that fires this
+        # node's action from anywhere (see UIManagement#trigger_shortcuts). Core
+        # draws nothing for it — display is game code, keyed off the injected
+        # action's name (shortcut_action_name). nil (default) means no work.
+        @shortcut = shortcut
+
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
         @dirty = true
@@ -361,8 +368,8 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, **object, &block)
-        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, wrap: wrap, text_break: text_break, **object, &block)
+      def node(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, **object, &block)
+        element = Node.new(object_hash, id: id, direction: direction, justify: justify, align: align, gap: gap, padding: padding, position: position, top: top, right: right, bottom: bottom, left: left, group: group, overflow: overflow, wrap: wrap, text_break: text_break, shortcut: shortcut, **object, &block)
         element.parent = self
         children << element
         clear_structure_cache!
@@ -785,14 +792,16 @@ module Conjuration
         @descendants = nil
         @interactive_nodes = nil
         @navigation_groups = nil
+        @shortcut_nodes = nil
         parent&.clear_structure_cache!
       end
 
       # Like clear_structure_cache! but keeps the @nodes/@descendants memos — only
-      # the interactive-ness caches go stale on a visible/disabled flip.
+      # the interactive-ness caches go stale on a visible/disabled/shortcut flip.
       def clear_interactive_cache!
         @interactive_nodes = nil
         @navigation_groups = nil
+        @shortcut_nodes = nil
         parent&.clear_interactive_cache!
       end
 
@@ -893,6 +902,30 @@ module Conjuration
 
       def interactive_nodes
         @interactive_nodes ||= nodes.select(&:interactive?)
+      end
+
+      # The interactive nodes carrying a shortcut, memoized on the root and rebuilt
+      # only when the structure/interactive caches are — so the input loop iterates
+      # a cached list each frame rather than rewalking the tree. Empty (and free)
+      # when nothing in the ui declares a shortcut.
+      def shortcut_nodes
+        @shortcut_nodes ||= interactive_nodes.select(&:shortcut)
+      end
+
+      # Reconcilable like a plain opt, but a change to shortcut presence flips
+      # membership in shortcut_nodes, so drop the interactive caches on any change.
+      def shortcut=(value)
+        return if @shortcut == value
+
+        @shortcut = value
+        clear_interactive_cache!
+      end
+
+      # The injected action name backing this node's shortcut — deterministic by
+      # id so a game can rebind it, and public so display code can resolve its
+      # glyph (e.g. DragonInput.glyph(pad, node.shortcut_action_name)).
+      def shortcut_action_name
+        :"ui_shortcut_#{id || object_id}"
       end
 
       # Interactive nodes bucketed by their navigation group — the nearest

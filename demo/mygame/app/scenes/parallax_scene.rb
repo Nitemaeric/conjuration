@@ -1,4 +1,5 @@
 require "app/views/prompt_view.rb"
+require "app/views/shortcut_badge_view.rb"
 
 class ParallaxScene < Conjuration::Scene
   WORLD_W = 6000
@@ -72,8 +73,9 @@ class ParallaxScene < Conjuration::Scene
 
   def hud(camera)
     node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, shortcut: { keyboard: :escape, controller: :b }, justify: :center, align: :center) do
         node({ text: "Back", r: 255, g: 255, b: 255 })
+        ShortcutBadgeView(id: :back_badge, shortcut: { keyboard: :escape, controller: :b }, height: 50, pad: game.ui_pad)
       end
     end
 

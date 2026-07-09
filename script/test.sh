@@ -42,11 +42,15 @@ preload=(
   test/support/doubles.rb
   test/support/demo_doubles.rb
   demo/mygame/app/views/prompt_view.rb
+  demo/mygame/app/views/shortcut_badge_view.rb
+  demo/mygame/app/views/button_view.rb
   demo/mygame/app/scenes/basic_camera_scene.rb
   demo/mygame/app/scenes/hit_stop_scene.rb
   demo/mygame/app/scenes/zoom_scene.rb
   demo/mygame/app/scenes/ecs_scene.rb
   demo/mygame/app/scenes/parallax_scene.rb
+  demo/mygame/app/scenes/ui_scene.rb
+  demo/mygame/app/scenes/multiple_cameras_scene.rb
 )
 
 for test_file in test/*_test.rb; do

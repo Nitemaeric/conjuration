@@ -45,7 +45,7 @@ class ReactiveScene < Conjuration::Scene
 
   def view
     node({ x: 20, y: 20.from_top, anchor_y: 1 }, group: :controls, direction: :row, gap: 12) do
-      ButtonView(id: :back, label: "Back", action: -> { change_scene(to: MenuScene.new(:main)) })
+      ButtonView(id: :back, label: "Back", action: -> { change_scene(to: MenuScene.new(:main)) }, shortcut: { keyboard: :escape, controller: :b })
       ButtonView(id: :add, label: "Add bar", width: 140, action: -> { spawn })
     end
 
