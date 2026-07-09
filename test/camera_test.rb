@@ -55,6 +55,19 @@ def test_visible_culls_offscreen_rects(args, assert)
   assert.true!(!cam.visible?({ x: -100, y: 100, w: 40, h: 40 }), "rect left of view is culled")
 end
 
+def test_visible_accounts_for_anchors(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 }) # view (0,0,1280,720)
+  # Centered on x=1400: visual bounds 1170..1630, so its left third is on screen.
+  assert.true!(cam.visible?({ x: 1400, y: 100, w: 460, h: 210, anchor_x: 0.5 }),
+               "half-anchored sprite straddling the right edge is visible")
+  assert.true!(!cam.visible?({ x: 1400, y: 100, w: 460, h: 210 }),
+               "same rect without anchor stays culled (bounds 1400..1860)")
+  assert.true!(cam.visible?({ x: 100, y: 750, w: 40, h: 80, anchor_y: 0.5 }),
+               "half-anchored sprite straddling the top edge is visible")
+  assert.true!(!cam.visible?({ x: -60, y: 100, w: 40, h: 40, anchor_x: 0.5 }),
+               "anchored sprite fully left of view is culled")
+end
+
 def test_visible_respects_zoomed_in_view(args, assert)
   cam = make_camera(current: { x: 640, y: 360, zoom: 2 }) # view (320,180,640,360)
   assert.true!(cam.visible?({ x: 330, y: 190, w: 10, h: 10 }), "inside the tighter zoomed view")

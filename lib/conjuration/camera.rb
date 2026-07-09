@@ -111,10 +111,17 @@ module Conjuration
       rw = world_rect[:w] || 0
       rh = world_rect[:h] || 0
 
-      world_rect[:x]      < view[:x] + view[:w] &&
-        world_rect[:x] + rw > view[:x] &&
-        world_rect[:y]      < view[:y] + view[:h] &&
-        world_rect[:y] + rh > view[:y]
+      # DR renders anchored sprites offset by anchor * extent, so the visual
+      # bounds differ from the x/y/w/h rect; cull against what will be drawn.
+      ax = world_rect[:anchor_x]
+      ay = world_rect[:anchor_y]
+      left   = ax ? world_rect[:x] - ax * rw : world_rect[:x]
+      bottom = ay ? world_rect[:y] - ay * rh : world_rect[:y]
+
+      left        < view[:x] + view[:w] &&
+        left + rw > view[:x] &&
+        bottom        < view[:y] + view[:h] &&
+        bottom + rh > view[:y]
     end
 
     # World space -> this camera's viewport-local space, (0, 0)..(w, h). Handles
