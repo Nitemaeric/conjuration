@@ -63,25 +63,30 @@ class ParallaxScene < Conjuration::Scene
     @ground = build_ground
     @hero_walk = Array.new(WALK_FRAMES) { |i| "sprites/parallax/hero/walk#{i}.png" }
 
-    cameras[:main].ui.view do
-      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-          node({ text: "Back", r: 255, g: 255, b: 255 })
-        end
-      end
-
-      node({ x: 20, y: 20, anchor_y: 0, w: 220, h: 90, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :center, justify: :center, padding: 16, gap: 6) do
-        PromptView(id: :walk, keys: [:a, :d], controller: :left_analog, label: "walk", pad: game.ui_pad)
-        node({ text: "camera x: #{cameras[:main].current.x.round}" }, id: :layer_label)
-      end
-    end
+    camera = cameras[:main]
+    camera.ui.view { hud(camera) }
 
     state.hero = { x: grid.w / 2, y: GROUND_H, w: HERO_W, h: HERO_H, facing: 1, moving: false }
     cameras[:main].follow(state.hero)
   end
 
+  def hud(camera)
+    node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+        node({ text: "Back", r: 255, g: 255, b: 255 })
+      end
+    end
+
+    node({ x: 20, y: 20, anchor_y: 0, w: 220, h: 90, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, id: :panel, align: :center, justify: :center, padding: 16, gap: 6) do
+      PromptView(id: :walk, actions: [:move_left, :move_right], controller: :left_analog, label: "walk", pad: game.ui_pad)
+      node({ text: "camera x: #{camera.current.x.round}" }, id: :layer_label)
+    end
+  end
+
   def input
     hero = state.hero
+    # Raw left_right, not the move_* actions: DR's composite keeps the arrows and
+    # stick analog live, and dragon_input digital bindings are single-key.
     dx = inputs.left_right * WALK_SPEED
     hero.moving = !dx.zero?
     return if dx.zero?

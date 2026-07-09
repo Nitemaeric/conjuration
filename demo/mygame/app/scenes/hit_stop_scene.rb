@@ -45,22 +45,25 @@ class HitStopScene < Conjuration::Scene
     state.swing_started_at = nil # clock tick the current swing began (nil = idle)
     state.idle_since = clock      # clock tick we've been idle since (drives auto-swing)
 
-    cameras[:main].ui.view do
-      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-          node({ text: "Back", r: 255, g: 255, b: 255 })
-        end
-      end
+    camera = cameras[:main]
+    camera.ui.view { hud(camera) }
+  end
 
-      node({ x: grid.w / 2, y: cameras[:main].from_top(30), anchor_x: 0.5, anchor_y: 1 }, direction: :row, justify: :center, align: :center, gap: 12) do
-        node({ text: "Knight auto-swings —", r: 255, g: 255, b: 255 })
-        PromptView(id: :swing, keys: [:space], controller: :b, label: "swing now", pad: game.ui_pad, color: { r: 255, g: 255, b: 255 })
+  def hud(camera)
+    node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+        node({ text: "Back", r: 255, g: 255, b: 255 })
       end
+    end
+
+    node({ x: grid.w / 2, y: camera.from_top(30), w: 520, h: 24, anchor_x: 0.5, anchor_y: 1 }, id: :prompt_row, direction: :row, justify: :center, align: :center, gap: 12) do
+      node({ text: "Knight auto-swings —", r: 255, g: 255, b: 255 })
+      PromptView(id: :swing, action: :attack, label: "swing now", pad: game.ui_pad, color: { r: 255, g: 255, b: 255 })
     end
   end
 
   def input
-    start_swing if inputs.keyboard.key_down.space
+    start_swing if game.input_source.just_pressed?(game.ui_pad, :attack)
   end
 
   def update

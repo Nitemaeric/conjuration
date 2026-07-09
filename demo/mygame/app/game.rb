@@ -9,6 +9,9 @@ class Game < Conjuration::Game
       c.action_set :gameplay do |s|
         s.digital :attack, controller: :b, keyboard: :space
         s.digital :start, controller: :start, keyboard: :enter
+        s.analog :pan, controller: :left_analog, keyboard: :wasd
+        s.digital :move_left, controller: :dpad_left, keyboard: :a
+        s.digital :move_right, controller: :dpad_right, keyboard: :d
       end
     end
 

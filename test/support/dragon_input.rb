@@ -1,20 +1,33 @@
-# A minimal double of the dragon_input surface Conjuration touches — not the real
-# library (https://github.com/Nitemaeric/dragon_input).
+# A minimal double of the dragon_input surface Conjuration (and the demo's
+# PromptView) touches — not the real library
+# (https://github.com/Nitemaeric/dragon_input).
 module DragonInput
+  # Real root constants (glyphs.rb in the library); PromptView's controller:
+  # override references them at load.
+  class Glyphs
+    VENDORED_ROOT = "vendor/dragon_input/sprites/dragon_input/glyphs".freeze
+    LOCAL_ROOT = "sprites/dragon_input/glyphs".freeze
+  end
+
   class FakeActionSet
     attr_reader :name, :digitals
 
     def initialize(name)
       @name = name
       @digitals = {}
+      @analogs = {}
     end
 
     def digital(name, controller: nil, keyboard: nil, mouse: nil, glyph: nil)
       @digitals[name] = { controller: controller, keyboard: keyboard, mouse: mouse }
     end
 
+    def analog(name, controller: nil, keyboard: nil, mouse: nil, glyph: nil)
+      @analogs[name] = { controller: controller, keyboard: keyboard, mouse: mouse }
+    end
+
     def action(name)
-      @digitals[name]
+      @digitals[name] || @analogs[name]
     end
   end
 
@@ -51,6 +64,7 @@ module DragonInput
     def reset!
       @config = nil
       @pressed = {}
+      @glyph_style = nil
     end
 
     def press!(pad, action)
@@ -74,6 +88,28 @@ module DragonInput
     def pressed?(pad, action)
       state = digital(pad, action)
       state[:held] || state[:down]
+    end
+
+    # Keyboard unless a test forces a controller style via glyph_style=.
+    attr_writer :glyph_style
+
+    def glyph_style(_pad)
+      @glyph_style || :keyboard
+    end
+
+    # Keyboard-style resolution like the real Ruby backend's: the action's
+    # keyboard binding names the art file, with the library's wasd->arrows
+    # cluster alias. nil (the keycap fallback) without setup or a binding.
+    def glyph(_pad, action_name)
+      return nil unless @config
+
+      set = @config.action_sets[@config.default_set]
+      binding = set && set.action(action_name)
+      button = binding && binding[:keyboard]
+      return nil unless button
+
+      button = :arrows if button == :wasd
+      "sprites/dragon_input/glyphs/keyboard/#{button}.png"
     end
   end
 end
