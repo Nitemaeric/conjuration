@@ -4,9 +4,8 @@ module Conjuration
       def delegate(*method_names, to:)
         method_names.each do |name|
           define_method(name) do |*args, **kwargs, &block|
-            # Splat an empty **kwargs and this mruby build forwards a stray `{}`
-            # positional, breaking zero-arg delegates like gtk — so only splat
-            # when there are keywords.
+            # Splatting an empty **kwargs makes this mruby build forward a stray `{}`
+            # positional, breaking zero-arg delegates — so only splat when keywords exist.
             if kwargs.empty?
               send(to).send(name, *args, &block)
             else

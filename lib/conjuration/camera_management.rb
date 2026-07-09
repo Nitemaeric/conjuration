@@ -28,9 +28,7 @@ module Conjuration
     end
 
     def perform_update
-      # Reset each tick so focus clears when the pointer leaves every camera.
-      # Last hit wins, so on overlap the most-recently-added (last-drawn) camera
-      # takes focus.
+      # Reset each tick so focus clears once the pointer leaves every camera.
       @focused_camera = nil
 
       cameras.each do |name, camera|

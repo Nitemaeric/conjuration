@@ -18,9 +18,7 @@ module Conjuration
     SHAKE_MAGNITUDE = 24
     SHAKE_DECAY = 0.04
 
-    # Default pan/zoom speed: effectively instant. The per-tick approach in
-    # perform_update clamps the step to the remaining distance, so a speed this
-    # large snaps straight onto the target. Pass a smaller speed for a lag/ease.
+    # The per-tick step is clamped to the remaining distance, so this large speed snaps instantly.
     SNAP = 1_000_000
 
     def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
@@ -332,10 +330,8 @@ module Conjuration
       def zoom=(value)
         @zoom = value.clamp(0.1, 10)
 
-        # The pan clamp in x=/y= is zoom-dependent (half-extent is w/2/zoom), so
-        # zooming out can leave the current x/y out of bounds; re-run the clamps
-        # to pull the view back in immediately. Guarded because zoom= can run
-        # before x/y are set during initialize.
+        # x=/y= clamp against zoom-dependent bounds, so re-run them to pull the view
+        # back in after zooming out. Guarded: zoom= can fire before x/y are set.
         self.x = @x unless @x.nil?
         self.y = @y unless @y.nil?
       end

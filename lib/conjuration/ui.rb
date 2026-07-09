@@ -476,9 +476,8 @@ module Conjuration
         declared = @declared || {}
         incoming = descriptor.object
 
-        # interactive? keys off action presence and `disabled`, neither of which
-        # is in the layout signature — so invalidate! below won't catch a flip;
-        # drop the interactive/navigation caches explicitly.
+        # action presence and `disabled` aren't in the layout signature, so invalidate!
+        # won't drop the interactive/navigation caches on a flip — do it here.
         if declared.key?(:action) != incoming.key?(:action) || declared[:disabled] != incoming[:disabled]
           clear_interactive_cache!
         end
@@ -789,10 +788,8 @@ module Conjuration
         parent&.clear_structure_cache!
       end
 
-      # Lighter counterpart to clear_structure_cache!: interactive-ness also
-      # depends on `visible`/`disabled`, which don't change the tree — so a flip
-      # drops only the derived caches and leaves the @nodes/@descendants memos
-      # intact. Walks up, since a descendant's flip changes ancestors' lists too.
+      # Like clear_structure_cache! but keeps the @nodes/@descendants memos — only
+      # the interactive-ness caches go stale on a visible/disabled flip.
       def clear_interactive_cache!
         @interactive_nodes = nil
         @navigation_groups = nil
@@ -1018,8 +1015,7 @@ module Conjuration
         return %i[solid label sprite line border].include?(primitive_marker)
       end
 
-      # Only clears the interactive caches, not layout: `visible` is in the
-      # layout signature, so invalidate! already re-runs layout on its own.
+      # No layout clear: `visible` is in the layout signature, so invalidate! relayouts.
       def visible=(value)
         return if @visible == value
 

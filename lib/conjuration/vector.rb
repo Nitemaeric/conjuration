@@ -24,8 +24,7 @@ module Conjuration
     end
 
     def magnitude
-      # Not memoized: x/y are public attr_accessors, so a cached magnitude would
-      # go stale the moment either is reassigned.
+      # Not memoized: x/y are mutable, so a cached value would go stale on reassignment.
       Math.sqrt(x ** 2 + y ** 2)
     end
 
