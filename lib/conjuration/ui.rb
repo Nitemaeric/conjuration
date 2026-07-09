@@ -301,7 +301,8 @@ module Conjuration
 
     class Node < Conjuration::Node
       attr_accessor :id, :object, :children, :descendants
-      attr_accessor :justify, :direction, :align, :gap, :padding, :visible, :position, :parent
+      attr_accessor :justify, :direction, :align, :gap, :padding, :position, :parent
+      attr_reader :visible
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
       attr_accessor :group
       attr_reader :overflow
@@ -474,6 +475,12 @@ module Conjuration
       def apply_descriptor(descriptor)
         declared = @declared || {}
         incoming = descriptor.object
+
+        # action presence and `disabled` aren't in the layout signature, so invalidate!
+        # won't drop the interactive/navigation caches on a flip — do it here.
+        if declared.key?(:action) != incoming.key?(:action) || declared[:disabled] != incoming[:disabled]
+          clear_interactive_cache!
+        end
 
         # An action lambda is a fresh object every frame and can't be compared —
         # write it through unconditionally but keep it out of the change test, so
@@ -776,7 +783,17 @@ module Conjuration
       def clear_structure_cache!
         @nodes = nil
         @descendants = nil
+        @interactive_nodes = nil
+        @navigation_groups = nil
         parent&.clear_structure_cache!
+      end
+
+      # Like clear_structure_cache! but keeps the @nodes/@descendants memos — only
+      # the interactive-ness caches go stale on a visible/disabled flip.
+      def clear_interactive_cache!
+        @interactive_nodes = nil
+        @navigation_groups = nil
+        parent&.clear_interactive_cache!
       end
 
       def primitives
@@ -875,14 +892,14 @@ module Conjuration
       end
 
       def interactive_nodes
-        nodes.select(&:interactive?)
+        @interactive_nodes ||= nodes.select(&:interactive?)
       end
 
       # Interactive nodes bucketed by their navigation group — the nearest
       # ancestor's `group:`. Ungrouped nodes are omitted: groups are explicit and
       # named, and the game decides which one is active.
       def navigation_groups
-        accumulate_navigation_groups(nil, {})
+        @navigation_groups ||= accumulate_navigation_groups(nil, {})
       end
 
       # The group id a given interactive node belongs to (or nil if ungrouped).
@@ -996,6 +1013,14 @@ module Conjuration
       def renderable?
         return false unless visible_in_tree?
         return %i[solid label sprite line border].include?(primitive_marker)
+      end
+
+      # No layout clear: `visible` is in the layout signature, so invalidate! relayouts.
+      def visible=(value)
+        return if @visible == value
+
+        @visible = value
+        clear_interactive_cache!
       end
 
       # Visible only if this node and every ancestor is visible. Effective
@@ -1196,11 +1221,15 @@ module Conjuration
       end
 
       def normalized_padding
-        case padding
-        when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
-        when Hash  then { left: padding[:left] || 0, right: padding[:right] || 0, top: padding[:top] || 0, bottom: padding[:bottom] || 0 }
-        else            { left: padding, right: padding, top: padding, bottom: padding }
-        end
+        return @normalized_padding if @normalized_padding && @normalized_padding_key == padding
+
+        @normalized_padding_key = padding
+        @normalized_padding =
+          case padding
+          when Array then { left: padding[0], right: padding[0], top: padding[1], bottom: padding[1] }
+          when Hash  then { left: padding[:left] || 0, right: padding[:right] || 0, top: padding[:top] || 0, bottom: padding[:bottom] || 0 }
+          else            { left: padding, right: padding, top: padding, bottom: padding }
+          end
       end
 
       def padding_left

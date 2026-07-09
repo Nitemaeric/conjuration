@@ -28,12 +28,13 @@ module Conjuration
     end
 
     def perform_update
+      # Reset each tick so focus clears once the pointer leaves every camera.
+      @focused_camera = nil
+
       cameras.each do |name, camera|
         camera.perform_update
 
-        if inputs.mouse.inside_rect?(camera.rect)
-          @focused_camera = camera
-        end
+        @focused_camera = camera if inputs.mouse.inside_rect?(camera.rect)
       end
     end
 

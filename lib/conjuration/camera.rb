@@ -18,8 +18,13 @@ module Conjuration
     SHAKE_MAGNITUDE = 24
     SHAKE_DECAY = 0.04
 
-    def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: 1_000_000, zoom_speed: 0.1)
+    # The per-tick step is clamped to the remaining distance, so this large speed snaps instantly.
+    SNAP = 1_000_000
+
+    def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
+
+      @output_key = "camera_#{name}"
 
       @current = FocalPoint.new(self, **current)
       @target = FocalPoint.new(self, **current)
@@ -43,9 +48,10 @@ module Conjuration
     end
 
     # Continuously centre the view on `object` (anything exposing x/y). The
-    # camera eases toward it each frame using `speed`, so a low speed gives a
-    # smooth, lagging follow and a high speed a rigid lock. Call #unfollow (or a
-    # positional #look_at) to stop.
+    # camera approaches it each frame at a constant `speed` (units/tick, clamped
+    # to the remaining distance — not an eased/proportional step), so a low speed
+    # gives a smooth, lagging follow and a high speed a rigid lock. Call #unfollow
+    # (or a positional #look_at) to stop.
     def follow(object)
       @following = object
     end
@@ -160,7 +166,7 @@ module Conjuration
     def from_top(distance);    h - distance; end
 
     def outputs
-      game.outputs["camera_#{name}"]
+      game.outputs[@output_key]
     end
 
     private
@@ -282,7 +288,7 @@ module Conjuration
         y: y,
         w: w,
         h: h,
-        path: "camera_#{name}"
+        path: @output_key
       }
     end
 
@@ -323,6 +329,11 @@ module Conjuration
 
       def zoom=(value)
         @zoom = value.clamp(0.1, 10)
+
+        # x=/y= clamp against zoom-dependent bounds, so re-run them to pull the view
+        # back in after zooming out. Guarded: zoom= can fire before x/y are set.
+        self.x = @x unless @x.nil?
+        self.y = @y unless @y.nil?
       end
     end
   end

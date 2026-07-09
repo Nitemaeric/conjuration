@@ -35,6 +35,52 @@ def test_focal_point_clamp_widens_when_zoomed_in(args, assert)
   assert.equal!(cam.current.x, 1680, "zoomed-in view reaches closer to the edge")
 end
 
+def test_zoom_out_reclamps_focal_point_to_bounds(args, assert)
+  cam = make_camera(scene_virtual: 2000, current: { x: 640, y: 360, zoom: 2 })
+  # half = (w/2)/zoom = 320 at zoom 2, so the focal point reaches 2000 - 320.
+  cam.current.x = 5000
+  assert.equal!(cam.current.x, 1680, "parked at the zoomed-in right edge")
+
+  # Zoom out to 1: half widens to 640, so the edge is now 2000 - 640 = 1360.
+  cam.current.zoom = 1
+  assert.equal!(cam.current.x, 1360, "zooming out re-clamps x to the widened bound")
+end
+
+def test_delegate_forwards_kwargs_and_block(args, assert)
+  target_class = Class.new do
+    def record(*args, **kwargs, &block)
+      { args: args, kwargs: kwargs, block: block && block.call }
+    end
+  end
+
+  node_class = Class.new(Conjuration::Node) do
+    attr_accessor :target
+    delegate :record, to: :target
+  end
+
+  node = node_class.new
+  node.target = target_class.new
+
+  result = node.record(1, 2, key: :value) { :from_block }
+  assert.equal!(result[:args], [1, 2], "positional args forwarded")
+  assert.equal!(result[:kwargs], { key: :value }, "keyword args forwarded (were dropped before)")
+  assert.equal!(result[:block], :from_block, "block forwarded (was dropped before)")
+end
+
+def test_delegate_forwards_plain_call_without_stray_hash(args, assert)
+  # A zero-arity target: a stray empty-kwargs {} positional would raise here.
+  target_class = Class.new { def ping; :pong; end }
+
+  node_class = Class.new(Conjuration::Node) do
+    attr_accessor :target
+    delegate :ping, to: :target
+  end
+
+  node = node_class.new
+  node.target = target_class.new
+  assert.equal!(node.ping, :pong, "a no-arg delegate forwards nothing extra")
+end
+
 def test_invisible_ui_node_is_not_interactive(args, assert)
   node = Conjuration::UI::Node.new({ x: 0, y: 0, w: 10, h: 10, action: -> {} })
   assert.true!(node.interactive?, "visible node with an action is interactive")

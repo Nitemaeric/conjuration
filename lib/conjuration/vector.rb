@@ -24,7 +24,8 @@ module Conjuration
     end
 
     def magnitude
-      @magnitude ||= Math.sqrt(x ** 2 + y ** 2)
+      # Not memoized: x/y are mutable, so a cached value would go stale on reassignment.
+      Math.sqrt(x ** 2 + y ** 2)
     end
 
     def normalize

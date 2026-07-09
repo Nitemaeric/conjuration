@@ -17,6 +17,8 @@ module Conjuration
     def initialize(name, **config)
       @name = name
 
+      @state_key = "scene_#{name}"
+
       super(
         config: config,
         w: grid.w,
@@ -25,7 +27,7 @@ module Conjuration
     end
 
     def state
-      game.state["scene_#{name}"] ||= {}
+      game.state[@state_key] ||= {}
     end
 
     # Screen-space output for HUD/backgrounds. World content is drawn through
