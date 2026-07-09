@@ -251,9 +251,9 @@ def test_iso_walking_knight_sorts_with_his_occupied_cell_at_every_step(args, ass
   map = [heights]
 
   # The full terrace walk, including every mid-transition quarter-step. Mid-
-  # stride the sprite straddles two columns, so the knight takes the DEEPER
-  # band (ceil): both straddled cells flush before him — the engine dump showed
-  # the entered cell painting over his leading half under the old round rule.
+  # stride the knight takes the deeper straddled band (ceil) only once his feet
+  # reach that cell's surface; ascending, he stays in the shallower band so the
+  # taller entered column occludes him (both cases proven by engine dumps).
   Array.new(17) { |i| i * 0.25 }.each do |col|
     cam.outputs.primitives.clear
 
@@ -264,13 +264,15 @@ def test_iso_walking_knight_sorts_with_his_occupied_cell_at_every_step(args, ass
       end
     end
 
-    k = iso.to_world(col, 0, walk_height_ref(map, col, 0))
-    cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0 }, z: col.ceil)
+    height = walk_height_ref(map, col, 0)
+    band = height >= heights[col.ceil] ? col.ceil : col.floor
+    k = iso.to_world(col, 0, height)
+    cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0 }, z: band)
 
     cam.send(:flush_ordered_draws)
     order = cam.outputs.primitives.map { |p| p[:path] }
     knight_at = order.index(:knight)
-    occupied = col.ceil
+    occupied = band
 
     heights.each_with_index do |h, c|
       (0..h).each do |level|
