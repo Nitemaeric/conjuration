@@ -244,6 +244,98 @@ def test_spatial_navigate_returns_nil_when_nothing_is_in_the_direction(args, ass
   assert.equal!(ui.spatial_navigate(ui.find(:north), { x: 0, y: 1 }), nil, "nothing above the topmost node")
 end
 
+# Builds interactive nodes at explicit bottom-left corners (anchor 0,0) so edge
+# and span reasoning is exact. `rects` is an ordered array of { id:, x:, y:, w:, h: }.
+def nav_layout(rects)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 4000, h: 4000 }, id: :root) do
+    node({ x: 0, y: 0, w: 4000, h: 4000 }, id: :container) do
+      rects.each { |r| node({ w: 10, h: 10, action: -> {} }, id: r[:id]) }
+    end
+  end
+  rects.each do |r|
+    ui.find(r[:id]).object.merge!(x: r[:x], y: r[:y], w: r[:w], h: r[:h], anchor_x: 0, anchor_y: 0)
+  end
+  ui
+end
+
+# The canonical regression: two row-aligned buttons (ECS, Parallax) with Quit
+# centred a row below, its centre nearer to ECS and inside the old 45-degree Right
+# cone. Right from ECS must reach the aligned Parallax, not the nearer Quit.
+def menu_grid
+  nav_layout([
+    { id: :ecs, x: 420, y: 274, w: 213, h: 46 },
+    { id: :parallax, x: 647, y: 274, w: 213, h: 46 },
+    { id: :quit, x: 533.5, y: 214, w: 213, h: 46 }
+  ])
+end
+
+def test_spatial_navigate_right_prefers_the_aligned_button_over_the_nearer_diagonal(args, assert)
+  ui = menu_grid
+  assert.equal!(ui.spatial_navigate(ui.find(:ecs), { x: 1, y: 0 }).id, :parallax, "Right from ECS -> aligned Parallax, not nearer Quit")
+end
+
+def test_spatial_navigate_down_reaches_quit_from_either_column(args, assert)
+  ui = menu_grid
+  assert.equal!(ui.spatial_navigate(ui.find(:ecs), { x: 0, y: -1 }).id, :quit, "Down from ECS -> Quit")
+  assert.equal!(ui.spatial_navigate(ui.find(:parallax), { x: 0, y: -1 }).id, :quit, "Down from Parallax -> Quit")
+end
+
+def test_spatial_navigate_left_returns_to_the_first_column(args, assert)
+  ui = menu_grid
+  assert.equal!(ui.spatial_navigate(ui.find(:parallax), { x: -1, y: 0 }).id, :ecs, "Left from Parallax -> ECS")
+end
+
+def test_spatial_navigate_beam_beats_a_nearer_diagonal(args, assert)
+  ui = nav_layout([
+    { id: :source, x: 0, y: 0, w: 10, h: 10 },
+    { id: :aligned_far, x: 200, y: 0, w: 10, h: 10 },
+    { id: :near_diagonal, x: 30, y: 20, w: 10, h: 10 }
+  ])
+  assert.equal!(ui.spatial_navigate(ui.find(:source), { x: 1, y: 0 }).id, :aligned_far, "an aligned far candidate outranks a near diagonal one")
+end
+
+def test_spatial_navigate_beam_is_span_overlap_not_centre_in_band(args, assert)
+  # `overlapping` is offset most of a row up — its centre sits outside any centre
+  # band, but its span still overlaps the source, so it wins over the fallback tier.
+  ui = nav_layout([
+    { id: :source, x: 0, y: 0, w: 10, h: 46 },
+    { id: :overlapping, x: 200, y: 30, w: 10, h: 46 },
+    { id: :off_row, x: 40, y: 52, w: 10, h: 10 }
+  ])
+  assert.equal!(ui.spatial_navigate(ui.find(:source), { x: 1, y: 0 }).id, :overlapping, "a half-row-overlapping candidate beats the cone fallback")
+end
+
+def test_spatial_navigate_beam_ranks_by_edge_not_centre(args, assert)
+  # The long button's centre is far, but its near edge is closest; edge distance
+  # must pick it over the short button whose centre is nearer.
+  ui = nav_layout([
+    { id: :source, x: 0, y: 0, w: 10, h: 10 },
+    { id: :long, x: 20, y: 0, w: 300, h: 10 },
+    { id: :short, x: 40, y: 0, w: 10, h: 10 }
+  ])
+  assert.equal!(ui.spatial_navigate(ui.find(:source), { x: 1, y: 0 }).id, :long, "edge distance picks the adjacent long button")
+end
+
+def test_spatial_navigate_empty_beam_falls_back_to_the_cone(args, assert)
+  ui = nav_layout([
+    { id: :source, x: 0, y: 0, w: 10, h: 10 },
+    { id: :diagonal, x: 60, y: 40, w: 10, h: 10 }
+  ])
+  assert.equal!(ui.spatial_navigate(ui.find(:source), { x: 1, y: 0 }).id, :diagonal, "a diagonal-only layout still navigates via the cone")
+end
+
+def test_spatial_navigate_tie_break_is_deterministic(args, assert)
+  near = { id: :near, x: 50, y: 40, w: 10, h: 10 }  # equal edge, smaller cross offset
+  far  = { id: :far,  x: 50, y: 90, w: 10, h: 10 }  # equal edge, larger cross offset
+  source = { id: :source, x: 0, y: 0, w: 10, h: 100 }
+  right = { x: 1, y: 0 }
+
+  a = nav_layout([source, near, far])
+  b = nav_layout([source, far, near])
+  assert.equal!(a.spatial_navigate(a.find(:source), right).id, :near, "smaller cross offset wins")
+  assert.equal!(b.spatial_navigate(b.find(:source), right).id, :near, "winner is order-independent")
+end
+
 # --- interaction states ---
 
 def interaction_ui
