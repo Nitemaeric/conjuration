@@ -24,6 +24,11 @@ class GtkDouble
   def set_cursor(*)
     nil
   end
+
+  # No filesystem in the harness: art probes miss, exercising fallback paths.
+  def read_file(*)
+    nil
+  end
 end
 
 # A render target: tracks its size and accumulates primitives.

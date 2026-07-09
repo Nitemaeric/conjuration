@@ -21,36 +21,38 @@ class ZoomScene < Conjuration::Scene
       end
     end
 
-    cameras[:main].ui.view do
-      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-          node({ text: "Back", r: 255, g: 255, b: 255 })
-        end
-      end
+    camera = cameras[:main]
+    camera.ui.view { hud(camera) }
+  end
 
-      node({ x: 0, y: grid.h / 2, w: 256, h: cameras[:main].h / 2, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :stretch, padding: 20, gap: 20) do
-        node({ h: 56 }, gap: 6, align: :center) do
-          PromptView(id: :pan, keys: [:w, :a, :s, :d], controller: :left_analog, label: "pan", pad: game.ui_pad)
-          node({ text: "Scroll wheel to zoom" })
-        end
-
-        node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }}, justify: :center, align: :center) do
-          node({ text: "Zoom In", r: 255, g: 255, b: 255 })
-        end
-
-        node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }}, justify: :center, align: :center) do
-          node({ text: "Zoom Out", r: 255, g: 255, b: 255 })
-        end
-
-        node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(zoom: 1) }}, justify: :center, align: :center) do
-          node({ text: "Reset", r: 255, g: 255, b: 255 })
-        end
-      end
-
-      node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, justify: :end, align: :end) do
-        node({ text: "Zoom: #{cameras[:main].current.zoom.round(2)}" }, id: :zoom_label)
+  def hud(camera)
+    node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+        node({ text: "Back", r: 255, g: 255, b: 255 })
       end
     end
+
+    node({ x: 0, y: grid.h / 2, w: 256, h: camera.h / 2, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, id: :panel, align: :stretch, padding: 20, gap: 20) do
+      node({ h: 56 }, gap: 6, align: :center) do
+        PromptView(id: :pan, action: :pan, label: "pan", pad: game.ui_pad)
+        node({ text: "Scroll wheel to zoom" })
+      end
+
+      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }}, justify: :center, align: :center) do
+        node({ text: "Zoom In", r: 255, g: 255, b: 255 })
+      end
+
+      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }}, justify: :center, align: :center) do
+        node({ text: "Zoom Out", r: 255, g: 255, b: 255 })
+      end
+
+      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(zoom: 1) }}, justify: :center, align: :center) do
+        node({ text: "Reset", r: 255, g: 255, b: 255 })
+      end
+    end
+
+    # format, not Float#round(2): the harness's mruby round takes no digits arg.
+    node({ x: camera.from_right(20), y: 20, anchor_x: 1, anchor_y: 0, text: "Zoom: #{format('%.2f', camera.current.zoom)}" }, id: :zoom_label)
   end
 
   def input

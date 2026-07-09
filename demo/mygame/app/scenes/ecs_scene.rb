@@ -26,22 +26,25 @@ class ECSScene < Conjuration::Scene
 
     refresh_renderables
 
-    cameras[:main].ui.view do
-      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) } }, justify: :center, align: :center) do
-          node({ text: "Back", r: 255, g: 255, b: 255 })
-        end
-      end
+    camera = cameras[:main]
+    camera.ui.view { hud(camera) }
+  end
 
-      node({ x: cameras[:main].from_right(20), y: 20, anchor_x: 1, anchor_y: 0 }, direction: :column, justify: :end, align: :end, gap: 6) do
-        PromptView(id: :spawn, keys: [:space], controller: :b, label: "spawn 50", pad: game.ui_pad, color: { r: 255, g: 255, b: 255 })
-        node({ text: "Critters: #{@renderables.length}", r: 255, g: 255, b: 255 }, id: :count_label)
+  def hud(camera)
+    node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
+      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) } }, justify: :center, align: :center) do
+        node({ text: "Back", r: 255, g: 255, b: 255 })
       end
+    end
+
+    node({ x: camera.from_right(20), y: 20, w: 220, h: 64, anchor_x: 1, anchor_y: 0 }, id: :readout, direction: :column, justify: :end, align: :end, gap: 6) do
+      PromptView(id: :spawn, action: :attack, label: "spawn 50", pad: game.ui_pad, color: { r: 255, g: 255, b: 255 })
+      node({ text: "Critters: #{critter_count}", r: 255, g: 255, b: 255 }, id: :count_label)
     end
   end
 
   def input
-    spawn(SPAWN_BATCH) if inputs.keyboard.key_down.space
+    spawn(SPAWN_BATCH) if game.input_source.just_pressed?(game.ui_pad, :attack)
   end
 
   def update
@@ -63,6 +66,10 @@ class ECSScene < Conjuration::Scene
   end
 
   private
+
+  def critter_count
+    @renderables ? @renderables.length : 0
+  end
 
   def refresh_renderables
     @renderables = @world.filter(Position, Sprite).to_a
