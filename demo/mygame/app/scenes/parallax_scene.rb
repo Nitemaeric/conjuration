@@ -1,3 +1,5 @@
+require "app/views/prompt_view.rb"
+
 class ParallaxScene < Conjuration::Scene
   WORLD_W = 6000
   GROUND_H = 120
@@ -51,15 +53,17 @@ class ParallaxScene < Conjuration::Scene
     @trees  = build_trees
     @ground = build_ground
 
-    cameras[:main].ui.node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
+    cameras[:main].ui.view do
+      node({ x: 20, y: cameras[:main].from_top(20), anchor_y: 1 }) do
+        node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, justify: :center, align: :center) do
+          node({ text: "Back", r: 255, g: 255, b: 255 })
+        end
       end
-    end
 
-    cameras[:main].ui.node({ x: 20, y: 20, anchor_y: 0, w: 220, h: 90, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :center, justify: :center, padding: 16, gap: 6) do
-      node({ text: "A / D to walk" })
-      node({ text: "layers parallax" }, id: :layer_label)
+      node({ x: 20, y: 20, anchor_y: 0, w: 220, h: 90, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, align: :center, justify: :center, padding: 16, gap: 6) do
+        PromptView(id: :walk, keys: [:a, :d], controller: :left_analog, label: "walk", pad: game.ui_pad)
+        node({ text: "camera x: #{cameras[:main].current.x.round}" }, id: :layer_label)
+      end
     end
 
     state.hero = { x: grid.w / 2, y: GROUND_H, w: 96, h: 96, facing: 1 }
@@ -73,10 +77,6 @@ class ParallaxScene < Conjuration::Scene
 
     hero.x = (hero.x + dx).clamp(hero.w / 2, WORLD_W - hero.w / 2)
     hero.facing = dx.positive? ? 1 : -1
-  end
-
-  def update
-    cameras[:main].ui.find(:layer_label).object.text = "camera x: #{cameras[:main].current.x.round}"
   end
 
   def draw_world(camera)
