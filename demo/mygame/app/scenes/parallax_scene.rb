@@ -20,7 +20,7 @@ class ParallaxScene < Conjuration::Scene
   HILL_H = 400
   HILL_SPRITES = [
     "sprites/parallax/hills.png",
-    "sprites/parallax/hillsLarge.png",
+    "sprites/parallax/hills_large.png",
     "sprites/parallax/mountains.png"
   ].freeze
 
@@ -33,8 +33,8 @@ class ParallaxScene < Conjuration::Scene
 
   TREE_SPRITES = [
     { path: "sprites/parallax/tree.png",     w: 94,  h: 204 },
-    { path: "sprites/parallax/treePine.png", w: 106, h: 254 },
-    { path: "sprites/parallax/treeLong.png", w: 82,  h: 249 }
+    { path: "sprites/parallax/tree_pine.png", w: 106, h: 254 },
+    { path: "sprites/parallax/tree_long.png", w: 82,  h: 249 }
   ].freeze
 
   GROUND_TILE_W = 600

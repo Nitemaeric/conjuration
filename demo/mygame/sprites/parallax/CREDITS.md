@@ -9,9 +9,9 @@ required. Credited here anyway.
 
 **Source:** https://kenney.nl/assets/background-elements-remastered
 
-- Distant hills: `hills.png`, `hillsLarge.png`, `mountains.png`
+- Distant hills: `hills.png`, `hills_large.png`, `mountains.png`
 - Clouds: `cloud1.png`, `cloud2.png`, `cloud3.png`, `cloud4.png`
-- Near trees: `tree.png`, `treePine.png`, `treeLong.png`
+- Near trees: `tree.png`, `tree_pine.png`, `tree_long.png`
 
 ## Toon Characters
 
