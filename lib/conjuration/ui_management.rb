@@ -44,19 +44,23 @@ module Conjuration
 
       scroll_under_mouse
 
-      # The mouse drives focus directly and always — it's pointing, not
-      # "navigating". Keyboard/controller navigation only runs once the game has
-      # set an active group; nil means nav is off, so gameplay can own the stick
-      # while menus stay dormant until the game activates one.
+      # The mouse is pointing, not navigating: it drives hovered_node (styling +
+      # click targeting) and never touches focused_node, so keyboard/pad focus
+      # survives a mouse interlude and resumes where it left off. Navigation only
+      # runs once the game has set an active group; nil means nav is off, so
+      # gameplay can own the stick while menus stay dormant.
       if inputs.last_active == :mouse
-        update_focus_from_mouse
-      elsif UI.active_navigation_group
-        ensure_focus_in_active_group
-        update_focus_by_navigation
-        trigger_focused_node if UI.focused_node && confirm_pressed?
+        update_hover_from_mouse
+      else
+        UI.hovered_node = nil
+        if UI.active_navigation_group
+          ensure_focus_in_active_group
+          update_focus_by_navigation
+          trigger_node(UI.focused_node) if UI.focused_node && confirm_pressed?
+        end
       end
 
-      UI.pressed_node = pressing? ? UI.focused_node : nil
+      UI.pressed_node = pressed_target
 
       trigger_shortcuts
 
@@ -111,32 +115,28 @@ module Conjuration
       ui.invalidate_subtree! if events.orientation_changed
     end
 
-    def update_focus_from_mouse
+    def update_hover_from_mouse
       hovered = ui.find_interactive_intersect(inputs.mouse)
 
-      # Scene + cameras share UI.focused_node and each runs this; the scene's input
-      # supers into the cameras', so it runs last. Only manage focus for this ui's
-      # own nodes, or an empty scene ui would clear focus owned by a camera (and
-      # reset its cursor) — which is why the Back button never showed the hand.
-      owns_focus = UI.focused_node && ui.interactive_nodes.include?(UI.focused_node)
-      return if hovered.nil? && !owns_focus
+      # Scene + cameras share UI.hovered_node and each runs this; the scene's
+      # input supers into the cameras', so it runs last. Only manage hover for
+      # this ui's own nodes, or an empty scene ui would clear hover owned by a
+      # camera (and reset its cursor).
+      owns_hover = UI.hovered_node && ui.interactive_nodes.include?(UI.hovered_node)
+      return if hovered.nil? && !owns_hover
 
-      if hovered != UI.focused_node
-        UI.focused_node = hovered
+      if hovered != UI.hovered_node
+        UI.hovered_node = hovered
 
-        if UI.focused_node
-          # Moving the mouse into another pane makes it the active group, so mouse
-          # and game-driven navigation agree on where focus lives.
-          group = ui.group_of(UI.focused_node)
-          UI.active_navigation_group = group if group
+        if hovered
           gtk.set_cursor(*UI.hover_cursor) if UI.hover_cursor
         else
           gtk.set_cursor(*UI.default_cursor) if UI.default_cursor
         end
       end
 
-      focused = UI.focused_node
-      trigger_focused_node if inputs.mouse.click && focused && focused.intersect_rect?(inputs.mouse)
+      hovered = UI.hovered_node
+      trigger_node(hovered) if inputs.mouse.click && hovered && hovered.intersect_rect?(inputs.mouse)
     end
 
     # The cursor is left as-is here — a mouse affordance, irrelevant when
@@ -173,6 +173,8 @@ module Conjuration
 
     # Seed focus into the active group when it isn't already there (e.g. right
     # after the game activates navigation), so there's always a visible selection.
+    # A focus retained in the group is left alone — a mouse interlude never
+    # reseeds the selection.
     def ensure_focus_in_active_group
       members = ui.navigation_groups[UI.active_navigation_group]
       return if members.nil? || members.empty?
@@ -185,29 +187,40 @@ module Conjuration
       game.input_source.just_pressed?(game.ui_pad, :ui_confirm)
     end
 
-    def pressing?
-      focused = UI.focused_node
-      return false unless focused
+    # A mouse press acts on the hovered node; a held confirm on the focused one.
+    def pressed_target
+      hovered = UI.hovered_node
+      return hovered if hovered && inputs.mouse.held && hovered.intersect_rect?(inputs.mouse)
 
-      (inputs.mouse.held && focused.intersect_rect?(inputs.mouse)) ||
-        game.input_source.pressed?(game.ui_pad, :ui_confirm)
+      focused = UI.focused_node
+      return focused if focused && game.input_source.pressed?(game.ui_pad, :ui_confirm)
+
+      nil
     end
 
-    # Only triggers if the focused node belongs to THIS ui: focus is a shared
-    # global, so a scene and its cameras all reach here each tick.
-    def trigger_focused_node
-      return unless ui.interactive_nodes.include?(UI.focused_node)
+    # Only triggers if the node belongs to THIS ui: hover/focus are shared
+    # globals, so a scene and its cameras all reach here each tick.
+    def trigger_node(node)
+      return unless ui.interactive_nodes.include?(node)
 
       # A focusable node may have no action (e.g. a scroll container); confirm is
       # a no-op on it.
-      action = UI.focused_node.object.action
+      action = node.object.action
       instance_exec(&action) if action
     end
 
-    # The built-in focus highlight, so keyboard/pad focus is always visible. nil
-    # unless THIS ui owns the focused node (focus is a shared global, reached by
-    # every scene + camera each tick).
+    # The built-in focus highlight, so keyboard/pad focus is visible without any
+    # game styling. Hidden (but retained) while the mouse is the active device;
+    # nil unless THIS ui owns the focused node (focus is a shared global, reached
+    # by every scene + camera each tick).
+    def focus_indicator_enabled?
+      UI.focus_indicator_default
+    end
+
     def focus_indicator
+      return unless focus_indicator_enabled?
+      return if inputs.last_active == :mouse
+
       focused = UI.focused_node
       return unless focused && ui.interactive_nodes.include?(focused)
 
@@ -225,7 +238,12 @@ module Conjuration
         cursor[:h] = cursor[:h].lerp(rect.h, 0.3)
       end
 
-      { x: cursor[:x] - 4, y: cursor[:y] - 4, w: cursor[:w] + 8, h: cursor[:h] + 8, r: 255, g: 220, b: 0 }.border!
+      # Two nested borders — a dark outline under a light one — so the ring reads
+      # on any background without shouting.
+      [
+        { x: cursor[:x] - 4, y: cursor[:y] - 4, w: cursor[:w] + 8, h: cursor[:h] + 8, r: 20, g: 16, b: 8, a: 160 }.border!,
+        { x: cursor[:x] - 3, y: cursor[:y] - 3, w: cursor[:w] + 6, h: cursor[:h] + 6, r: 255, g: 250, b: 235, a: 220 }.border!
+      ]
     end
   end
 end

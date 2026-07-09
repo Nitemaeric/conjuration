@@ -1,4 +1,4 @@
-require "app/views/shortcut_badge_view.rb"
+require "app/views/button_view.rb"
 
 # A knight swings at a row of crates. On contact everything fires at once for an
 # "impact frame": the game freezes (Game#hit_stop), the camera shakes along the
@@ -53,10 +53,7 @@ class HitStopScene < Conjuration::Scene
 
   def hud(camera)
     node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, shortcut: { keyboard: :escape, controller: :b }, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
-        ShortcutBadgeView(id: :back_badge, shortcut: { keyboard: :escape, controller: :b }, height: 50, pad: game.ui_pad)
-      end
+      ButtonView(id: :back, label: "Back", action: -> { scene.change_scene(to: MenuScene.new(:main)) }, height: 50, shortcut: { keyboard: :escape, controller: :b }, pad: game.ui_pad)
     end
 
     node({ x: grid.w / 2, y: camera.from_top(30), w: 520, h: 24, anchor_x: 0.5, anchor_y: 1 }, id: :prompt_row, direction: :row, justify: :center, align: :center, gap: 12) do

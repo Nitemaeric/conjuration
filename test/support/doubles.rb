@@ -66,6 +66,7 @@ class GameDouble
   def outputs; @outputs ||= OutputsDouble.new; end
   def events; @events ||= EventsDouble.new; end
   def state; @state ||= {}; end
+  def audio; @audio ||= {}; end
   def debug?; false; end
 
   attr_accessor :inputs

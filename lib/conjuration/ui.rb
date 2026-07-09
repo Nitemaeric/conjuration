@@ -6,12 +6,24 @@ module Conjuration
       root
     end
 
+    # Keyboard/controller navigation focus. The mouse never writes this — it
+    # tracks hovered_node instead — so focus survives a mouse interlude.
     def self.focused_node
       @focused_node
     end
 
     def self.focused_node=(node)
       @focused_node = node
+    end
+
+    # The interactive node under the mouse. Drives hover styling and click
+    # targeting; independent of focused_node.
+    def self.hovered_node
+      @hovered_node
+    end
+
+    def self.hovered_node=(node)
+      @hovered_node = node
     end
 
     def self.pressed_node
@@ -37,6 +49,17 @@ module Conjuration
 
     def self.default_cursor=(cursor)
       @default_cursor = cursor
+    end
+
+    # Games that style focus themselves (per-state styles, custom cursors) turn
+    # the built-in indicator off here; a scene can override focus_indicator_enabled?
+    # to opt back in.
+    def self.focus_indicator_default
+      @focus_indicator_default.nil? ? true : @focus_indicator_default
+    end
+
+    def self.focus_indicator_default=(value)
+      @focus_indicator_default = value
     end
 
     # Lerp state for the focus indicator (the highlight that trails focused_node).
@@ -553,6 +576,7 @@ module Conjuration
       def discard_node!(node)
         node.nodes.each do |gone|
           UI.focused_node = nil if UI.focused_node.equal?(gone)
+          UI.hovered_node = nil if UI.hovered_node.equal?(gone)
           UI.pressed_node = nil if UI.pressed_node.equal?(gone)
         end
       end
@@ -1131,6 +1155,10 @@ module Conjuration
         UI.focused_node.equal?(self)
       end
 
+      def hovered?
+        UI.hovered_node.equal?(self)
+      end
+
       def pressed?
         UI.pressed_node.equal?(self)
       end
@@ -1138,14 +1166,19 @@ module Conjuration
       def interaction_state
         return :disabled if disabled?
         return :pressed if pressed?
-        return :hover if focused?
+        return :hover if hovered?
+        return :focused if focused?
 
         :default
       end
 
-      # Nodes declare per-state style overrides as hover:/pressed:/disabled: hashes.
+      # Nodes declare per-state style overrides as hover:/focused:/pressed:/
+      # disabled: hashes. Without a focused: override, focus falls back to the
+      # hover: style so hover-only buttons still read as selected under nav.
       def styled_object
-        override = object[interaction_state]
+        state = interaction_state
+        override = object[state]
+        override = object[:hover] if override.nil? && state == :focused
         return object unless override.is_a?(Hash)
 
         { **object, **override }

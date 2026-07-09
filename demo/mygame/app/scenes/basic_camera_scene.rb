@@ -1,5 +1,5 @@
 require "app/views/prompt_view.rb"
-require "app/views/shortcut_badge_view.rb"
+require "app/views/button_view.rb"
 
 class BasicCameraScene < Conjuration::Scene
   TILE_SIZE = 40
@@ -39,10 +39,7 @@ class BasicCameraScene < Conjuration::Scene
 
   def hud(camera)
     node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, shortcut: { keyboard: :escape, controller: :b }, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
-        ShortcutBadgeView(id: :back_badge, shortcut: { keyboard: :escape, controller: :b }, height: 50, pad: game.ui_pad)
-      end
+      ButtonView(id: :back, label: "Back", action: -> { scene.change_scene(to: MenuScene.new(:main)) }, height: 50, shortcut: { keyboard: :escape, controller: :b }, pad: game.ui_pad)
     end
 
     node({ x: 0, y: grid.h / 2, w: 256, h: 420, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, id: :panel, align: :stretch, padding: 20, gap: 20) do
@@ -52,21 +49,13 @@ class BasicCameraScene < Conjuration::Scene
         node({ text: "RMB to destroy tile" })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }}, justify: :center, align: :center) do
-        node({ text: "Point A", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :point_a, label: "Point A", action: -> { scene.cameras[:main].look_at(x: 1200, y: 1600) }, width: nil, height: 50)
 
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 640, y: 600) }}, justify: :center, align: :center) do
-        node({ text: "Point B", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :point_b, label: "Point B", action: -> { scene.cameras[:main].look_at(x: 640, y: 600) }, width: nil, height: 50)
 
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(x: 1200, y: 400) }}, justify: :center, align: :center) do
-        node({ text: "Point C", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :point_c, label: "Point C", action: -> { scene.cameras[:main].look_at(x: 1200, y: 400) }, width: nil, height: 50)
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.following ? camera.unfollow : camera.follow(scene.state.target) }}, justify: :center, align: :center) do
-        node({ text: "Follow", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :follow, label: "Follow", action: -> { camera = scene.cameras[:main]; camera.following ? camera.unfollow : camera.follow(scene.state.target) }, width: nil, height: 50)
     end
 
     node({ x: camera.from_right(20), y: 20, anchor_x: 1, anchor_y: 0, text: camera_readout(camera) }, id: :camera_label)

@@ -1,4 +1,4 @@
-require "app/views/shortcut_badge_view.rb"
+require "app/views/button_view.rb"
 
 class MultipleCamerasScene < Conjuration::Scene
   TILE_SIZE = 40
@@ -32,10 +32,7 @@ class MultipleCamerasScene < Conjuration::Scene
 
   def hud(camera)
     node({ x: 20, y: camera.from_top(20), anchor_y: 1 }, id: :hud_bar) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) } }, id: :back, shortcut: BACK_SHORTCUT, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 }, id: :back_label)
-        ShortcutBadgeView(id: :back_badge, shortcut: BACK_SHORTCUT, height: 50, pad: game.ui_pad)
-      end
+      ButtonView(id: :back, label: "Back", action: -> { scene.change_scene(to: MenuScene.new(:main)) }, height: 50, shortcut: BACK_SHORTCUT, pad: game.ui_pad)
     end
   end
 

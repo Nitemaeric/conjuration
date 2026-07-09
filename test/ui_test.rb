@@ -347,18 +347,43 @@ def interaction_ui
   end
 end
 
-def test_styled_object_merges_the_hover_override_when_focused(args, assert)
+def test_styled_object_merges_the_hover_override_when_hovered(args, assert)
   ui = interaction_ui
   button = ui.find(:button)
-  Conjuration::UI.focused_node = nil
+  Conjuration::UI.hovered_node = nil
   Conjuration::UI.pressed_node = nil
 
   assert.equal!(button.styled_object[:path], "base.png", "default state renders the base object")
 
-  Conjuration::UI.focused_node = button
+  Conjuration::UI.hovered_node = button
   assert.equal!(button.styled_object[:path], "hover.png", "hover merges the override")
 ensure
+  Conjuration::UI.hovered_node = nil
+end
+
+def test_styled_object_focused_state_prefers_focused_and_falls_back_to_hover(args, assert)
+  ui = interaction_ui
+  button = ui.find(:button)
+  Conjuration::UI.focused_node = button
+
+  assert.equal!(button.styled_object[:path], "hover.png", "no focused: override -> the hover style stands in")
+
+  button.object.merge!(focused: { path: "focused.png" })
+  assert.equal!(button.styled_object[:path], "focused.png", "a focused: override wins for keyboard/pad focus")
+ensure
   Conjuration::UI.focused_node = nil
+end
+
+def test_hover_state_outranks_focus_state(args, assert)
+  ui = interaction_ui
+  button = ui.find(:button)
+  Conjuration::UI.focused_node = button
+  Conjuration::UI.hovered_node = button
+
+  assert.equal!(button.interaction_state, :hover, "hovered + focused reads as hover")
+ensure
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.hovered_node = nil
 end
 
 def test_disabled_nodes_are_excluded_from_interactive_nodes(args, assert)
@@ -369,31 +394,38 @@ def test_pressed_state_takes_priority_over_hover(args, assert)
   ui = interaction_ui
   button = ui.find(:button)
   button.object.merge!(pressed: { path: "pressed.png" })
-  Conjuration::UI.focused_node = button
+  Conjuration::UI.hovered_node = button
   Conjuration::UI.pressed_node = button
 
   assert.equal!(button.styled_object[:path], "pressed.png", "pressed wins over hover")
 ensure
-  Conjuration::UI.focused_node = nil
+  Conjuration::UI.hovered_node = nil
   Conjuration::UI.pressed_node = nil
 end
 
-def test_a_node_knows_its_own_focused_and_pressed_state(args, assert)
+def test_a_node_knows_its_own_focused_hovered_and_pressed_state(args, assert)
   ui = interaction_ui
   button = ui.find(:button)
   Conjuration::UI.focused_node = nil
+  Conjuration::UI.hovered_node = nil
   Conjuration::UI.pressed_node = nil
 
   assert.equal!(button.focused?, false, "not focused by default")
+  assert.equal!(button.hovered?, false, "not hovered by default")
 
   Conjuration::UI.focused_node = button
   assert.equal!(button.focused?, true, "focused? reflects UI.focused_node")
   assert.equal!(ui.find(:off).focused?, false, "a sibling node is not focused")
 
+  Conjuration::UI.hovered_node = button
+  assert.equal!(button.hovered?, true, "hovered? reflects UI.hovered_node")
+  assert.equal!(ui.find(:off).hovered?, false, "a sibling node is not hovered")
+
   Conjuration::UI.pressed_node = button
   assert.equal!(button.pressed?, true, "pressed? reflects UI.pressed_node")
 ensure
   Conjuration::UI.focused_node = nil
+  Conjuration::UI.hovered_node = nil
   Conjuration::UI.pressed_node = nil
 end
 
