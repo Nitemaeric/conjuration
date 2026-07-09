@@ -81,13 +81,15 @@ class MenuScene < Conjuration::Scene
   def press_prompt
     memo(:press_prompt, DragonInput.glyph_style(game.ui_pad)) do
       node({ x: grid.w / 2, y: grid.h / 2, w: 240, h: 80, anchor_x: 0.5, anchor_y: 0.5 }, id: :press_prompt, direction: :row, justify: :center, align: :center, gap: 14) do
-        node({ text: "Press", size_enum: 2, r: 235, g: 235, b: 240 }, id: :press_label)
+        node({ text: "Press", size_enum: 2, r: 92, g: 62, b: 30 }, id: :press_label)
         glyph = DragonInput.glyph(game.ui_pad, PROMPT_ACTION)
         if glyph
-          node({ w: 64, h: 64, path: glyph }, id: :start_glyph)
+          # The glyph art is a white silhouette with cutout lettering; tinting it
+          # dark keeps it legible on the light panel.
+          node({ w: 64, h: 64, path: glyph, r: 92, g: 62, b: 30 }, id: :start_glyph)
         else
-          node({ w: 64, h: 64, path: :solid, r: 40, g: 40, b: 48 }, id: :start_glyph) do
-            node({ text: "Start", r: 235, g: 235, b: 240 }, id: :start_glyph_label)
+          node({ w: 64, h: 64, path: :solid, r: 92, g: 62, b: 30 }, id: :start_glyph) do
+            node({ text: "Start", r: 245, g: 238, b: 220 }, id: :start_glyph_label)
           end
         end
       end
