@@ -3,6 +3,13 @@ module Conjuration
     attr_accessor :current_scene
 
     def change_scene(to:)
+      # Focus state is module-global, so the outgoing scene's focus/navigation
+      # would otherwise leak into the incoming one. Reset before setup so the
+      # new scene's own activate_navigation (e.g. MenuScene's) still sticks.
+      UI.focused_node = nil
+      UI.pressed_node = nil
+      UI.active_navigation_group = nil
+
       @current_scene = to
       @current_scene.perform_setup
     end

@@ -16,8 +16,9 @@ class BasicCameraScene < Conjuration::Scene
     self.virtual_w = self.virtual_h = 2000
 
     add_camera(:main, speed: 30)
-    cameras[:main].ui.group = :hud # the whole HUD is one navigable pane
-    activate_navigation(:hud)
+    # No activate_navigation: the arrows pan the camera; activating would let
+    # ensure_focus_in_active_group steal them to focus the HUD.
+    cameras[:main].ui.group = :hud
 
     @tiles = Conjuration::TileLayer.new(name: :grid, chunk_size: 400)
 
