@@ -213,7 +213,12 @@ module Conjuration
     # game styling. Hidden (but retained) while the mouse is the active device;
     # nil unless THIS ui owns the focused node (focus is a shared global, reached
     # by every scene + camera each tick).
+    def focus_indicator_enabled?
+      UI.focus_indicator_default
+    end
+
     def focus_indicator
+      return unless focus_indicator_enabled?
       return if inputs.last_active == :mouse
 
       focused = UI.focused_node

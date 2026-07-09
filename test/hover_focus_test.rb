@@ -261,3 +261,43 @@ def test_button_view_focus_brackets_hide_while_the_mouse_is_active(args, assert)
 ensure
   reset_input_globals
 end
+
+def test_focus_indicator_default_flag_suppresses_scene_and_camera(args, assert)
+  host = HoverNavHost.new
+  camera = hover_camera(host)
+  Conjuration::UI.focused_node = camera.ui.find(:a)
+  Conjuration::UI.focus_cursor[:w] = 0
+  $game.inputs = { last_active: :keyboard, mouse: mouse_nowhere }
+
+  Conjuration::UI.focus_indicator_default = false
+  assert.nil!(camera.send(:focus_indicator), "flag off: camera renders no indicator")
+
+  Conjuration::UI.focus_indicator_default = true
+  assert.true!(camera.send(:focus_indicator), "flag on: indicator returns")
+ensure
+  Conjuration::UI.focus_indicator_default = true
+  reset_input_globals
+  Conjuration::UI.focus_cursor[:w] = 0
+end
+
+class IndicatorOptInScene
+  def focus_indicator_enabled?
+    true
+  end
+end
+
+def test_camera_indicator_follows_its_scenes_predicate(args, assert)
+  host = HoverNavHost.new
+  camera = hover_camera(host)
+  camera.scene = IndicatorOptInScene.new
+  Conjuration::UI.focused_node = camera.ui.find(:a)
+  Conjuration::UI.focus_cursor[:w] = 0
+  $game.inputs = { last_active: :keyboard, mouse: mouse_nowhere }
+  Conjuration::UI.focus_indicator_default = false
+
+  assert.true!(camera.send(:focus_indicator), "a scene opting back in re-enables its cameras' indicator")
+ensure
+  Conjuration::UI.focus_indicator_default = true
+  reset_input_globals
+  Conjuration::UI.focus_cursor[:w] = 0
+end

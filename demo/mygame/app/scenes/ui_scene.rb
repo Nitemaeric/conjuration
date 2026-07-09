@@ -34,6 +34,10 @@ class UIScene < Conjuration::Scene
     nav_hint
   end
 
+  def focus_indicator_enabled?
+    true
+  end
+
   private
 
   # ~600 static nodes: memoized on a constant, so the subtree is built once and

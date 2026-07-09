@@ -15,6 +15,10 @@ class Game < Conjuration::Game
       end
     end
 
+    # ButtonView owns focus visuals (corner brackets); ui_scene opts back in
+    # to showcase the built-in ring.
+    Conjuration::UI.focus_indicator_default = false
+
     Conjuration::UI.default_cursor = ["sprites/cursor-none.png", 9, 4]
     Conjuration::UI.hover_cursor = ["sprites/hand-point.png", 6, 4]
 

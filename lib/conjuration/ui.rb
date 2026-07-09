@@ -51,6 +51,17 @@ module Conjuration
       @default_cursor = cursor
     end
 
+    # Games that style focus themselves (per-state styles, custom cursors) turn
+    # the built-in indicator off here; a scene can override focus_indicator_enabled?
+    # to opt back in.
+    def self.focus_indicator_default
+      @focus_indicator_default.nil? ? true : @focus_indicator_default
+    end
+
+    def self.focus_indicator_default=(value)
+      @focus_indicator_default = value
+    end
+
     # Lerp state for the focus indicator (the highlight that trails focused_node).
     def self.focus_cursor
       @focus_cursor ||= { x: 0, y: 0, w: 0, h: 0 }

@@ -79,7 +79,6 @@ class MenuScene < Conjuration::Scene
   private
 
   # ButtonView draws its own focus brackets; skip the framework's default ring.
-  def focus_indicator; end
 
   # Keyed on glyph_style so the art (and only the art) re-derives when the player
   # swaps between keyboard and controller; unchanged style reuses last frame's

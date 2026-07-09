@@ -35,6 +35,13 @@ module Conjuration
       @draw_buffer = []
     end
 
+    # The indicator toggle is scene-scoped; camera HUDs follow their scene.
+    def focus_indicator_enabled?
+      return super unless scene.respond_to?(:focus_indicator_enabled?)
+
+      scene.focus_indicator_enabled?
+    end
+
     def look_at(object)
       # A positional look_at takes manual control, so it ends any active follow;
       # a zoom-only look_at leaves the follow running.

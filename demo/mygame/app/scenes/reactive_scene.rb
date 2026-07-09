@@ -68,5 +68,4 @@ class ReactiveScene < Conjuration::Scene
   private
 
   # ButtonView draws its own focus brackets; skip the framework's default ring.
-  def focus_indicator; end
 end
