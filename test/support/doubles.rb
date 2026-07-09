@@ -68,11 +68,7 @@ class GameDouble
   def input_source
     return @input_source if @input_source_assigned
 
-    @input_source ||= if Object.const_defined?(:DragonInput)
-      Conjuration::DragonInputSource.new
-    else
-      Conjuration::FallbackInputSource.new(inputs)
-    end
+    @input_source ||= Conjuration::DragonInputSource.new
   end
 
   def input_source=(source)

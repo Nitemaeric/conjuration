@@ -2,11 +2,19 @@
 # Run `drenv bundle` to update it.
 
 lockfile_version = 1
-manifest_digest = "sha256-7f834122dc564bb926f86b84056911255673b99519d37064890c8165a1d84b2e"
+manifest_digest = "sha256-5b5def9e8ce20d1bde2b61fa60e8f5a55b85c0e4d25e3ed7256b355a71a7f2ff"
+
+[[dependencies]]
+name = "dragon_input"
+source = "github:Nitemaeric/dragon_input"
+ref = "a4e98355d24693d297a3514043453a84b3367e0f"
+require = ["vendor/dragon_input/dragon_input.rb"]
+integrity = "sha256-e2b2d31706b2efdebc93245403da4f644605fe7f4dab64697120f402f16404af"
+via = ["conjuration"]
 
 [[dependencies]]
 name = "conjuration"
-source = "path:../../lib"
+source = "path:../.."
 require = ["vendor/conjuration/conjuration.rb"]
 
 [[dependencies]]
@@ -15,10 +23,3 @@ source = "github:owenbutler/dr-frame-timer"
 ref = "60733abd90e7de5e9f53d025b593ab3084c75460"
 require = ["vendor/frame-timer/frame-timer.rb"]
 integrity = "sha256-0362fd56b4409db27437328f22c86bfe9c22a9dd8bd7e5c82251a92e00d4fbd2"
-
-[[dependencies]]
-name = "dragon_input"
-source = "github:Nitemaeric/dragon_input"
-ref = "982cb3058f385f67fa29b7fb0a63c12f315ff8d0"
-require = ["vendor/dragon_input/dragon_input.rb"]
-integrity = "sha256-d0aa84adfbc3a105ed9ccbc2a3c4b761c2b2eb920c7855b1b121af6b3dd5fa13"

@@ -1,9 +1,9 @@
 module Conjuration
   # The reserved UI actions the framework listens for, and their default
-  # bindings. Single source of truth: the fallback source reads this to know what
-  # to poll, and the dragon_input integration injects these same entries into the
-  # game's action sets (see DragonInputSource). Each entry's shape matches
-  # dragon_input's ActionSet#digital keyword args, so it splats straight in.
+  # bindings. Single source of truth: the dragon_input integration injects these
+  # entries into the game's action sets (see DragonInputSource). Each entry's
+  # shape matches dragon_input's ActionSet#digital keyword args, so it splats
+  # straight in.
   #
   # Bindings degrade gracefully: querying any action not listed here is defined to
   # read as "not pressed", so future reserved names stay safe on old games.
@@ -17,68 +17,12 @@ module Conjuration
     ui_right:   { controller: :dpad_right, keyboard: :right }
   }.freeze
 
-  # The default input source when dragon_input is absent: implements the contract
-  # (just_pressed?/pressed?) by reading raw DragonRuby `inputs`, driven entirely
-  # by UI_ACTIONS. Replaces the old bespoke ControlScheme.
-  #
-  # Keyboard bindings use the arrow-key aliases (:up/:down/:left/:right on
-  # key_down are the arrow-key edges); dragon_input's digital reads bind a single
-  # key, so per-direction WASD can't ride along here — WASD stays free for
-  # gameplay.
-  class FallbackInputSource
-    SOURCE_TYPES = {
-      controller_one:   :controller,
-      controller_two:   :controller,
-      controller_three: :controller,
-      controller_four:  :controller,
-      keyboard:         :keyboard
-    }.freeze
-
-    PAD_SOURCES = {
-      one:      [:controller_one, :keyboard],
-      two:      [:controller_two],
-      three:    [:controller_three],
-      four:     [:controller_four],
-      keyboard: [:keyboard]
-    }.freeze
-
-    def initialize(inputs)
-      # DragonRuby mutates `inputs` in place each tick, so holding the reference
-      # reads live state — no need to re-fetch per frame.
-      @inputs = inputs
-    end
-
-    def just_pressed?(pad, action)
-      read(pad, action, :key_down)
-    end
-
-    def pressed?(pad, action)
-      read(pad, action, :key_held)
-    end
-
-    private
-
-    def read(pad, action, state)
-      bindings = UI_ACTIONS[action]
-      return false unless bindings
-
-      (PAD_SOURCES[pad] || []).any? do |src_key|
-        binding = bindings[SOURCE_TYPES[src_key]]
-        next false unless binding
-
-        source = @inputs.send(src_key)
-        source && !!source.send(state).send(binding)
-      end
-    end
-  end
-
-  # The input source when dragon_input is present and the game hasn't assigned
-  # one explicitly (see Game#input_source). It reads through the DragonInput
-  # facade and, because Conjuration can't control when the game calls
-  # DragonInput.setup, LAZILY injects the reserved UI actions from UI_ACTIONS into
-  # every action set — filling only gaps, so a game's own :ui_* binding always
-  # wins. Injected actions are ordinary config entries, so rebinding and IGA
-  # export pick them up for free.
+  # The default input source (see Game#input_source): dragon_input is a hard
+  # dependency, so this reads through the DragonInput facade. Because Conjuration
+  # can't control when the game calls DragonInput.setup, it LAZILY injects the
+  # reserved UI actions from UI_ACTIONS into every action set — filling only gaps,
+  # so a game's own :ui_* binding always wins. Injected actions are ordinary
+  # config entries, so rebinding and IGA export pick them up for free.
   class DragonInputSource
     INACTIVE = { down: false, held: false, up: false, active: false }.freeze
 

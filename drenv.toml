@@ -1,0 +1,10 @@
+[package]
+name = "conjuration"
+root = "lib"
+entrypoint = "conjuration.rb"
+version = "0.1.0"
+
+# dragon_input is a hard dependency: framework UI reads input through it, and
+# drenv vendors it before conjuration so the DragonInput constant is present.
+[dependencies.dragon_input]
+github = "Nitemaeric/dragon_input"

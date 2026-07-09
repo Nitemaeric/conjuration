@@ -25,6 +25,13 @@ module Conjuration
     end
 
     def tick
+      # Conjuration owns the input pump. dragon_input is bundled before
+      # conjuration (drenv owns load order), so the constant is always present;
+      # config stays nil until the game calls DragonInput.setup or framework UI
+      # lazily creates one. Gating on config keeps games that never use input at
+      # one nil-check per tick — the zero-cost-when-unused path.
+      DragonInput.tick(args) if DragonInput.config
+
       if @hit_stop && @hit_stop > 0
         @hit_stop -= 1
       else
@@ -41,13 +48,13 @@ module Conjuration
 
     # The object framework UI reads input through: it answers
     # just_pressed?(pad, action) / pressed?(pad, action) for the reserved
-    # UI_ACTIONS names. Defaults implicitly — DragonInput when it's loaded,
-    # otherwise the raw-inputs fallback. Assigning one (see input_source=) opts
-    # out of all implicit behaviour.
+    # UI_ACTIONS names. Defaults to the DragonInput wrapper (dragon_input is a
+    # dependency). Assigning one (see input_source=) opts out of all implicit
+    # behaviour.
     def input_source
       return @input_source if @input_source_assigned
 
-      @input_source ||= detect_input_source
+      @input_source ||= DragonInputSource.new
     end
 
     def input_source=(source)
@@ -63,15 +70,6 @@ module Conjuration
     attr_writer :ui_pad
 
     private
-
-    def detect_input_source
-      # const_defined?, not defined? — DragonRuby's mruby has no `defined?`.
-      if Object.const_defined?(:DragonInput)
-        DragonInputSource.new
-      else
-        FallbackInputSource.new(inputs)
-      end
-    end
 
     def perform_setup
       setup if respond_to?(:setup)

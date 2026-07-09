@@ -1,13 +1,3 @@
-# Builds a raw-inputs double the FallbackInputSource can read. Relies on the Hash
-# method_missing shim (test/support/shims.rb) so `inputs.keyboard.key_down.enter`
-# resolves nested keys; unspecified keys read as nil (falsey).
-def make_inputs(keyboard_down: {}, keyboard_held: {}, controller_down: {}, controller_held: {})
-  {
-    keyboard:       { key_down: keyboard_down, key_held: keyboard_held },
-    controller_one: { key_down: controller_down, key_held: controller_held }
-  }
-end
-
 # A fake action source satisfying the contract by naming which reserved actions
 # are down this tick (edges) and which are held. Drives the end-to-end UI tests.
 class FakeInputSource
@@ -22,88 +12,6 @@ class FakeInputSource
 
   def pressed?(_pad, action)
     @held.include?(action) || @pressed.include?(action)
-  end
-end
-
-# A faithful minimal double of the dragon_input surface Conjuration touches
-# (DragonInput.setup / .config / .digital; Config#action_set(s);
-# ActionSet#digital / #action). Mirrors the real library's shapes — see
-# https://github.com/Nitemaeric/dragon_input — so injection is exercised against
-# the real API: digital returns { down:, held:, up:, active: }, resolves an
-# action in the pad's active (default) set, and reports active:false when the
-# action is absent. It simulates presses (press!) rather than reading raw inputs.
-# NOT the real library.
-module DragonInput
-  class FakeActionSet
-    attr_reader :name, :digitals
-
-    def initialize(name)
-      @name = name
-      @digitals = {}
-    end
-
-    def digital(name, controller: nil, keyboard: nil, mouse: nil, glyph: nil)
-      @digitals[name] = { controller: controller, keyboard: keyboard, mouse: mouse }
-    end
-
-    def action(name)
-      @digitals[name]
-    end
-  end
-
-  class FakeConfig
-    attr_reader :action_sets, :default_set
-
-    def initialize
-      @action_sets = {}
-      @default_set = nil
-    end
-
-    def action_set(name)
-      set = (@action_sets[name] ||= FakeActionSet.new(name))
-      yield set if block_given?
-      @default_set ||= name
-      set
-    end
-  end
-
-  class << self
-    attr_reader :config
-
-    def setup(&block)
-      @config = FakeConfig.new
-      @pressed = {}
-      block.call(@config) if block
-      @config
-    end
-
-    def reset!
-      @config = nil
-      @pressed = {}
-    end
-
-    def press!(pad, action)
-      (@pressed ||= {})["#{pad}/#{action}"] = true
-    end
-
-    def digital(pad, action)
-      raise "DragonInput.setup must be called before use" unless @config
-
-      set = @config.action_sets[@config.default_set]
-      return { down: false, held: false, up: false, active: false } unless set && set.action(action)
-
-      down = @pressed && @pressed["#{pad}/#{action}"] ? true : false
-      { down: down, held: false, up: false, active: true }
-    end
-
-    def just_pressed?(pad, action)
-      digital(pad, action)[:down]
-    end
-
-    def pressed?(pad, action)
-      state = digital(pad, action)
-      state[:held] || state[:down]
-    end
   end
 end
 
@@ -127,55 +35,13 @@ class NavMenuHost
   end
 end
 
-# --- Fallback source: preserves the current-branch default bindings ---------
+# --- Game wiring: default source + opt-out ----------------------------------
 
-def test_fallback_confirms_on_enter(args, assert)
-  source = Conjuration::FallbackInputSource.new(make_inputs(keyboard_down: { enter: true }))
-  assert.true!(source.just_pressed?(:one, :ui_confirm), "Enter confirms")
-end
-
-def test_fallback_confirms_on_controller_a(args, assert)
-  source = Conjuration::FallbackInputSource.new(make_inputs(controller_down: { a: true }))
-  assert.true!(source.just_pressed?(:one, :ui_confirm), "controller A confirms")
-end
-
-def test_fallback_excludes_space(args, assert)
-  source = Conjuration::FallbackInputSource.new(make_inputs(keyboard_down: { space: true }))
-  assert.false!(source.just_pressed?(:one, :ui_confirm), "Space does not confirm")
-end
-
-def test_fallback_confirm_held_tracks_enter_and_a(args, assert)
-  enter = Conjuration::FallbackInputSource.new(make_inputs(keyboard_held: { enter: true }))
-  a = Conjuration::FallbackInputSource.new(make_inputs(controller_held: { a: true }))
-  idle = Conjuration::FallbackInputSource.new(make_inputs)
-
-  assert.true!(enter.pressed?(:one, :ui_confirm), "Enter held presses")
-  assert.true!(a.pressed?(:one, :ui_confirm), "A held presses")
-  assert.false!(idle.pressed?(:one, :ui_confirm), "nothing held")
-end
-
-def test_fallback_navigation_edges(args, assert)
-  right_arrow = Conjuration::FallbackInputSource.new(make_inputs(keyboard_down: { right: true }))
-  assert.true!(right_arrow.just_pressed?(:one, :ui_right), "right arrow is a right edge")
-  assert.false!(right_arrow.just_pressed?(:one, :ui_left), "right arrow is not a left edge")
-
-  dpad_up = Conjuration::FallbackInputSource.new(make_inputs(controller_down: { dpad_up: true }))
-  assert.true!(dpad_up.just_pressed?(:one, :ui_up), "controller dpad up is an up edge")
-end
-
-def test_fallback_unknown_action_is_false(args, assert)
-  source = Conjuration::FallbackInputSource.new(make_inputs(keyboard_down: { enter: true }))
-  assert.false!(source.just_pressed?(:one, :ui_teleport), "unknown action reads as not pressed")
-  assert.false!(source.pressed?(:one, :ui_teleport), "unknown action reads as not held")
-end
-
-# --- Game wiring: implicit detection + opt-out ------------------------------
-
-def test_game_auto_detects_dragon_input(args, assert)
+def test_game_defaults_to_dragon_input_source(args, assert)
   game = Conjuration::Game.new(nil)
   source = game.input_source
 
-  assert.true!(source.is_a?(Conjuration::DragonInputSource), "auto-detects DragonInput when defined")
+  assert.true!(source.is_a?(Conjuration::DragonInputSource), "defaults to the DragonInput wrapper")
   assert.equal!(game.input_source.equal?(source), true, "memoized: one source, not one per frame")
 end
 
@@ -191,7 +57,7 @@ def test_game_explicit_assignment_opts_out(args, assert)
   game = Conjuration::Game.new(nil)
   game.input_source = nil
 
-  assert.nil!(game.input_source, "any explicit assignment disables implicit detection")
+  assert.nil!(game.input_source, "any explicit assignment disables the default")
 end
 
 # --- End-to-end: a fake source drives navigation and confirm ----------------
@@ -298,6 +164,16 @@ def test_dragon_input_injection_is_lazy(args, assert)
   source.just_pressed?(:one, :ui_confirm)
 
   assert.true!(!DragonInput.config.action_sets[:menu].action(:ui_confirm).nil?, "injects on first query after late setup")
+ensure
+  DragonInput.reset!
+end
+
+def test_dragon_input_unknown_action_is_false(args, assert)
+  DragonInput.setup { |c| c.action_set(:menu) }
+  source = Conjuration::DragonInputSource.new
+
+  assert.false!(source.just_pressed?(:one, :ui_teleport), "unknown action reads as not pressed")
+  assert.false!(source.pressed?(:one, :ui_teleport), "unknown action reads as not held")
 ensure
   DragonInput.reset!
 end

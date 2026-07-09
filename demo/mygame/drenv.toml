@@ -1,10 +1,6 @@
 [dependencies.conjuration]
-path = "../../lib"
-entrypoint = "conjuration.rb"
+path = "../.."
 
 [dependencies.frame-timer]
 github = "owenbutler/dr-frame-timer"
 entrypoint = "frame-timer.rb"
-
-[dependencies.dragon_input]
-github = "Nitemaeric/dragon_input"
