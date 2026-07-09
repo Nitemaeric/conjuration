@@ -1,4 +1,4 @@
-require_relative "scenes/title_scene"
+require_relative "scenes/menu_scene"
 require_relative "device_toast"
 
 class Game < Conjuration::Game
@@ -16,7 +16,7 @@ class Game < Conjuration::Game
     Conjuration::UI.hover_cursor = ["sprites/hand-point.png", 6, 4]
 
     @device_toast = DeviceToast.new
-    self.current_scene = TitleScene.new(:title)
+    self.current_scene = MenuScene.new(:main)
   end
 
   def update
