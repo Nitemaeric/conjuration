@@ -1,19 +1,40 @@
 class IsometricScene < Conjuration::Scene
-  TILE_W = 64
-  TILE_H = 32
-
   GRID_COLS = 10
   GRID_ROWS = 10
 
   KNIGHT_ROW = 5
   MAX_HEIGHT = 2
 
-  # Chunky, clearly-stepped columns (the lib default of tile_h/2 reads thin here).
-  ELEVATION_STEP = 24
+  # Kenney "Sketch Desert" (CC0) cube art — see sprites/isometric/CREDITS.md.
+  # Measured from the PNGs: the top-face diamond footprint, one block level's
+  # side-face height, and the top-face centre within the 256x352 canvas. The
+  # projection is set to MATCH the art, not the other way round.
+  SPRITE_W = 256
+  SPRITE_H = 352
+  DIAMOND_W = 231
+  DIAMOND_H = 122
+  STEP_PX = 97
+  TOP_FACE_PY = 190
+  SCALE = 0.5
 
-  # One hue; the baked block textures carry three grey shades that this tint
-  # multiplies into three shades of the same colour (lit top, mid + dark faces).
-  BLOCK_TINT = [120, 165, 120].freeze
+  TILE_W = DIAMOND_W * SCALE
+  TILE_H = DIAMOND_H * SCALE
+  ELEVATION_STEP = STEP_PX * SCALE
+  DRAW_W = SPRITE_W * SCALE
+  DRAW_H = SPRITE_H * SCALE
+  TILE_ANCHOR_X = 0.5
+  TILE_ANCHOR_Y = (SPRITE_H - TOP_FACE_PY) / SPRITE_H.to_f
+
+  DIRT = "sprites/isometric/dirt_center.png".freeze
+  GRASS = "sprites/isometric/grass_center.png".freeze
+
+  # Ground props (col, row, sprite, anchor_x, anchor_y) — anchors are each
+  # sprite's base centre, so it plants on the tile's top face. Placed off the
+  # knight's row so he z-interleaves with them as he walks past.
+  PROPS = [
+    [8, 4, "sprites/isometric/tree.png".freeze, 0.501, 0.139],
+    [2, 6, "sprites/isometric/rocks.png".freeze, 0.458, 0.071]
+  ].freeze
 
   # Hand-authored terrain: a height-2 plateau with a height-1 apron. Row 5 (the
   # knight's path) reads 0 0 0 1 2 2 2 1 0 0 — a ramp up, a plateau, a ramp down.
@@ -33,8 +54,7 @@ class IsometricScene < Conjuration::Scene
   def setup
     @iso = Conjuration::Projection::Isometric.new(tile_w: TILE_W, tile_h: TILE_H, elevation_step: ELEVATION_STEP)
 
-    build_tile_texture
-    build_block_textures
+    build_highlight_texture
 
     add_camera(:main, speed: 30)
     cameras[:main].ui.group = :hud
@@ -44,18 +64,6 @@ class IsometricScene < Conjuration::Scene
     camera = cameras[:main]
     camera.current.x = camera.target.x = centre[:x]
     camera.current.y = camera.target.y = centre[:y]
-
-    @tiles = Conjuration::TileLayer.new(name: :iso_floor, chunk_size: 512)
-    GRID_ROWS.times do |row|
-      GRID_COLS.times do |col|
-        c = @iso.to_world(col, row)
-        tint = (col + row).even? ? [70, 120, 90] : [92, 150, 112]
-        @tiles.add({
-          x: c[:x] - TILE_W / 2, y: c[:y] - TILE_H / 2, w: TILE_W, h: TILE_H,
-          path: :iso_tile, r: tint[0], g: tint[1], b: tint[2]
-        })
-      end
-    end
 
     state.knight_col = 0.0
     state.knight_height = 0.0
@@ -88,9 +96,8 @@ class IsometricScene < Conjuration::Scene
   end
 
   def draw_world(camera)
-    @tiles.draw(camera)
-
     draw_terrain(camera)
+    draw_props(camera)
 
     if camera == focused_camera
       pick = picked_cell(camera)
@@ -98,8 +105,8 @@ class IsometricScene < Conjuration::Scene
         c = @iso.to_world(pick[:col], pick[:row], pick[:height])
         camera.draw({
           x: c[:x], y: c[:y], w: TILE_W, h: TILE_H,
-          path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5,
-          r: 255, g: 232, b: 120, a: 200
+          path: :iso_highlight, anchor_x: 0.5, anchor_y: 0.5,
+          r: 255, g: 232, b: 120, a: 150
         }, z: pick[:col] + pick[:row])
       end
     end
@@ -109,35 +116,44 @@ class IsometricScene < Conjuration::Scene
 
   private
 
-  # One baked block-column sprite per raised cell: lit top diamond + two side
-  # faces. Deferred (z: col + row, height never touches z), not baked into the
-  # static floor TileLayer, so the moving knight z-interleaves with the terrain.
+  # Each cell is a stack of cube sprites, one per level 0..height, drawn deferred
+  # at z: col + row (height never touches z). Emitting bottom-up means each cube's
+  # base covers the top of the one below, so the art's own side faces terrace like
+  # FFTA; grass caps the top of a raised cell. The knight is emitted after all of
+  # his cell's cubes, so equal-z stable ordering lands him on top of his own tile.
   def draw_terrain(camera)
-    half_h = TILE_H / 2.0
-
     GRID_ROWS.times do |row|
       GRID_COLS.times do |col|
         h = HEIGHTMAP[row][col]
-        next if h.zero?
+        z = col + row
 
-        top = @iso.to_world(col, row, h)
-        depth = h * @iso.elevation_step
-        tex_h = TILE_H + depth
-
-        camera.draw({
-          x: top[:x], y: top[:y], w: TILE_W, h: tex_h,
-          path: :"iso_block_#{h}", anchor_x: 0.5, anchor_y: (depth + half_h) / tex_h,
-          r: BLOCK_TINT[0], g: BLOCK_TINT[1], b: BLOCK_TINT[2]
-        }, z: col + row)
+        (0..h).each do |level|
+          c = @iso.to_world(col, row, level)
+          path = (h > 0 && level == h) ? GRASS : DIRT
+          camera.draw({
+            x: c[:x], y: c[:y], w: DRAW_W, h: DRAW_H,
+            path: path, anchor_x: TILE_ANCHOR_X, anchor_y: TILE_ANCHOR_Y
+          }, z: z)
+        end
       end
+    end
+  end
+
+  def draw_props(camera)
+    PROPS.each do |(col, row, path, anchor_x, anchor_y)|
+      c = @iso.to_world(col, row, height_at(col, row))
+      camera.draw({
+        x: c[:x], y: c[:y], w: DRAW_W, h: DRAW_H,
+        path: path, anchor_x: anchor_x, anchor_y: anchor_y
+      }, z: col + row)
     end
   end
 
   def draw_knight(camera)
     pos = @iso.to_world(state.knight_col, KNIGHT_ROW, state.knight_height)
     camera.draw({
-      x: pos[:x], y: pos[:y], w: 30, h: 42,
-      path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0.2
+      x: pos[:x], y: pos[:y], w: 48, h: 68,
+      path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0.15
     }, z: state.knight_col.round + KNIGHT_ROW)
   end
 
@@ -175,52 +191,23 @@ class IsometricScene < Conjuration::Scene
     pick ? "Tile: #{pick[:col]}, #{pick[:row]} (h#{pick[:height]})" : "Tile: -"
   end
 
-  def build_tile_texture
-    return if @tile_texture_built
+  # A flat diamond matching the cube's top-face footprint, so the pick highlight
+  # hugs the lit top of whatever the cursor is over.
+  def build_highlight_texture
+    return if @highlight_built
 
-    target = outputs[:iso_tile]
-    target.width = TILE_W
-    target.height = TILE_H
+    target = outputs[:iso_highlight]
+    target.width = DIAMOND_W
+    target.height = DIAMOND_H
 
-    half_h = TILE_H / 2.0
-    TILE_H.times do |yy|
+    half_h = DIAMOND_H / 2.0
+    DIAMOND_H.times do |yy|
       frac = 1.0 - ((yy + 0.5) - half_h).abs / half_h
-      half = TILE_W * frac / 2.0
-      target.primitives << { x: TILE_W / 2.0 - half, y: yy, w: half * 2, h: 1, path: :pixel, r: 255, g: 255, b: 255 }
+      half = DIAMOND_W * frac / 2.0
+      target.primitives << { x: DIAMOND_W / 2.0 - half, y: yy, w: half * 2, h: 1, path: :pixel, r: 255, g: 255, b: 255 }
     end
 
-    @tile_texture_built = true
-  end
-
-  # Rasterise one block-column texture per distinct height, column by column: a
-  # lit top diamond over two side faces (SW dark, SE mid). Baked in greyscale so
-  # the per-cell BLOCK_TINT multiplies into three shades of a single colour.
-  def build_block_textures
-    return if @block_textures_built
-
-    half_w = TILE_W / 2.0
-    half_h = TILE_H / 2.0
-
-    (1..MAX_HEIGHT).each do |h|
-      depth = h * @iso.elevation_step
-      tex_h = TILE_H + depth
-
-      target = outputs[:"iso_block_#{h}"]
-      target.width = TILE_W
-      target.height = tex_h
-
-      TILE_W.times do |xx|
-        col_frac = 1.0 - ((xx + 0.5) - half_w).abs / half_w
-        dh = half_h * col_frac
-        y_centre = depth + half_h
-        shade = xx < half_w ? 105 : 175
-
-        target.primitives << { x: xx, y: y_centre - dh, w: 1, h: dh * 2, path: :pixel, r: 255, g: 255, b: 255 }
-        target.primitives << { x: xx, y: y_centre - dh - depth, w: 1, h: depth, path: :pixel, r: shade, g: shade, b: shade }
-      end
-    end
-
-    @block_textures_built = true
+    @highlight_built = true
   end
 
   def build_hud
