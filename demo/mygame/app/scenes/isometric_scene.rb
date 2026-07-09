@@ -25,15 +25,22 @@ class IsometricScene < Conjuration::Scene
   TILE_ANCHOR_X = 0.5
   TILE_ANCHOR_Y = (SPRITE_H - TOP_FACE_PY) / SPRITE_H.to_f
 
-  # FFTA unit convention: feet plant at the top face's NEAR corner — the point
-  # shared with the front neighbour's far corner — so a same-elevation neighbour
-  # can never rise above the feet line. Anchored at the diamond centre instead,
-  # the neighbour's art legitimately covers everything below the centre line
-  # (half the diamond + the old 0.15 feet sink ≈ 60% of the sprite: the
-  # waist-deep clip). Constant offset, so the walking lerp is untouched.
-  KNIGHT_FEET_OFFSET = TILE_H / 2.0
+  # Tactics-style unit rule: a unit belongs to the one cell under its feet
+  # centre, shares that cell's depth band (z = col + row, emitted after the
+  # cell's cubes), and its FEET SIT AT THE TOP-FACE CENTRE. At the centre, a
+  # same-height front neighbour's top face peaks half a diamond BELOW the feet
+  # line, so it can never clip the unit; at the near corner (the previous
+  # anchor) those neighbours rise above the feet and wedge over the shins.
   KNIGHT_H = TILE_H * 1.5
   KNIGHT_W = KNIGHT_H * 48 / 68.0
+
+  # Elevation while walking must track the occupied cell, not lag it: the old
+  # eased lerp trailed by nearly a whole tile, so right after a terrace-edge z
+  # flip the knight was drawn a step too low and the front cell's cubes covered
+  # his legs. Instead the height ramps deterministically across a narrow window
+  # centred on the cell boundary (an FFTA stair-step), reaching the new surface
+  # while the sprite is still between columns where no neighbour art can reach.
+  STEP_RAMP = 0.15
 
   DIRT = "sprites/isometric/dirt_center.png".freeze
   GRASS = "sprites/isometric/grass_center.png".freeze
@@ -76,7 +83,6 @@ class IsometricScene < Conjuration::Scene
     camera.current.y = camera.target.y = centre[:y]
 
     state.knight_col = 0.0
-    state.knight_height = 0.0
 
     build_hud
   end
@@ -93,12 +99,6 @@ class IsometricScene < Conjuration::Scene
   def update
     phase = (clock * 0.01) % 2.0
     state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
-
-    # Round, not floor: the occupied cell is the one under his feet centre, not
-    # the one his sprite's back edge overhangs — flooring buries him a block deep
-    # on every ascent.
-    target = height_at(state.knight_col.round, KNIGHT_ROW)
-    state.knight_height += (target - state.knight_height) * 0.2
 
     label = cameras[:main].ui.find(:hover_label)
     label.object.text = hovered_label
@@ -160,11 +160,28 @@ class IsometricScene < Conjuration::Scene
   end
 
   def draw_knight(camera)
-    pos = @iso.to_world(state.knight_col, KNIGHT_ROW, state.knight_height)
+    pos = @iso.to_world(state.knight_col, KNIGHT_ROW, walk_height(state.knight_col, KNIGHT_ROW))
     camera.draw({
-      x: pos[:x], y: pos[:y] - KNIGHT_FEET_OFFSET, w: KNIGHT_W, h: KNIGHT_H,
+      x: pos[:x], y: pos[:y], w: KNIGHT_W, h: KNIGHT_H,
       path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0
     }, z: state.knight_col.round + KNIGHT_ROW)
+  end
+
+  # Surface height under a fractional column: the occupied cell's height, except
+  # within STEP_RAMP of a cell boundary, where it blends linearly toward the
+  # neighbour so the crossing reads as a stair step. Halfway at the boundary
+  # itself — continuous from both sides, exactly when the depth key flips.
+  def walk_height(col_exact, row)
+    col = col_exact.round
+    here = height_at(col, row)
+
+    frac = col_exact - col
+    edge = 0.5 - frac.abs
+    return here * 1.0 if edge >= STEP_RAMP
+
+    there = height_at(col + (frac > 0 ? 1 : -1), row)
+    t = 0.5 + 0.5 * (edge / STEP_RAMP)
+    there + (here - there) * t
   end
 
   # Probe from the tallest possible stack down: the first candidate height whose

@@ -178,24 +178,112 @@ def test_iso_surface_height_rounds_to_the_feet_centre_cell(args, assert)
   assert.equal!(surface_height(heightmap, 0.4, 0), 0, "col 0.4 rounds down to cell 0")
 end
 
-# FFTA unit convention: feet plant at the top face's NEAR corner (centre y minus
-# tile_h/2) — the point shared with the front-diagonal neighbour's far corner —
-# so no same-elevation neighbour's art can rise above the feet line. Feet at the
-# diamond CENTRE would let a front neighbour legitimately cover everything below
-# the centre line (the waist-deep-clip regression).
-def test_iso_feet_plant_at_the_top_face_near_corner(args, assert)
+# Tactics unit rule: feet sit at the top-face CENTRE. A same-height front
+# neighbour's top face peaks exactly at the unit's centre line but only at the
+# neighbour's own apex (half a tile away in x) — along the shared edge it climbs
+# from half a diamond BELOW the feet, so within any unit narrower than the tile
+# it stays under the feet line. Corner-anchored feet (the previous convention)
+# put the boot pixels ON that edge and same-height neighbours wedged over them.
+def test_iso_feet_sit_at_the_top_face_centre_clear_of_neighbours(args, assert)
   iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32, elevation_step: 24)
+  half_w = 32.0
+  half_h = 16.0
 
   [[4, 5, 2], [3, 5, 1], [7, 2, 3]].each do |(col, row, h)|
-    ground   = iso.to_world(col, row, 0)
-    top_face = iso.to_world(col, row, h)
-    feet_y   = top_face[:y] - 32 / 2.0
+    ground = iso.to_world(col, row, 0)
+    feet   = iso.to_world(col, row, h)
 
-    neighbour_far_corner_y = iso.to_world(col + 1, row + 1, h)[:y] + 32 / 2.0
-    assert.close!(feet_y, neighbour_far_corner_y, "feet sit on the corner shared with the front neighbour (h=#{h})")
+    assert.close!(feet[:y], ground[:y] + h * 24, "feet ride the top face, h*step above the ground plane (h=#{h})")
+    assert.close!(feet[:x], ground[:x], "elevation leaves x unchanged (h=#{h})")
 
-    assert.close!(top_face[:y], ground[:y] + h * 24, "top face sits h*step above the ground plane (h=#{h})")
-    assert.close!(top_face[:x], ground[:x], "elevation leaves x unchanged (h=#{h})")
+    # Front-right neighbour at the SAME height: its top face's upper-left edge
+    # runs from the shared corner toward its apex. Sampled at a body half-width
+    # (under the full half-tile) it stays strictly below the feet line.
+    body_half = half_w * 0.6
+    neighbour = iso.to_world(col + 1, row, h)
+    edge_y = (neighbour[:y] + half_h) - half_h * (1.0 - body_half / half_w)
+    assert.true!(edge_y < feet[:y], "same-height front neighbour's art stays below centre-anchored feet (h=#{h})")
+
+    # One block HIGHER in front: its top face rises above the feet line — the
+    # legitimate occlusion (unit hidden behind a taller terrace).
+    higher = iso.to_world(col + 1, row, h + 1)
+    assert.true!(higher[:y] + half_h > feet[:y], "a higher front neighbour rises above the feet line (h=#{h})")
+  end
+end
+
+# The demo's walk elevation: the occupied cell's surface, blended toward the
+# neighbour only inside a narrow ramp around the cell boundary, exactly halfway
+# AT the boundary — where the depth key flips cell. Mirrors walk_height in
+# isometric_scene.rb; a lagging eased height here is the mid-stride clip bug.
+def walk_height_ref(heightmap, col_exact, row, ramp = 0.15)
+  col = col_exact.round
+  here = heightmap[row][col]
+
+  frac = col_exact - col
+  edge = 0.5 - frac.abs
+  return here * 1.0 if edge >= ramp
+
+  neighbour_col = (col + (frac > 0 ? 1 : -1)).clamp(0, heightmap[row].length - 1)
+  there = heightmap[row][neighbour_col]
+  t = 0.5 + 0.5 * (edge / ramp)
+  there + (here - there) * t
+end
+
+def test_iso_walk_height_steps_across_the_boundary_not_after_it(args, assert)
+  row = [0, 1, 2, 1, 0]
+  map = [row]
+
+  assert.close!(walk_height_ref(map, 1.0, 0), 1.0, "cell centre reads its own height")
+  assert.close!(walk_height_ref(map, 1.3, 0), 1.0, "outside the ramp the height holds steady")
+  assert.close!(walk_height_ref(map, 1.5, 0), 1.5, "at the boundary the height is exactly halfway")
+  assert.close!(walk_height_ref(map, 2.5, 0), 1.5, "descending boundary is halfway too")
+  assert.close!(walk_height_ref(map, 1.65, 0), 2.0, "the ramp completes just past the boundary")
+
+  before = walk_height_ref(map, 1.49, 0)
+  after  = walk_height_ref(map, 1.51, 0)
+  assert.true!((after - before).abs < 0.1, "height is continuous through the depth-key flip")
+end
+
+def test_iso_walking_knight_sorts_with_his_occupied_cell_at_every_step(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32, elevation_step: 16)
+  cam = make_camera(current: { x: 0, y: 0, zoom: 1 })
+  heights = [0, 1, 2, 1, 0]
+  map = [heights]
+
+  # The full terrace walk, including every mid-transition quarter-step: the
+  # knight must flush after every cube of his occupied cell and before every
+  # cube of any strictly nearer cell — at x.5 exactly, with the ramp at halfway,
+  # he commits to the entered cell (Ruby rounds half away from zero).
+  Array.new(17) { |i| i * 0.25 }.each do |col|
+    cam.outputs.primitives.clear
+
+    heights.each_with_index do |h, c|
+      (0..h).each do |level|
+        centre = iso.to_world(c, 0, level)
+        cam.draw({ x: centre[:x], y: centre[:y], w: 64, h: 48, path: :"cube_#{c}_#{level}", anchor_x: 0.5, anchor_y: 0.5 }, z: c)
+      end
+    end
+
+    k = iso.to_world(col, 0, walk_height_ref(map, col, 0))
+    cam.draw({ x: k[:x], y: k[:y], w: 30, h: 42, path: :knight, anchor_x: 0.5, anchor_y: 0 }, z: col.round)
+
+    cam.send(:flush_ordered_draws)
+    order = cam.outputs.primitives.map { |p| p[:path] }
+    knight_at = order.index(:knight)
+    occupied = col.round
+
+    heights.each_with_index do |h, c|
+      (0..h).each do |level|
+        cube_at = order.index(:"cube_#{c}_#{level}")
+        next unless cube_at
+
+        if c <= occupied
+          assert.true!(cube_at < knight_at, "col #{col}: cube (#{c},#{level}) of cell <= occupied #{occupied} draws before the knight")
+        else
+          assert.true!(cube_at > knight_at, "col #{col}: cube (#{c},#{level}) of nearer cell #{c} draws after the knight")
+        end
+      end
+    end
   end
 end
 
