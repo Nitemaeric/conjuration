@@ -1,6 +1,5 @@
 [dependencies.conjuration]
-path = "../../lib"
-entrypoint = "conjuration.rb"
+path = "../.."
 
 [dependencies.frame-timer]
 github = "owenbutler/dr-frame-timer"

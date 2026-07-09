@@ -4,9 +4,11 @@
 #
 # The standalone `mruby` CLI has no `require`/`require_relative` (DragonRuby
 # provides those in its engine), so we preload every file with -r in dependency
-# order: DR-surface shims first, then the lib sub-files exactly as
-# lib/conjuration.rb requires them (never conjuration.rb itself, whose
-# require_relatives would raise), then the test doubles, then each *_test.rb.
+# order: DR-surface shims and the dragon_input double first (lib touches the
+# DragonInput constant, absent from the mruby harness), then the
+# lib sub-files exactly as lib/conjuration.rb requires them (never conjuration.rb
+# itself, whose require_relatives would raise), then the test doubles, then each
+# *_test.rb.
 # test/run.rb is the main script that discovers and runs the test_* methods.
 
 set -euo pipefail
@@ -22,11 +24,13 @@ fi
 # Order mirrors lib/conjuration.rb.
 preload=(
   test/support/shims.rb
+  test/support/dragon_input.rb
   lib/conjuration/extensions/hash.rb
   lib/conjuration/extensions/array.rb
   lib/conjuration/base_lifecycle_methods.rb
   lib/conjuration/node.rb
   lib/conjuration/vector.rb
+  lib/conjuration/input_source.rb
   lib/conjuration/ui.rb
   lib/conjuration/ui_management.rb
   lib/conjuration/camera.rb

@@ -2,11 +2,19 @@
 # Run `drenv bundle` to update it.
 
 lockfile_version = 1
-manifest_digest = "sha256-dffa450eb597c4546f9c8950111dc509f514a5f39aeaa3ff818ecca916ddb9fd"
+manifest_digest = "sha256-5b5def9e8ce20d1bde2b61fa60e8f5a55b85c0e4d25e3ed7256b355a71a7f2ff"
+
+[[dependencies]]
+name = "dragon_input"
+source = "github:Nitemaeric/dragon_input"
+ref = "a4e98355d24693d297a3514043453a84b3367e0f"
+require = ["vendor/dragon_input/dragon_input.rb"]
+integrity = "sha256-e2b2d31706b2efdebc93245403da4f644605fe7f4dab64697120f402f16404af"
+via = ["conjuration"]
 
 [[dependencies]]
 name = "conjuration"
-source = "path:../../lib"
+source = "path:../.."
 require = ["vendor/conjuration/conjuration.rb"]
 
 [[dependencies]]

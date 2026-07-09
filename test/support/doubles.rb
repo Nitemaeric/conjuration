@@ -62,6 +62,23 @@ class GameDouble
   def events; @events ||= EventsDouble.new; end
   def state; @state ||= {}; end
   def debug?; false; end
+
+  attr_accessor :inputs
+
+  def input_source
+    return @input_source if @input_source_assigned
+
+    @input_source ||= Conjuration::DragonInputSource.new
+  end
+
+  def input_source=(source)
+    @input_source_assigned = true
+    @input_source = source
+  end
+
+  def ui_pad
+    @ui_pad ||= :one
+  end
 end
 
 # Stands in for a Conjuration::Scene where a camera only needs its world bounds.

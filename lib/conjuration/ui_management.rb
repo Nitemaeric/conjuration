@@ -122,13 +122,26 @@ module Conjuration
     # The cursor is left as-is here — a mouse affordance, irrelevant when
     # navigating by key/pad.
     def update_focus_by_navigation
-      direction = inputs.key_down.directional_vector
-      return if direction.nil? || (direction.x == 0 && direction.y == 0)
+      direction = navigation_vector
+      return if direction.nil?
 
       # Spatial nav stays within the active pane.
       candidates = ui.navigation_groups[UI.active_navigation_group] || []
       target = ui.spatial_navigate(UI.focused_node, direction, candidates: candidates)
       UI.focused_node = target if target
+    end
+
+    # Left unnormalized (a diagonal fires both axes); spatial_navigate reads only
+    # the signs.
+    def navigation_vector
+      source = game.input_source
+      pad = game.ui_pad
+
+      x = (source.just_pressed?(pad, :ui_right) ? 1 : 0) - (source.just_pressed?(pad, :ui_left) ? 1 : 0)
+      y = (source.just_pressed?(pad, :ui_up) ? 1 : 0) - (source.just_pressed?(pad, :ui_down) ? 1 : 0)
+      return nil if x == 0 && y == 0
+
+      { x: x, y: y }
     end
 
     # Seed focus into the active group when it isn't already there (e.g. right
@@ -141,21 +154,16 @@ module Conjuration
       UI.focused_node = members.first
     end
 
-    # Space is intentionally excluded — games commonly bind it (the hit-stop demo
-    # swings with it), so confirming on it would double-fire.
     def confirm_pressed?
-      inputs.keyboard.key_down.enter || inputs.controller_one.key_down.a
+      game.input_source.just_pressed?(game.ui_pad, :ui_confirm)
     end
 
-    # Drives the :pressed state: the focused node held down (mouse over it with the
-    # button down, or a held confirm key).
     def pressing?
       focused = UI.focused_node
       return false unless focused
 
       (inputs.mouse.held && focused.intersect_rect?(inputs.mouse)) ||
-        inputs.keyboard.key_held.enter ||
-        inputs.controller_one.key_held.a
+        game.input_source.pressed?(game.ui_pad, :ui_confirm)
     end
 
     # Only triggers if the focused node belongs to THIS ui: focus is a shared

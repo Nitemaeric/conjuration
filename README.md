@@ -65,6 +65,7 @@ View the following files to get started:
 
 - [main.rb](demo/mygame/app/main.rb)
 - [game.rb](demo/mygame/app/game.rb)
+- [scenes/title_scene.rb](demo/mygame/app/scenes/title_scene.rb)
 - [scenes/menu_scene.rb](demo/mygame/app/scenes/menu_scene.rb)
 
 ## Conventions
@@ -96,3 +97,10 @@ camera.draw(sprite, z: -sprite[:y])    # y-sort: lower on screen draws in front
 - y-sorting (`z: -y`) is a convention, not a separate feature; the same `z:` handles layering, depth, and iso ordering.
 
 Only interleaving entities pay for the sort — tiles and backgrounds stay on the immediate fast path. See [basic_camera_scene.rb](demo/mygame/app/scenes/basic_camera_scene.rb) for the follow target y-sorted against pillars.
+
+### Menu input — works out of the box
+
+Conjuration depends on [dragon_input](https://github.com/Nitemaeric/dragon_input); drenv vendors it automatically when you add Conjuration, so you don't declare it yourself. Framework UI (menu navigation and confirm) needs **no setup at all** — if you never call `DragonInput.setup`, the first menu query bootstraps a minimal config, and either way the reserved UI actions (`:ui_confirm`, `:ui_up/down/left/right`, bound to Enter/arrows and controller A/D-pad) are injected into your action sets the first time a menu reads input, filling only gaps so your own bindings win. Calling your own `DragonInput.setup` later simply replaces the config; the reserved actions are re-injected into it.
+
+- **Don't pump manually.** Conjuration calls `DragonInput.tick` once per frame inside `Game#tick`. The pump is gated on `DragonInput.config`, so a game that never uses input pays only a nil-check per tick.
+- **Escape hatch:** assign `game.input_source = your_source` (any object answering `just_pressed?(pad, action)` / `pressed?(pad, action)`) to bypass the DragonInput wrapper entirely. `game.ui_pad` (default `:one`) picks the logical pad the framework UI listens to.

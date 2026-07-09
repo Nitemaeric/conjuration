@@ -25,6 +25,10 @@ module Conjuration
     end
 
     def tick
+      # config is nil until the game (or framework UI) calls setup; gating on it
+      # skips the pump for games that never use input.
+      DragonInput.tick(args) if DragonInput.config
+
       if @hit_stop && @hit_stop > 0
         @hit_stop -= 1
       else
@@ -38,6 +42,23 @@ module Conjuration
     def debug?
       debug
     end
+
+    def input_source
+      return @input_source if @input_source_assigned
+
+      @input_source ||= DragonInputSource.new
+    end
+
+    def input_source=(source)
+      @input_source_assigned = true
+      @input_source = source
+    end
+
+    def ui_pad
+      @ui_pad ||= :one
+    end
+
+    attr_writer :ui_pad
 
     private
 
