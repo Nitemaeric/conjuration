@@ -919,38 +919,81 @@ module Conjuration
         groups
       end
 
-      # The nearest interactive node to `from` within a 45-degree cone of
-      # `direction`, among `candidates` (default: all interactive nodes; the input
-      # loop passes the active group's members to keep navigation inside a pane).
+      # The interactive node `direction` leads to from `from`, among `candidates`
+      # (default: all interactive nodes; the input loop passes the active group's
+      # members to keep navigation inside a pane).
+      #
+      # A candidate whose cross-axis span overlaps the source's (the "beam")
+      # categorically outranks every non-beam candidate, however near: this is what
+      # makes an aligned neighbour win over a closer diagonal one. Only when the
+      # beam is empty do we fall back to the nearest node in a 45-degree cone.
       def spatial_navigate(from, direction, candidates: interactive_nodes)
         return candidates.first if from.nil?
 
-        origin = from.rect.center
-        best = nil
-        best_distance = nil
+        source = from.rect
+        origin = source.center
+        horizontal = direction.x != 0
+
+        main_sign = horizontal ? direction.x : direction.y
+        if horizontal
+          src_main_lo, src_main_hi = source.left, source.right
+          beam_lo, beam_hi = source.bottom, source.top
+        else
+          src_main_lo, src_main_hi = source.bottom, source.top
+          beam_lo, beam_hi = source.left, source.right
+        end
+
+        beam_best = nil
+        beam_gap = nil
+        beam_offset = nil
+        fallback_best = nil
+        fallback_score = nil
 
         candidates.each do |node|
           next if node.equal?(from)
 
-          centre = node.rect.center
+          rect = node.rect
+          centre = rect.center
           dx = centre.x - origin.x
           dy = centre.y - origin.y
 
-          # Inside a 45-degree cone of the direction: the projection along it must
-          # be positive and at least as large as the perpendicular offset.
+          # Eligibility: the centre must lie strictly beyond the source along the
+          # direction axis (a permissive centre test — edge-based exclusion strands
+          # focus in overlapping layouts).
           along = dx * direction.x + dy * direction.y
           next unless along > 0
-          across = (dx * direction.y - dy * direction.x).abs
-          next if along < across
 
-          distance = dx * dx + dy * dy
-          if best_distance.nil? || distance < best_distance
-            best = node
-            best_distance = distance
+          if horizontal
+            cand_lo, cand_hi = rect.bottom, rect.top
+            cand_main_lo, cand_main_hi = rect.left, rect.right
+            cross_offset = dy.abs
+          else
+            cand_lo, cand_hi = rect.left, rect.right
+            cand_main_lo, cand_main_hi = rect.bottom, rect.top
+            cross_offset = dx.abs
+          end
+
+          if cand_hi > beam_lo && cand_lo < beam_hi
+            gap = main_sign > 0 ? cand_main_lo - src_main_hi : src_main_lo - cand_main_hi
+            gap = 0 if gap < 0
+            if beam_gap.nil? || gap < beam_gap || (gap == beam_gap && cross_offset < beam_offset)
+              beam_best = node
+              beam_gap = gap
+              beam_offset = cross_offset
+            end
+          else
+            across = (dx * direction.y - dy * direction.x).abs
+            next if along < across
+
+            weighted = along + 2 * across
+            if fallback_score.nil? || weighted < fallback_score
+              fallback_best = node
+              fallback_score = weighted
+            end
           end
         end
 
-        best
+        beam_best || fallback_best
       end
 
       def method_missing(method_name, *args, &block)
