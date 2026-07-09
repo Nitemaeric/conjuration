@@ -97,8 +97,16 @@ class IsometricScene < Conjuration::Scene
   end
 
   def update
-    phase = (clock * 0.01) % 2.0
-    state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
+    # Draw-order forensics: K freezes the walk so a clipping pose can be held,
+    # P dumps that frame's entire deferred draw buffer to iso_draw_dump.txt
+    # (analyse with demo/tools/analyze_iso_dump.rb).
+    state.walk_paused = !state.walk_paused if inputs.keyboard.key_down.k
+    @dump_requested = true if inputs.keyboard.key_down.p
+
+    unless state.walk_paused
+      phase = (clock * 0.01) % 2.0
+      state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
+    end
 
     label = cameras[:main].ui.find(:hover_label)
     label.object.text = hovered_label
@@ -113,15 +121,22 @@ class IsometricScene < Conjuration::Scene
       pick = picked_cell(camera)
       if pick
         c = @iso.to_world(pick[:col], pick[:row], pick[:height])
-        camera.draw({
+        prim = {
           x: c[:x], y: c[:y], w: TILE_W, h: TILE_H,
           path: :iso_highlight, anchor_x: 0.5, anchor_y: 0.5,
           r: 255, g: 232, b: 120, a: 150
-        }, z: pick[:col] + pick[:row])
+        }
+        prim[:dbg] = "highlight_#{pick[:col]}_#{pick[:row]}" if @dump_requested
+        camera.draw(prim, z: pick[:col] + pick[:row])
       end
     end
 
     draw_knight(camera)
+
+    if @dump_requested && camera == cameras[:main]
+      dump_draw_buffer(camera)
+      @dump_requested = false
+    end
   end
 
   private
@@ -140,10 +155,12 @@ class IsometricScene < Conjuration::Scene
         (0..h).each do |level|
           c = @iso.to_world(col, row, level)
           path = (h > 0 && level == h) ? GRASS : DIRT
-          camera.draw({
+          prim = {
             x: c[:x], y: c[:y], w: DRAW_W, h: DRAW_H,
             path: path, anchor_x: TILE_ANCHOR_X, anchor_y: TILE_ANCHOR_Y
-          }, z: z)
+          }
+          prim[:dbg] = "cube_#{col}_#{row}_L#{level}" if @dump_requested
+          camera.draw(prim, z: z)
         end
       end
     end
@@ -152,19 +169,47 @@ class IsometricScene < Conjuration::Scene
   def draw_props(camera)
     PROPS.each do |(col, row, path, anchor_x, anchor_y)|
       c = @iso.to_world(col, row, height_at(col, row))
-      camera.draw({
+      prim = {
         x: c[:x], y: c[:y], w: DRAW_W, h: DRAW_H,
         path: path, anchor_x: anchor_x, anchor_y: anchor_y
-      }, z: col + row)
+      }
+      prim[:dbg] = "prop_#{col}_#{row}" if @dump_requested
+      camera.draw(prim, z: col + row)
     end
   end
 
   def draw_knight(camera)
     pos = @iso.to_world(state.knight_col, KNIGHT_ROW, walk_height(state.knight_col, KNIGHT_ROW))
-    camera.draw({
+    prim = {
       x: pos[:x], y: pos[:y], w: KNIGHT_W, h: KNIGHT_H,
       path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0
-    }, z: state.knight_col.round + KNIGHT_ROW)
+    }
+    prim[:dbg] = "knight" if @dump_requested
+    camera.draw(prim, z: state.knight_col.round + KNIGHT_ROW)
+  end
+
+  # Ground truth for the clip investigation: the camera's deferred buffer, in
+  # post-sort flush order, exactly as DR will composite it — plus every runtime
+  # constant the offline model needs. Taps @draw_buffer before the camera's own
+  # flush so the lib stays untouched; the sort here mirrors flush_ordered_draws.
+  def dump_draw_buffer(camera)
+    buffer = camera.instance_variable_get(:@draw_buffer)
+    flushed = buffer.sort { |a, b| a[0] == b[0] ? a[1] <=> b[1] : a[0] <=> b[0] }
+    view = camera.view_rect
+
+    lines = []
+    lines << "# iso draw dump v1 (viewport space, y-up; rect = [x - ax*w, y - ay*h, w, h])"
+    lines << "const TILE_W=#{TILE_W} TILE_H=#{TILE_H} ELEVATION_STEP=#{ELEVATION_STEP} DRAW_W=#{DRAW_W} DRAW_H=#{DRAW_H} TILE_ANCHOR_X=#{TILE_ANCHOR_X} TILE_ANCHOR_Y=#{TILE_ANCHOR_Y} KNIGHT_W=#{KNIGHT_W} KNIGHT_H=#{KNIGHT_H} STEP_RAMP=#{STEP_RAMP}"
+    lines << "camera x=#{camera.current.x} y=#{camera.current.y} zoom=#{camera.current.zoom} w=#{camera.w} h=#{camera.h}"
+    lines << "view x=#{view[:x]} y=#{view[:y]} w=#{view[:w]} h=#{view[:h]}"
+    lines << "knight col=#{state.knight_col} row=#{KNIGHT_ROW} z=#{state.knight_col.round + KNIGHT_ROW} walk_height=#{walk_height(state.knight_col, KNIGHT_ROW)}"
+
+    flushed.each_with_index do |(z, em, prim), idx|
+      lines << "prim idx=#{idx} z=#{z} em=#{em} x=#{prim[:x]} y=#{prim[:y]} w=#{prim[:w]} h=#{prim[:h]} ax=#{prim[:anchor_x]} ay=#{prim[:anchor_y]} path=#{prim[:path]} dbg=#{prim[:dbg]}"
+    end
+
+    gtk.write_file("iso_draw_dump.txt", lines.join("\n") + "\n")
+    gtk.notify!("wrote iso_draw_dump.txt (#{flushed.length} prims)")
   end
 
   # Surface height under a fractional column: the occupied cell's height, except
