@@ -2,9 +2,8 @@ require_relative "scenes/menu_scene"
 
 class Game < Conjuration::Game
   def setup
-    # Deliberately declares NO ui_* actions: Conjuration injects the reserved UI
-    # actions into this set on the first menu query, so navigation and confirm
-    # work without the game wiring them.
+    # No ui_* actions here on purpose: Conjuration injects them on the first menu
+    # query, so navigation works without the game wiring them.
     DragonInput.setup do |c|
       c.action_set :gameplay do |s|
         s.digital :attack, controller: :b, keyboard: :space

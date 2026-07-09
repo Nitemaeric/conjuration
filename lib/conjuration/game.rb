@@ -25,11 +25,8 @@ module Conjuration
     end
 
     def tick
-      # Conjuration owns the input pump. dragon_input is bundled before
-      # conjuration (drenv owns load order), so the constant is always present;
-      # config stays nil until the game calls DragonInput.setup or framework UI
-      # lazily creates one. Gating on config keeps games that never use input at
-      # one nil-check per tick — the zero-cost-when-unused path.
+      # config is nil until the game (or framework UI) calls setup; gating on it
+      # skips the pump for games that never use input.
       DragonInput.tick(args) if DragonInput.config
 
       if @hit_stop && @hit_stop > 0
@@ -46,11 +43,6 @@ module Conjuration
       debug
     end
 
-    # The object framework UI reads input through: it answers
-    # just_pressed?(pad, action) / pressed?(pad, action) for the reserved
-    # UI_ACTIONS names. Defaults to the DragonInput wrapper (dragon_input is a
-    # dependency). Assigning one (see input_source=) opts out of all implicit
-    # behaviour.
     def input_source
       return @input_source if @input_source_assigned
 
@@ -62,7 +54,6 @@ module Conjuration
       @input_source = source
     end
 
-    # The logical pad framework UI listens to.
     def ui_pad
       @ui_pad ||= :one
     end

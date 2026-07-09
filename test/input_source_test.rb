@@ -1,5 +1,3 @@
-# A fake action source satisfying the contract by naming which reserved actions
-# are down this tick (edges) and which are held. Drives the end-to-end UI tests.
 class FakeInputSource
   def initialize(pressed: [], held: [])
     @pressed = pressed
@@ -35,8 +33,6 @@ class NavMenuHost
   end
 end
 
-# --- Game wiring: default source + opt-out ----------------------------------
-
 def test_game_defaults_to_dragon_input_source(args, assert)
   game = Conjuration::Game.new(nil)
   source = game.input_source
@@ -59,8 +55,6 @@ def test_game_explicit_assignment_opts_out(args, assert)
 
   assert.nil!(game.input_source, "any explicit assignment disables the default")
 end
-
-# --- End-to-end: a fake source drives navigation and confirm ----------------
 
 def menu_camera(host)
   camera = make_camera
@@ -106,8 +100,6 @@ ensure
   $game.input_source = nil
   $game.inputs = nil
 end
-
-# --- Implicit dragon_input integration --------------------------------------
 
 def test_dragon_input_injects_missing_actions_into_every_set(args, assert)
   DragonInput.setup do |c|
@@ -155,8 +147,6 @@ ensure
 end
 
 def test_dragon_input_injection_is_lazy(args, assert)
-  # Source chosen before setup — mirrors Conjuration booting before the game
-  # calls DragonInput.setup.
   DragonInput.reset!
   source = Conjuration::DragonInputSource.new
   assert.false!(source.just_pressed?(:one, :ui_confirm), "not pressed before setup, no raise")

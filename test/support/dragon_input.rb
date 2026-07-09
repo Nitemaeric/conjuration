@@ -1,15 +1,5 @@
-# A faithful minimal double of the dragon_input surface Conjuration touches
-# (DragonInput.setup / .config / .digital / .tick; Config#action_set(s);
-# ActionSet#digital / #action). dragon_input is a hard dependency vendored ahead
-# of lib code in a real game, but the mruby test harness only preloads lib/, so
-# this double must load before any lib code touches the DragonInput constant —
-# hence it lives in test/support and is preloaded early (see script/test.sh).
-#
-# Mirrors the real library's shapes — see https://github.com/Nitemaeric/dragon_input
-# — so injection is exercised against the real API: digital returns
-# { down:, held:, up:, active: }, resolves an action in the pad's active
-# (default) set, and reports active:false when the action is absent. It simulates
-# presses (press!) rather than reading raw inputs. NOT the real library.
+# A minimal double of the dragon_input surface Conjuration touches — not the real
+# library (https://github.com/Nitemaeric/dragon_input).
 module DragonInput
   class FakeActionSet
     attr_reader :name, :digitals

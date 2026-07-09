@@ -4,8 +4,8 @@
 #
 # The standalone `mruby` CLI has no `require`/`require_relative` (DragonRuby
 # provides those in its engine), so we preload every file with -r in dependency
-# order: DR-surface shims and the dragon_input double first (lib code touches the
-# DragonInput constant, a hard dependency absent from the mruby harness), then the
+# order: DR-surface shims and the dragon_input double first (lib touches the
+# DragonInput constant, absent from the mruby harness), then the
 # lib sub-files exactly as lib/conjuration.rb requires them (never conjuration.rb
 # itself, whose require_relatives would raise), then the test doubles, then each
 # *_test.rb.
@@ -24,9 +24,6 @@ fi
 # Order mirrors lib/conjuration.rb.
 preload=(
   test/support/shims.rb
-  # dragon_input is a hard dependency vendored ahead of lib in a real game; the
-  # harness only preloads lib/, so the faithful double must load before any lib
-  # code touches the DragonInput constant.
   test/support/dragon_input.rb
   lib/conjuration/extensions/hash.rb
   lib/conjuration/extensions/array.rb

@@ -131,9 +131,8 @@ module Conjuration
       UI.focused_node = target if target
     end
 
-    # Compose the directional vector from the four reserved UI edges — nil when
-    # idle, matching DragonRuby's directional_vector. x/y stay unnormalized (both
-    # axes may fire for a diagonal); spatial_navigate only reads their signs.
+    # Left unnormalized (a diagonal fires both axes); spatial_navigate reads only
+    # the signs.
     def navigation_vector
       source = game.input_source
       pad = game.ui_pad

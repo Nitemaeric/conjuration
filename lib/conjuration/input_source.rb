@@ -1,14 +1,6 @@
 module Conjuration
-  # The reserved UI actions the framework listens for, and their default
-  # bindings. Single source of truth: the dragon_input integration injects these
-  # entries into the game's action sets (see DragonInputSource). Each entry's
-  # shape matches dragon_input's ActionSet#digital keyword args, so it splats
-  # straight in.
-  #
-  # Bindings degrade gracefully: querying any action not listed here is defined to
-  # read as "not pressed", so future reserved names stay safe on old games.
   UI_ACTIONS = {
-    # Space is intentionally NOT bound: games commonly use it (the hit-stop demo
+    # Space is intentionally unbound: games commonly use it (the hit-stop demo
     # swings with it), so confirming on it would double-fire.
     ui_confirm: { controller: :a,          keyboard: :enter },
     ui_up:      { controller: :dpad_up,    keyboard: :up },
@@ -17,13 +9,6 @@ module Conjuration
     ui_right:   { controller: :dpad_right, keyboard: :right }
   }.freeze
 
-  # The default input source (see Game#input_source): dragon_input is a hard
-  # dependency, so this reads through the DragonInput facade. Because Conjuration
-  # can't control when — or whether — the game calls DragonInput.setup, it LAZILY
-  # injects the reserved UI actions from UI_ACTIONS into every action set (and
-  # bootstraps a minimal config on the first reserved query if setup never ran) —
-  # filling only gaps, so a game's own :ui_* binding always wins. Injected actions
-  # are ordinary config entries, so rebinding and IGA export pick them up for free.
   class DragonInputSource
     INACTIVE = { down: false, held: false, up: false, active: false }.freeze
 
@@ -41,23 +26,16 @@ module Conjuration
     def digital(pad, action)
       config = DragonInput.config
 
-      # A game may never call DragonInput.setup, so the first reserved :ui_*
-      # query bootstraps a minimal config for injection to fill — that's what
-      # makes menus work with zero game wiring (and flips Game#tick's pump gate
-      # on). At query time, not load time: a game calling its own setup later in
-      # tick 0 replaces the config wholesale, and the identity re-scan below then
-      # re-injects into it. Only for reserved names — framework UI is the only
-      # mandate, so a game querying its own actions before its own setup keeps
-      # reading "not pressed" instead of getting a surprise config.
+      # Bootstrap at query time (not load time) so a game's own later setup wins,
+      # and only for reserved names so a game's own actions never get a config.
       config = bootstrap_config if config.nil? && UI_ACTIONS.key?(action)
       return INACTIVE unless config
 
       ensure_injected(config)
       result = DragonInput.digital(pad, action)
 
-      # active:false means the action isn't in the pad's set. A reserved name
-      # should be; a miss means a set was (re)built since our last injection, so
-      # re-inject and read once more.
+      # active:false on a reserved name means a set was (re)built since our last
+      # injection: re-inject and read once more.
       if !result[:active] && UI_ACTIONS.key?(action)
         inject(config)
         result = DragonInput.digital(pad, action)
@@ -66,10 +44,8 @@ module Conjuration
       result
     end
 
-    # One empty :ui set — action_set makes it the default set, and the injection
-    # pass fills it with UI_ACTIONS. setup returns the backend, not the config,
-    # so re-read the facade.
     def bootstrap_config
+      # setup returns the backend, not the config, so re-read the facade.
       DragonInput.setup { |c| c.action_set(:ui) }
       DragonInput.config
     end
