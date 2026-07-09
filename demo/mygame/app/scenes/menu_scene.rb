@@ -4,6 +4,7 @@ require_relative "ui_scene"
 require_relative "zoom_scene"
 require_relative "hit_stop_scene"
 require_relative "reactive_scene"
+require_relative "ecs_scene"
 
 # The single home page. `view` is a pure function of state: before the player
 # presses start it emits only the centred "Press <glyph>" prompt; the start /
@@ -125,7 +126,8 @@ class MenuScene < Conjuration::Scene
       { id: :ui, label: "UI", scene: UIScene },
       { id: :zoom, label: "Zoom", scene: ZoomScene },
       { id: :hit_stop, label: "Hit Stop", scene: HitStopScene },
-      { id: :reactive, label: "Reactive", scene: ReactiveScene }
+      { id: :reactive, label: "Reactive", scene: ReactiveScene },
+      { id: :ecs, label: "ECS (draco)", scene: ECSScene }
     ]
   end
 
