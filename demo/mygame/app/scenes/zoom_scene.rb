@@ -1,5 +1,5 @@
 require "app/views/prompt_view.rb"
-require "app/views/shortcut_badge_view.rb"
+require "app/views/button_view.rb"
 
 class ZoomScene < Conjuration::Scene
   TILE_SIZE = 40
@@ -28,10 +28,7 @@ class ZoomScene < Conjuration::Scene
 
   def hud(camera)
     node({ x: 20, y: camera.from_top(20), anchor_y: 1 }) do
-      node({ w: 100, h: 50, path: "sprites/button.png", action: -> { scene.change_scene(to: MenuScene.new(:main)) }}, shortcut: { keyboard: :escape, controller: :b }, justify: :center, align: :center) do
-        node({ text: "Back", r: 255, g: 255, b: 255 })
-        ShortcutBadgeView(id: :back_badge, shortcut: { keyboard: :escape, controller: :b }, height: 50, pad: game.ui_pad)
-      end
+      ButtonView(id: :back, label: "Back", action: -> { scene.change_scene(to: MenuScene.new(:main)) }, height: 50, shortcut: { keyboard: :escape, controller: :b }, pad: game.ui_pad)
     end
 
     node({ x: 0, y: grid.h / 2, w: 256, h: camera.h / 2, anchor_y: 0.5, path: "sprites/menu-container-background.png", tile_x: 32, tile_w: 480 - 32 }, id: :panel, align: :stretch, padding: 20, gap: 20) do
@@ -40,17 +37,11 @@ class ZoomScene < Conjuration::Scene
         node({ text: "Scroll wheel to zoom" })
       end
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }}, justify: :center, align: :center) do
-        node({ text: "Zoom In", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :zoom_in, label: "Zoom In", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom + 0.1) }, width: nil, height: 50)
 
-      node({ h: 50, path: "sprites/button.png", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }}, justify: :center, align: :center) do
-        node({ text: "Zoom Out", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :zoom_out, label: "Zoom Out", action: -> { camera = scene.cameras[:main]; camera.look_at(zoom: camera.target.zoom - 0.1) }, width: nil, height: 50)
 
-      node({ h: 50, path: "sprites/button.png", action: -> { scene.cameras[:main].look_at(zoom: 1) }}, justify: :center, align: :center) do
-        node({ text: "Reset", r: 255, g: 255, b: 255 })
-      end
+      ButtonView(id: :reset_zoom, label: "Reset", action: -> { scene.cameras[:main].look_at(zoom: 1) }, width: nil, height: 50)
     end
 
     # format, not Float#round(2): the harness's mruby round takes no digits arg.

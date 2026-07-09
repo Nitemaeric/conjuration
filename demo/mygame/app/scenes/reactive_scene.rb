@@ -64,4 +64,9 @@ class ReactiveScene < Conjuration::Scene
   def render
     outputs.primitives << { x: grid.allscreen_x, y: grid.allscreen_y, w: grid.allscreen_w, h: grid.allscreen_h, path: :pixel, r: 28, g: 28, b: 36 }
   end
+
+  private
+
+  # ButtonView draws its own focus brackets; skip the framework's default ring.
+  def focus_indicator; end
 end

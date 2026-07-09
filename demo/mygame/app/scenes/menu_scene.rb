@@ -1,4 +1,4 @@
-require "app/views/shortcut_badge_view.rb"
+require "app/views/button_view.rb"
 require_relative "basic_camera_scene"
 require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
@@ -78,6 +78,9 @@ class MenuScene < Conjuration::Scene
 
   private
 
+  # ButtonView draws its own focus brackets; skip the framework's default ring.
+  def focus_indicator; end
+
   # Keyed on glyph_style so the art (and only the art) re-derives when the player
   # swaps between keyboard and controller; unchanged style reuses last frame's
   # subtree, so there's no per-frame glyph lookup or hash allocation.
@@ -112,9 +115,7 @@ class MenuScene < Conjuration::Scene
         pair = entries[row * 2, 2]
         node({ h: 46 }, id: "menu_row_#{row}", direction: :row, justify: :center, gap: 14) do
           pair.each do |entry|
-            node({ w: 213, h: 46, path: "sprites/button.png", action: entry[:action] }, id: entry[:id], justify: :center, align: :center) do
-              node({ text: entry[:label], r: 255, g: 255, b: 255 }, id: "#{entry[:id]}_label")
-            end
+            ButtonView(id: entry[:id], label: entry[:label], action: entry[:action], width: 213, height: 46)
           end
         end
         row += 1
@@ -122,10 +123,7 @@ class MenuScene < Conjuration::Scene
     end
 
     node({ x: 10.from_right, y: 10.from_top, anchor_x: 1, anchor_y: 1 }, id: :mute_bar, direction: :row, justify: :end, gap: 20, group: :menu) do
-      node({ w: 120, h: 40, path: "sprites/button.png", action: -> { toggle_mute } }, id: :mute_button, justify: :center, align: :center, shortcut: { keyboard: :m, controller: :y }) do
-        node({ text: mute_label, r: 255, g: 255, b: 255 }, id: :mute_button_text)
-        ShortcutBadgeView(id: :mute_badge, shortcut: { keyboard: :m, controller: :y }, height: 40, pad: game.ui_pad)
-      end
+      ButtonView(id: :mute_button, label: mute_label, action: -> { toggle_mute }, width: 120, height: 40, shortcut: { keyboard: :m, controller: :y }, pad: game.ui_pad)
     end
   end
 

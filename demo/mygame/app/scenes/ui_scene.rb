@@ -145,9 +145,9 @@ class UIScene < Conjuration::Scene
   # frame, before the button has a box).
   def tooltip
     button = ui.find(:button)
-    focused = button ? button.focused? : false
+    shown = button ? button.hovered? || button.focused? : false
 
-    node({ x: focused ? button.rect.right + 20 : grid.w, y: focused ? button.rect.center.y : grid.h, anchor_y: 0.5, path: :pixel, w: 700, h: 60, r: 0, g: 0, b: 0 }, id: :tooltip, visible: focused, padding: 20) do
+    node({ x: shown ? button.rect.right + 20 : grid.w, y: shown ? button.rect.center.y : grid.h, anchor_y: 0.5, path: :pixel, w: 700, h: 60, r: 0, g: 0, b: 0 }, id: :tooltip, visible: shown, padding: 20) do
       node({ text: "Clicking this button will print 'Button clicked!' to the console.", r: 255, g: 255, b: 255 }, id: :tooltip_text)
     end
   end
