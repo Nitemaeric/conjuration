@@ -74,6 +74,85 @@ def test_iso_shared_corner_resolves_to_one_owner(args, assert)
   assert.equal!([pick[:col], pick[:row]], [1, 1], "the shared corner resolves to a single owner")
 end
 
+def test_iso_height_zero_is_identical_to_the_no_height_projection(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
+
+  [[0, 0], [3, 2], [-1, 4]].each do |(col, row)|
+    flat = iso.to_world(col, row)
+    zero = iso.to_world(col, row, 0)
+    assert.equal!([zero[:x], zero[:y]], [flat[:x], flat[:y]], "height 0 returns exactly the ground projection for (#{col},#{row})")
+  end
+end
+
+def test_iso_elevation_step_defaults_to_half_tile_h_as_a_float(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
+  assert.equal!(iso.elevation_step, 16.0, "elevation_step defaults to tile_h / 2.0")
+  assert.true!(iso.elevation_step.is_a?(Float), "elevation_step is a float")
+
+  custom = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32, elevation_step: 24)
+  assert.equal!(custom.elevation_step, 24.0, "elevation_step honours the constructor override as a float")
+end
+
+def test_iso_height_offsets_y_upward_by_height_times_elevation_step(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32, elevation_step: 20)
+
+  ground = iso.to_world(2, 3)
+  [1, 2, 5].each do |h|
+    raised = iso.to_world(2, 3, h)
+    assert.close!(raised[:x], ground[:x], "height leaves x unchanged (h=#{h})")
+    assert.close!(raised[:y], ground[:y] + h * 20, "height raises y by height * elevation_step (h=#{h})")
+  end
+end
+
+def test_iso_round_trips_a_raised_tile_at_its_own_height(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
+
+  [[0, 0, 1], [3, 2, 2], [5, 5, 3], [-2, 4, 1]].each do |(col, row, h)|
+    world = iso.to_world(col, row, h)
+    back = iso.to_grid(world[:x], world[:y], h)
+    assert.equal!([back[:col], back[:row]], [col, row], "raised tile (#{col},#{row}) at height #{h} round-trips")
+  end
+end
+
+def probe_height(iso, heightmap, x, y, max_height)
+  # Highest-first: a tall tile's top face occludes the lower cells drawn behind
+  # it, so the first candidate height whose cell actually stands that tall is the
+  # one under the cursor.
+  h = max_height
+  while h >= 0
+    cell = iso.to_grid(x, y, h)
+    stack = heightmap[[cell[:col], cell[:row]]]
+    return cell if stack && stack == h
+    h -= 1
+  end
+  nil
+end
+
+def test_iso_probe_finds_the_top_of_a_stack(args, assert)
+  iso = Conjuration::Projection::Isometric.new(tile_w: 64, tile_h: 32)
+  heightmap = {
+    [0, 0] => 0,
+    [1, 0] => 2,
+    [0, 1] => 0,
+    [1, 1] => 1
+  }
+
+  top = iso.to_world(1, 0, 2)
+  pick = probe_height(iso, heightmap, top[:x], top[:y], 2)
+  assert.equal!([pick[:col], pick[:row]], [1, 0], "probe picks the raised tile at its elevated top face")
+
+  ground = iso.to_world(0, 1, 0)
+  flat = probe_height(iso, heightmap, ground[:x], ground[:y], 2)
+  assert.equal!([flat[:col], flat[:row]], [0, 1], "probe falls through to a ground tile when nothing taller occludes it")
+end
+
+def test_topdown_to_world_ignores_height(args, assert)
+  td = Conjuration::Projection::TopDown.new(tile_w: 40, tile_h: 40)
+  flat = td.to_world(2, 3)
+  raised = td.to_world(2, 3, 5)
+  assert.equal!([raised[:x], raised[:y]], [flat[:x], flat[:y]], "TopDown height is a no-op")
+end
+
 def test_topdown_is_the_identity_projection(args, assert)
   td = Conjuration::Projection::TopDown.new(tile_w: 40, tile_h: 40)
 

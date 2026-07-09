@@ -5,8 +5,23 @@ class IsometricScene < Conjuration::Scene
   GRID_COLS = 10
   GRID_ROWS = 10
 
-  RAISE_COL = 5
-  RAISE_ROW = 5
+  KNIGHT_ROW = 5
+  MAX_HEIGHT = 2
+
+  # Hand-authored terrain: a height-2 plateau with a height-1 apron. Row 5 (the
+  # knight's path) reads 0 0 0 1 2 2 2 1 0 0 — a ramp up, a plateau, a ramp down.
+  HEIGHTMAP = [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 1, 1, 1, 1, 1, 0, 0],
+    [0, 0, 0, 1, 2, 2, 2, 1, 0, 0],
+    [0, 0, 0, 1, 2, 2, 2, 1, 0, 0],
+    [0, 0, 0, 1, 2, 2, 2, 1, 0, 0],
+    [0, 0, 0, 1, 1, 1, 1, 1, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  ].freeze
 
   def setup
     @iso = Conjuration::Projection::Isometric.new(tile_w: TILE_W, tile_h: TILE_H)
@@ -35,6 +50,7 @@ class IsometricScene < Conjuration::Scene
     end
 
     state.knight_col = 0.0
+    state.knight_height = 0.0
 
     build_hud
   end
@@ -52,6 +68,9 @@ class IsometricScene < Conjuration::Scene
     phase = (clock * 0.01) % 2.0
     state.knight_col = (phase <= 1.0 ? phase : 2.0 - phase) * (GRID_COLS - 1)
 
+    target = height_at(state.knight_col.floor, KNIGHT_ROW)
+    state.knight_height += (target - state.knight_height) * 0.2
+
     label = cameras[:main].ui.find(:hover_label)
     label.object.text = hovered_label
     label.invalidate!
@@ -60,49 +79,84 @@ class IsometricScene < Conjuration::Scene
   def draw_world(camera)
     @tiles.draw(camera)
 
-    if camera == focused_camera
-      point = camera.to_world(**inputs.mouse.rect)
-      cell = @iso.to_grid(point[:x], point[:y])
+    draw_terrain(camera)
 
-      if in_bounds?(cell[:col], cell[:row])
-        c = @iso.to_world(cell[:col], cell[:row])
+    if camera == focused_camera
+      pick = picked_cell(camera)
+      if pick
+        c = @iso.to_world(pick[:col], pick[:row], pick[:height])
         camera.draw({
           x: c[:x], y: c[:y], w: TILE_W, h: TILE_H,
           path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5,
           r: 255, g: 232, b: 120, a: 200
-        })
+        }, z: pick[:col] + pick[:row])
       end
     end
 
-    draw_raised_block(camera)
     draw_knight(camera)
   end
 
   private
 
-  def draw_raised_block(camera)
-    base = @iso.to_world(RAISE_COL, RAISE_ROW)
-    z = RAISE_COL + RAISE_ROW
+  # Raised columns are deferred (z: col + row), not baked into the static floor
+  # TileLayer, so the moving knight z-interleaves with the terrain it walks past.
+  def draw_terrain(camera)
+    GRID_ROWS.times do |row|
+      GRID_COLS.times do |col|
+        h = HEIGHTMAP[row][col]
+        next if h.zero?
 
-    camera.draw({
-      x: base[:x], y: base[:y], w: TILE_W, h: TILE_H,
-      path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 96, g: 78, b: 150
-    }, z: z)
+        base = @iso.to_world(col, row)
+        z = col + row
 
-    3.times do |i|
-      camera.draw({
-        x: base[:x], y: base[:y] + 6 + i * 26, w: 44, h: 44,
-        path: "sprites/crate.png", anchor_x: 0.5, anchor_y: 0.3
-      }, z: z)
+        # Dark diamonds stacked at half-block steps read as a solid cliff face:
+        # each is 32px tall but offset 8px, so only its lower band stays visible.
+        (1..(h * 2)).each do |i|
+          camera.draw({
+            x: base[:x], y: base[:y] + i * (@iso.elevation_step / 2.0),
+            w: TILE_W, h: TILE_H,
+            path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 72, g: 64, b: 92
+          }, z: z)
+        end
+
+        top = @iso.to_world(col, row, h)
+        camera.draw({
+          x: top[:x], y: top[:y], w: TILE_W, h: TILE_H,
+          path: :iso_tile, anchor_x: 0.5, anchor_y: 0.5, r: 150, g: 138, b: 168
+        }, z: z)
+      end
     end
   end
 
   def draw_knight(camera)
-    pos = @iso.to_world(state.knight_col, RAISE_ROW)
+    pos = @iso.to_world(state.knight_col, KNIGHT_ROW, state.knight_height)
     camera.draw({
       x: pos[:x], y: pos[:y], w: 30, h: 42,
       path: "sprites/knight.png", anchor_x: 0.5, anchor_y: 0.2
-    }, z: state.knight_col + RAISE_ROW)
+    }, z: state.knight_col + KNIGHT_ROW)
+  end
+
+  # Probe from the tallest possible stack down: the first candidate height whose
+  # cell actually stands that tall is the top face under the cursor, because a
+  # raised tile occludes the lower cells drawn behind it.
+  def picked_cell(camera)
+    point = camera.to_world(**inputs.mouse.rect)
+
+    h = MAX_HEIGHT
+    while h >= 0
+      cell = @iso.to_grid(point[:x], point[:y], h)
+      if in_bounds?(cell[:col], cell[:row]) && height_at(cell[:col], cell[:row]) == h
+        return { col: cell[:col], row: cell[:row], height: h }
+      end
+      h -= 1
+    end
+    nil
+  end
+
+  def height_at(col, row)
+    return 0 unless in_bounds?(col, row)
+
+    HEIGHTMAP[row][col]
   end
 
   def in_bounds?(col, row)
@@ -110,11 +164,10 @@ class IsometricScene < Conjuration::Scene
   end
 
   def hovered_label
-    return "Hover: -" unless focused_camera
+    return "Tile: -" unless focused_camera
 
-    point = focused_camera.to_world(**inputs.mouse.rect)
-    cell = @iso.to_grid(point[:x], point[:y])
-    in_bounds?(cell[:col], cell[:row]) ? "Tile: #{cell[:col]}, #{cell[:row]}" : "Tile: -"
+    pick = picked_cell(focused_camera)
+    pick ? "Tile: #{pick[:col]}, #{pick[:row]} (h#{pick[:height]})" : "Tile: -"
   end
 
   def build_tile_texture
