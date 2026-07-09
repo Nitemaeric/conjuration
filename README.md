@@ -65,6 +65,7 @@ View the following files to get started:
 
 - [main.rb](demo/mygame/app/main.rb)
 - [game.rb](demo/mygame/app/game.rb)
+- [scenes/title_scene.rb](demo/mygame/app/scenes/title_scene.rb)
 - [scenes/menu_scene.rb](demo/mygame/app/scenes/menu_scene.rb)
 
 ## Conventions
