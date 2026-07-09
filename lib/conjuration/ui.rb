@@ -1111,11 +1111,12 @@ module Conjuration
         end
       end
 
-      # Every justify but :start divides by the node's main-axis size; when that
-      # size is unresolved (nil) mruby dies with an opaque "non float value"
-      # TypeError, so degrade to :start and record why.
+      # :center/:between/:around/:evenly divide by the node's main-axis size; when
+      # that size is unresolved (nil) mruby dies with an opaque "non float value"
+      # TypeError, so degrade to :start and record why. :start and :end never
+      # touch the size (:end anchors off the trailing edge), so they pass through.
       def effective_justify(size, axis, index)
-        return justify if justify == :start || size
+        return justify if justify == :start || justify == :end || size
 
         UI.warn(self, "justify: #{justify.inspect} on #{id.inspect} needs a #{axis}; falling back to :start") if index.zero?
         :start

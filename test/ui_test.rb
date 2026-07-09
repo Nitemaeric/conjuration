@@ -684,3 +684,17 @@ def test_heightless_justify_center_column_falls_back_to_start(args, assert)
   assert.equal!(n2.object.y, 300, "n2 stacked below n1")
   assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":sidebar") && warning.include?("height") }, true, "the missing height is flagged")
 end
+
+def test_widthless_justify_end_row_anchors_off_the_trailing_edge(args, assert)
+  Conjuration::UI.warnings.clear
+
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 1280, h: 720 }, id: :root) do
+    node({ x: 1270, y: 710, anchor_x: 1, anchor_y: 1 }, id: :mute_bar, direction: :row, justify: :end) do
+      node({ w: 120, h: 40, primitive_marker: :solid }, id: :mute)
+    end
+  end
+
+  mute = ui.find(:mute)
+  assert.equal!([mute.object.x, mute.object.anchor_x], [1270, 1], "child's right edge anchors at the container's right edge")
+  assert.equal!(Conjuration::UI.warnings.empty?, true, ":end without a width is legitimate — no warning")
+end
