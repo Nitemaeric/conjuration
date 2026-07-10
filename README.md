@@ -37,9 +37,11 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
 - [x] UI & HUD Management
   - [ ] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
   - [ ] Interactive node management
-- [ ] Input Management
-  - [ ] Default key mapping
-  - [ ] User remapping
+- [x] Input Management — via [dragon_input](https://github.com/Nitemaeric/dragon_input), bundled as a dependency
+  - [x] Action-based bindings (keyboard, mouse, controller; pure-Ruby backend, optional native Steam Input)
+  - [x] Default key mapping (reserved `:ui_*` actions injected automatically — see [Menu input](#menu-input--works-out-of-the-box))
+  - [x] User remapping (in-game rebind UI, or the Steam overlay when available)
+  - [x] Device-following input glyphs (prompts swap art with the last-used device)
 - [ ] Debugging tools
   - [ ] Debug layers
   - [ ] Scene / Camera debug overlay
