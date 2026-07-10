@@ -97,9 +97,18 @@ the iso knight gains a walk (its art permitting) or a bob.
 Chained steps with waits — `sequence { move(npc, to:); pan(camera, to:);
 say("..."); wait_for_confirm }` — the minimal scripted-events primitive a
 Pokémon-like needs. Composes G1's tweens/timers; input-locking during a
-sequence is the scene's choice, not enforced. Demo: a short scripted moment in
-an existing scene (parallax doorway greeting is a natural fit with #19's
-interior).
+sequence is the scene's choice, not enforced.
+
+**Demo (the G3 acceptance): a dialogue cutscene.** Two characters on screen
+talking in turns; a large portrait face shows whoever is speaking (swapping
+sides/highlight as turns pass); dialogue advances on confirm; the character
+models move subtly throughout (idle bob, a step toward each other, a gesture
+on emphasis — all G1 tweens keyed to the scene clock, so pausing freezes the
+whole performance). Needs a second character + face art (Kenney Toon
+Characters ships per-part PNGs including heads — same CC0 sourcing as the
+parallax hero). This one demo exercises sequences, tweens, portrait/UI
+composition, and confirm-gated waits together — if it reads like a scene from
+a real game, Track G is done.
 
 Particles were considered and left as a **demo convention** — first game that
 wants them hand-rolls a pooled emitter on G1/G2 primitives; extraction to core
