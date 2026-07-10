@@ -209,6 +209,39 @@ module Conjuration
       instance_exec(&action) if action
     end
 
+    # Re-derive this ui's tree from state (no-op unless a `view` is registered),
+    # relayout once per frame, then emit its primitives, focus indicator, and — in
+    # debug — its interactive/container bounds into `outputs`. Reconcile writes
+    # only changed props and clean subtrees early-out of layout, so this is
+    # near-free when nothing changed. Scene and camera share it, each passing its
+    # own outputs (screen HUD vs. viewport target).
+    def render_ui(outputs)
+      ui.render_view
+      ui.calculate_layout
+      ui.render_scroll_targets
+
+      outputs.primitives << ui.primitives
+
+      indicator = focus_indicator
+      outputs.primitives << indicator if indicator
+
+      return unless debug?
+
+      outputs.debug << ui.interactive_nodes.map do |node|
+        {
+          **node.rect,
+          r: 0,
+          g: 255,
+          b: 0
+        }.border!
+      end
+
+      # Invisible layout containers, in magenta — only where they resolve to
+      # real bounds (the root has none).
+      container_bounds = ui.nodes.reject(&:renderable?).map(&:rect).select { |rect| rect[:w] && rect[:h] }
+      outputs.debug << container_bounds.map { |rect| { **rect, r: 255, g: 0, b: 255 }.border! }
+    end
+
     # The built-in focus highlight, so keyboard/pad focus is visible without any
     # game styling. Hidden (but retained) while the mouse is the active device;
     # nil unless THIS ui owns the focused node (focus is a shared global, reached
