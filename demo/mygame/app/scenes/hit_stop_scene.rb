@@ -34,6 +34,7 @@ class HitStopScene < Conjuration::Scene
   PARTICLE_LIFE = 28   # debris lifetime
   BURST_LIFE = 12      # starburst lifetime
   POP_SCALE = 1.45     # crate scale punch on impact
+  POP_DURATION = 12    # frames the crate takes to settle back to 1.0
 
   def setup
     add_camera(:main)
@@ -43,7 +44,7 @@ class HitStopScene < Conjuration::Scene
     reset_crates
     state.particles = []
     state.bursts = []
-    state.flash_at = nil         # clock tick of the last screen flash (nil = none)
+    state.screen_flash = 0       # screen-flash alpha, tweened to 0 after each hit
     state.swing_started_at = nil # clock tick the current swing began (nil = idle)
     state.idle_since = clock      # clock tick we've been idle since (drives auto-swing)
 
@@ -68,18 +69,16 @@ class HitStopScene < Conjuration::Scene
 
   def update
     # Physics sims (crate flight, debris) integrate per update, so they freeze on
-    # their own during a hit stop — update simply doesn't run. Time-keyed effects
-    # (flashes, burst, swing) instead read elapsed = clock - started_at; clock
-    # holds through the freeze, so they hold identically, no manual counters.
+    # their own during a hit stop — update simply doesn't run. The scheduled
+    # tweens (flashes, scale pop) and the remaining elapsed reads (burst, swing)
+    # freeze too, since they all key to the scene clock, which holds.
     state.crates.each do |crate|
-      if crate.launched
-        crate.x += crate.vx
-        crate.y += crate.vy
-        crate.vy -= GRAVITY
-        crate.angle += crate.spin
-      end
+      next unless crate.launched
 
-      crate.scale += (1.0 - crate.scale) * 0.25 # ease the pop back to normal
+      crate.x += crate.vx
+      crate.y += crate.vy
+      crate.vy -= GRAVITY
+      crate.angle += crate.spin
     end
 
     state.particles.each do |p|
@@ -109,7 +108,7 @@ class HitStopScene < Conjuration::Scene
 
   # Screen-space flash, drawn over the camera view.
   def render
-    alpha = screen_flash_alpha
+    alpha = state.screen_flash
     return unless alpha > 0
 
     outputs.primitives << {
@@ -125,7 +124,7 @@ class HitStopScene < Conjuration::Scene
 
       camera.draw({ x: crate.x, y: crate.y, w: w, h: h, path: "sprites/crate.png", angle: crate.angle, anchor_x: 0.5, anchor_y: 0.5 })
 
-      flash = crate_flash_alpha(crate)
+      flash = crate.flash
       next unless flash > 0
 
       camera.draw({ x: crate.x, y: crate.y, w: w, h: h, path: :pixel, r: 255, g: 255, b: 255, a: flash, angle: crate.angle, anchor_x: 0.5, anchor_y: 0.5 })
@@ -164,7 +163,7 @@ class HitStopScene < Conjuration::Scene
 
   def reset_crates
     state.crates = CRATE_COUNT.times.map do |i|
-      { x: CRATE_START_X + i * CRATE_SPACING, y: CRATE_Y, w: CRATE_SIZE, h: CRATE_SIZE, vx: 0, vy: 0, angle: 0, spin: 0, scale: 1.0, flash_at: nil, launched: false }
+      { x: CRATE_START_X + i * CRATE_SPACING, y: CRATE_Y, w: CRATE_SIZE, h: CRATE_SIZE, vx: 0, vy: 0, angle: 0, spin: 0, scale: 1.0, flash: 0, launched: false }
     end
   end
 
@@ -194,11 +193,16 @@ class HitStopScene < Conjuration::Scene
     crate.vy = 13
     crate.spin = 11
     crate.scale = POP_SCALE
-    crate.flash_at = clock
+    crate.flash = 255
+
+    tween(crate, :scale, to: 1.0, over: POP_DURATION, ease: :smooth_stop)
+    tween(crate, :flash, to: 0, over: FLASH_DURATION)
 
     spawn_particles(crate.x, crate.y)
     state.bursts << { x: crate.x, y: crate.y, born: clock }
-    state.flash_at = clock
+
+    state.screen_flash = 60
+    tween(state, :screen_flash, to: 0, over: SCREEN_FLASH)
 
     game.hit_stop(HIT_STOP)
     cameras[:main].shake(0.7, direction: { x: 1, y: 0.4 })
@@ -239,23 +243,6 @@ class HitStopScene < Conjuration::Scene
         primitive_marker: :line, r: 255, g: 240, b: 190, a: alpha
       })
     end
-  end
-
-  # Fade alphas for the two flashes, keyed to elapsed clock ticks since the hit.
-  # remaining counts down from the full duration, so both hold at peak through a
-  # hit stop (clock frozen) then fade once it thaws — same curve as before.
-  def crate_flash_alpha(crate)
-    return 0 unless crate.flash_at
-
-    remaining = FLASH_DURATION - (clock - crate.flash_at)
-    remaining > 0 ? 255 * remaining / FLASH_DURATION : 0
-  end
-
-  def screen_flash_alpha
-    return 0 unless state.flash_at
-
-    remaining = SCREEN_FLASH - (clock - state.flash_at)
-    remaining > 0 ? 60 * remaining / SCREEN_FLASH : 0
   end
 
   def stationary_crates
