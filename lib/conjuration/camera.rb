@@ -179,6 +179,49 @@ module Conjuration
       game.outputs[@output_key]
     end
 
+    # Serialise this frame's deferred draw buffer in post-sort flush order — the
+    # draw-order inspector (roadmap H3, promoted from the isometric demo's ad-hoc
+    # forensics). Debug-only by convention, but callable anytime; nothing is kept
+    # between calls, so a game that never dumps pays nothing.
+    #
+    # Each primitive line carries its flush index, z band, emission index,
+    # viewport rect (x/y/w/h), anchors, path, and an optional caller tag. The tag
+    # is the DEBUG-TAG CONVENTION: set a `dbg:` key on any primitive handed to
+    # #draw and it rides through unchanged into the dump. It costs nothing on the
+    # render path — #to_viewport dups the source hash, so an absent `dbg:` is
+    # never present, and DragonRuby's renderer reads only the keys it knows and
+    # ignores the rest, so a present one is a free passenger.
+    #
+    # `io_or_path`: an IO-ish sink (anything responding to `<<` — a StringIO, an
+    # array) receives the text; a String path (or nil, defaulting to a per-camera
+    # filename) routes through `gtk.write_file` into DR's sandboxed write root.
+    # The full text is always returned, so a harness with no file sandbox can just
+    # capture it.
+    def dump_draw_order(io_or_path = nil)
+      view = view_rect
+
+      lines = []
+      lines << "# conjuration draw-order dump v1 (viewport space, y-up; rect = [x - ax*w, y - ay*h, w, h])"
+      lines << "camera name=#{name} x=#{current.x} y=#{current.y} zoom=#{current.zoom} w=#{w} h=#{h}"
+      lines << "view x=#{view[:x]} y=#{view[:y]} w=#{view[:w]} h=#{view[:h]}"
+
+      idx = 0
+      each_ordered_draw do |z, em, prim|
+        lines << "prim idx=#{idx} z=#{z} em=#{em} x=#{prim[:x]} y=#{prim[:y]} w=#{prim[:w]} h=#{prim[:h]} ax=#{prim[:anchor_x]} ay=#{prim[:anchor_y]} path=#{prim[:path]} tag=#{prim[:dbg]}"
+        idx += 1
+      end
+
+      text = lines.join("\n") + "\n"
+
+      if io_or_path.respond_to?(:<<) && !io_or_path.is_a?(String)
+        io_or_path << text
+      else
+        gtk.write_file(io_or_path || "draw_order_#{name}.txt", text)
+      end
+
+      text
+    end
+
     private
 
     def perform_update
@@ -205,17 +248,13 @@ module Conjuration
       @trauma = [@trauma - SHAKE_DECAY, 0].max if @trauma && @trauma > 0
     end
 
-    # Emit the deferred draws, sorted by z then emission order, and clear the
-    # buffer for the next frame. Sorting on the emission index as the tie-breaker
-    # makes equal-z order deterministic (call order) regardless of whether the
-    # underlying sort is stable — mruby's is not — so equal-z primitives never
-    # flicker. The explicit comparator avoids the per-comparison array alloc a
-    # `[z, index] <=>` key would cost on this per-frame path.
+    # Emit the deferred draws in composite order, then clear the buffer for the
+    # next frame. The ordering itself lives in #each_ordered_draw, shared with the
+    # debug dump so the two can never drift.
     def flush_ordered_draws
       return if @draw_buffer.empty?
 
-      @draw_buffer.sort! { |a, b| a[0] == b[0] ? a[1] <=> b[1] : a[0] <=> b[0] }
-      @draw_buffer.each { |_, _, primitive| outputs.primitives << primitive }
+      each_ordered_draw { |_z, _em, primitive| outputs.primitives << primitive }
       @draw_buffer.clear
     end
 
@@ -289,6 +328,20 @@ module Conjuration
         { x: cx - DEBUG_MARKER_RADIUS, y: cy, x2: cx + DEBUG_MARKER_RADIUS, y2: cy, r: red, g: green, b: blue, primitive_marker: :line },
         { x: cx, y: cy - DEBUG_MARKER_RADIUS, x2: cx, y2: cy + DEBUG_MARKER_RADIUS, r: red, g: green, b: blue, primitive_marker: :line }
       ]
+    end
+
+    # Sort the deferred buffer into final composite order and yield each entry
+    # [z, emission_index, primitive]. THE single source of draw-order truth: the
+    # render flush and #dump_draw_order both go through here, so a dump reports
+    # exactly what DragonRuby composites. Sorting on the emission index as the
+    # tie-breaker makes equal-z order deterministic (call order) regardless of
+    # whether the underlying sort is stable — mruby's is not — so equal-z
+    # primitives never flicker. The explicit comparator avoids the per-comparison
+    # array alloc a `[z, index] <=>` key would cost on this per-frame path. Sorts
+    # in place; idempotent, so a dump before the flush leaves the flush correct.
+    def each_ordered_draw
+      @draw_buffer.sort! { |a, b| a[0] == b[0] ? a[1] <=> b[1] : a[0] <=> b[0] }
+      @draw_buffer.each { |entry| yield(entry[0], entry[1], entry[2]) }
     end
 
     def compute_view_rect(parallax)

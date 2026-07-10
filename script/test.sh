@@ -44,6 +44,7 @@ preload=(
   lib/conjuration/game.rb
   test/support/doubles.rb
   test/support/demo_doubles.rb
+  tools/analyze_draw_order.rb
   demo/mygame/app/views/prompt_view.rb
   demo/mygame/app/views/shortcut_badge_view.rb
   demo/mygame/app/views/button_view.rb
