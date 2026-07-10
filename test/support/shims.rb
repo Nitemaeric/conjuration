@@ -15,9 +15,14 @@
 # game.rb mixes this in at load time. DragonRuby's real AttrGTK
 # (dragon/attr_gtk.rb in the contrib repo) wires up args/state/outputs/etc. Most
 # tests never touch it, but the hit-stop test instantiates a Game (which assigns
-# `args` in its initializer), so expose that one accessor.
+# `args` in its initializer), so expose that accessor; the debug-panel test also
+# reads outputs, which real AttrGTK sources from args.
 module AttrGTK
   attr_accessor :args
+
+  def outputs
+    args.outputs
+  end
 end
 
 # DragonRuby exposes hash values as methods: `h.x` reads `h[:x]`, `h.x = v`

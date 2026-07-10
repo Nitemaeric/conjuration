@@ -21,6 +21,9 @@ module Conjuration
     # The per-tick step is clamped to the remaining distance, so this large speed snaps instantly.
     SNAP = 1_000_000
 
+    # Half-extent (px) of a debug focal crosshair, held constant across zoom.
+    DEBUG_MARKER_RADIUS = 6
+
     def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
 
@@ -216,6 +219,78 @@ module Conjuration
       @draw_buffer.clear
     end
 
+    # World-space introspection drawn into the camera's own viewport: the cull
+    # frame, focal current/target (with a link when they differ), the follow
+    # target, and the scene's world bounds, plus a corner text readout. World
+    # elements route through #to_viewport, so they track pan and zoom exactly as
+    # scene content does. Guarded here as well as at the call site so it builds
+    # nothing when debug is off — the whole overlay is a no-op then.
+    def render_debug_overlay
+      return unless debug?
+
+      outputs.debug << debug_view_rect_outline
+      debug_focal_markers.each { |primitive| outputs.debug << primitive }
+      outputs.debug << debug_follow_marker if following
+      outputs.debug << debug_world_bounds if scene.virtual_w && scene.virtual_h
+      debug_readout_labels.each { |label| outputs.debug << label }
+    end
+
+    def debug_view_rect_outline
+      { **to_viewport(view_rect), r: 255, g: 255, b: 0, primitive_marker: :border }
+    end
+
+    def debug_focal_markers
+      markers = debug_crosshair(current.x, current.y, 0, 255, 255)
+      debug_crosshair(target.x, target.y, 255, 160, 0).each { |marker| markers << marker }
+
+      if target.x != current.x || target.y != current.y
+        from = to_viewport({ x: current.x, y: current.y })
+        to = to_viewport({ x: target.x, y: target.y })
+        markers << { x: from[:x], y: from[:y], x2: to[:x], y2: to[:y], r: 255, g: 255, b: 255, primitive_marker: :line }
+      end
+
+      markers
+    end
+
+    def debug_follow_marker
+      point = to_viewport({ x: following.x, y: following.y })
+      radius = DEBUG_MARKER_RADIUS * 2
+
+      { x: point[:x] - radius, y: point[:y] - radius, w: radius * 2, h: radius * 2, r: 80, g: 160, b: 255, primitive_marker: :border }
+    end
+
+    def debug_world_bounds
+      { **to_viewport({ x: 0, y: 0, w: scene.virtual_w, h: scene.virtual_h }), r: 255, g: 140, b: 0, primitive_marker: :border }
+    end
+
+    def debug_readout_labels
+      zoom = (current.zoom * 100).round / 100.0
+      lines = [
+        name.to_s,
+        "x #{current.x.round} y #{current.y.round} z #{zoom}",
+        following ? "follow on" : "follow off"
+      ]
+
+      labels = []
+      lines.each_with_index do |text, index|
+        labels << { x: from_left(6), y: from_top(6) - index * 16, text: text, size_px: 14, r: 255, g: 255, b: 0, anchor_y: 1 }
+      end
+      labels
+    end
+
+    # Two viewport-space lines centred on a world point, drawn at a fixed pixel
+    # size (position transformed, extent not) so a marker stays legible at any zoom.
+    def debug_crosshair(world_x, world_y, red, green, blue)
+      point = to_viewport({ x: world_x, y: world_y })
+      cx = point[:x]
+      cy = point[:y]
+
+      [
+        { x: cx - DEBUG_MARKER_RADIUS, y: cy, x2: cx + DEBUG_MARKER_RADIUS, y2: cy, r: red, g: green, b: blue, primitive_marker: :line },
+        { x: cx, y: cy - DEBUG_MARKER_RADIUS, x2: cx, y2: cy + DEBUG_MARKER_RADIUS, r: red, g: green, b: blue, primitive_marker: :line }
+      ]
+    end
+
     def compute_view_rect(parallax)
       shake_x, shake_y = shake_offset
 
@@ -299,6 +374,8 @@ module Conjuration
         # real bounds (the root has none).
         container_bounds = ui.nodes.reject(&:renderable?).map(&:rect).select { |rect| rect[:w] && rect[:h] }
         outputs.debug << container_bounds.map { |rect| { **rect, r: 255, g: 0, b: 255 }.border! }
+
+        render_debug_overlay
       end
 
       # Blit the camera's viewport onto its rect on the screen.
