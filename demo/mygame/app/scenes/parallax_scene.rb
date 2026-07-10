@@ -62,7 +62,11 @@ class ParallaxScene < Conjuration::Scene
     @clouds = build_clouds
     @trees  = build_trees
     @ground = build_ground
-    @hero_walk = Array.new(WALK_FRAMES) { |i| "sprites/parallax/hero/walk#{i}.png" }
+    @hero_anim = Conjuration::Animation.new(
+      walk: { frames: Array.new(WALK_FRAMES) { |i| "sprites/parallax/hero/walk#{i}.png" }, hold: WALK_FRAME_DIV },
+      idle: { frames: [HERO_IDLE] }
+    )
+    @hero_anim.play(:idle)
 
     camera = cameras[:main]
     camera.ui.view { hud(camera) }
@@ -94,6 +98,11 @@ class ParallaxScene < Conjuration::Scene
     hero.facing = dx.positive? ? 1 : -1
   end
 
+  def update
+    @hero_anim.play(state.hero.moving ? :walk : :idle)
+    @hero_anim.update(clock)
+  end
+
   def draw_world(camera)
     camera.draw({ x: -LAYER_MARGIN, y: -400, w: WORLD_W + LAYER_MARGIN * 2, h: 1600, path: :pixel, **SKY_COLOR }, **SKY)
 
@@ -104,8 +113,7 @@ class ParallaxScene < Conjuration::Scene
     @ground.each { |tile| camera.draw(tile, z: 0) }
 
     hero = state.hero
-    path = hero.moving ? @hero_walk[clock.idiv(WALK_FRAME_DIV) % WALK_FRAMES] : HERO_IDLE
-    camera.draw({ x: hero.x, y: hero.y, w: hero.w, h: hero.h, path: path, anchor_x: 0.5, flip_horizontally: hero.facing.negative? }, z: 0)
+    camera.draw({ x: hero.x, y: hero.y, w: hero.w, h: hero.h, path: @hero_anim.path, anchor_x: 0.5, flip_horizontally: hero.facing.negative? }, z: 0)
   end
 
   private
