@@ -3,9 +3,25 @@ require "app/views/button_view.rb"
 
 class ZoomScene < Conjuration::Scene
   TILE_SIZE = 40
+  WORLD = 16000
+  # Rows of the grid baked per load_tick. The whole 400x400 grid (320k tiles) is
+  # the same total work as the old synchronous build in setup — spread across
+  # frames so a fade transition + progress bar cover the wait instead of a stall.
+  ROWS_PER_TICK = 6
+
+  # Bake one grid row into the layer. A class method so a test can build a
+  # reference layer synchronously and compare it against the sliced build.
+  def self.paint_row(tiles, row, dim, tile_size)
+    dim.times do |column|
+      cell = { x: column * tile_size, y: row * tile_size, w: tile_size, h: tile_size }
+      shade = (row + column) % 2 == 0 ? 192 : 64
+      tiles.add({ **cell, path: :pixel, r: shade, g: shade, b: shade, a: 192 })
+      tiles.add({ **cell, primitive_marker: :border, r: 255, g: 255, b: 255, a: 192 })
+    end
+  end
 
   def setup
-    self.virtual_w = self.virtual_h = 16000
+    self.virtual_w = self.virtual_h = WORLD
 
     add_camera(:main, speed: 30, zoom_speed: 0.05)
     # No activate_navigation: the arrows pan the camera; activating would let
@@ -13,18 +29,40 @@ class ZoomScene < Conjuration::Scene
     cameras[:main].ui.group = :hud
 
     @tiles = Conjuration::TileLayer.new(name: :grid, chunk_size: 400)
-
-    (virtual_w / TILE_SIZE).to_i.times do |row|
-      (virtual_h / TILE_SIZE).to_i.times do |column|
-        cell = { x: column * TILE_SIZE, y: row * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE }
-
-        @tiles.add({ **cell, path: :pixel, r: (row + column) % 2 == 0 ? 192 : 64, g: (row + column) % 2 == 0 ? 192 : 64, b: (row + column) % 2 == 0 ? 192 : 64, a: 192 })
-        @tiles.add({ **cell, primitive_marker: :border, r: 255, g: 255, b: 255, a: 192 })
-      end
-    end
+    @dim = (WORLD / TILE_SIZE).to_i
+    @build_row = 0
 
     camera = cameras[:main]
     camera.ui.view { hud(camera) }
+  end
+
+  # Time-slice the map build: a handful of rows per frame, reporting 0..1
+  # progress, then :done. Absent this hook a scene is instantly ready, so the
+  # protocol is zero-cost for the other demos.
+  def load_tick
+    return :done if @build_row >= @dim
+
+    target = @build_row + ROWS_PER_TICK
+    target = @dim if target > @dim
+
+    while @build_row < target
+      self.class.paint_row(@tiles, @build_row, @dim, TILE_SIZE)
+      @build_row += 1
+    end
+
+    @build_row >= @dim ? :done : @build_row.to_f / @dim
+  end
+
+  # Shown by the framework while loading (under a transition's hold, or on a bare
+  # black screen without one). A labelled progress bar over the map build.
+  def loading_view(progress)
+    bar_w = 480
+    bar_x = grid.w / 2 - bar_w / 2
+    bar_y = grid.h / 2 - 16
+
+    outputs.primitives << { x: grid.w / 2, y: bar_y + 60, text: "Building world  #{(progress * 100).to_i}%", size_enum: 2, anchor_x: 0.5, anchor_y: 0.5, r: 235, g: 235, b: 240 }
+    outputs.primitives << { x: bar_x, y: bar_y, w: bar_w, h: 24, path: :pixel, r: 40, g: 40, b: 48 }
+    outputs.primitives << { x: bar_x, y: bar_y, w: bar_w * progress, h: 24, path: :pixel, r: 120, g: 200, b: 130 }
   end
 
   def hud(camera)

@@ -1,5 +1,7 @@
 require "app/views/prompt_view.rb"
 require "app/views/button_view.rb"
+require "app/transitions/fade_transition.rb"
+require "app/scenes/interior_scene.rb"
 
 class ParallaxScene < Conjuration::Scene
   WORLD_W = 6000
@@ -39,6 +41,14 @@ class ParallaxScene < Conjuration::Scene
   ].freeze
 
   GROUND_TILE_W = 600
+
+  # A doorway in the world: walking into it push_scenes the interior (the "house"
+  # case). The overworld is paused, not torn down, so the hero and camera are
+  # exactly where he left them on the way back out.
+  DOOR_X = 1400
+  DOOR_HALF = 60
+  DOOR_W = 120
+  DOOR_H = 200
 
   # Kenney Toon Characters frames are 96x128; feet sit flush on the frame's
   # bottom edge, so the default bottom anchor puts them on the ground line.
@@ -86,16 +96,30 @@ class ParallaxScene < Conjuration::Scene
     end
   end
 
+  # Keep the menu's bgm playing into the overworld (change_scene clears audio by
+  # default; opting to retain proves the policy — the music then also survives
+  # the house push/pop, which never clears).
+  def retain_audio?
+    true
+  end
+
   def input
     hero = state.hero
     # Raw left_right, not the move_* actions: DR's composite keeps the arrows and
     # stick analog live, and dragon_input digital bindings are single-key.
     dx = inputs.left_right * WALK_SPEED
     hero.moving = !dx.zero?
-    return if dx.zero?
 
-    hero.x = (hero.x + dx).clamp(hero.w / 2, WORLD_W - hero.w / 2)
-    hero.facing = dx.positive? ? 1 : -1
+    unless dx.zero?
+      hero.x = (hero.x + dx).clamp(hero.w / 2, WORLD_W - hero.w / 2)
+      hero.facing = dx.positive? ? 1 : -1
+    end
+
+    # Edge-triggered on entering the doorway so a pop that lands the hero back in
+    # it doesn't immediately re-enter.
+    in_door = hero.x > DOOR_X - DOOR_HALF && hero.x < DOOR_X + DOOR_HALF
+    push_scene(InteriorScene.new(:interior), transition: FadeTransition.new) if in_door && !@was_in_door
+    @was_in_door = in_door
   end
 
   def update
@@ -111,6 +135,11 @@ class ParallaxScene < Conjuration::Scene
     @trees.each  { |tree|  camera.draw(tree,  **TREES) }
 
     @ground.each { |tile| camera.draw(tile, z: 0) }
+
+    # The doorway: a framed opening on the ground line. Walk into it to enter.
+    camera.draw({ x: DOOR_X, y: GROUND_H, w: DOOR_W, h: DOOR_H, path: :pixel, r: 40, g: 26, b: 16, anchor_x: 0.5 }, z: 0)
+    camera.draw({ x: DOOR_X, y: GROUND_H + DOOR_H / 2, w: DOOR_W - 24, h: DOOR_H - 24, path: :pixel, r: 92, g: 62, b: 30, anchor_x: 0.5, anchor_y: 0.5 }, z: 0)
+    camera.draw({ x: DOOR_X, y: GROUND_H + DOOR_H + 8, w: DOOR_W + 40, text: "ENTER", size_enum: 0, r: 255, g: 250, b: 235, anchor_x: 0.5 }, z: 0)
 
     hero = state.hero
     camera.draw({ x: hero.x, y: hero.y, w: hero.w, h: hero.h, path: @hero_anim.path, anchor_x: 0.5, flip_horizontally: hero.facing.negative? }, z: 0)

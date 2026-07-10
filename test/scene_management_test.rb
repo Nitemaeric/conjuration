@@ -1,5 +1,23 @@
+# change_scene now owns the audio-clear policy (moved out of Scene#perform_setup),
+# so a host needs a clearable audio.
+class AudioSpy
+  attr_reader :clears
+
+  def initialize
+    @clears = 0
+  end
+
+  def clear
+    @clears += 1
+  end
+end
+
 class SceneManagementHost
   include Conjuration::SceneManagement
+
+  def audio
+    @audio ||= AudioSpy.new
+  end
 end
 
 class SetupCountingScene

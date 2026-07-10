@@ -80,6 +80,9 @@ class GameDouble
   def grid; @grid ||= GridDouble.new; end
   def gtk; @gtk ||= GtkDouble.new; end
   def outputs; @outputs ||= OutputsDouble.new; end
+  # Screen indirection for transition snapshots (SceneManagement#render_output).
+  def render_output; @render_output || outputs; end
+  attr_writer :render_output
   def events; @events ||= EventsDouble.new; end
   def state; @state ||= {}; end
   def audio; @audio ||= {}; end
@@ -108,7 +111,12 @@ class GameDouble
 end
 
 # Stands in for a Conjuration::Scene where a camera only needs its world bounds.
-SceneDouble = Struct.new(:virtual_w, :virtual_h)
+# uid namespaces the camera's render target (camera.rb keys targets by it).
+SceneDouble = Struct.new(:virtual_w, :virtual_h) do
+  def uid
+    object_id
+  end
+end
 
 # Conjuration::Node delegates inputs/grid/gtk/events/debug? to $game.
 $game = GameDouble.new

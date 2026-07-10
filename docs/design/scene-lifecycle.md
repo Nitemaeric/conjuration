@@ -1,12 +1,21 @@
-# Scene lifecycle: hooks, stack, and audio policy
+# Scene lifecycle: hooks, stack, transitions, loading
 
-Design pass for roadmap **C1 (PR 6)**. This is a discussion document, not an
-implementation. The roadmap flagged this item as *the one place semantics can
-paint us into a corner*, so the bulk of the doc is the corner cases and a
-**recommended, decided** answer for each — not a list of open questions.
+Design pass for roadmap **C1 (PR 6)**, now with an implementation. The roadmap
+flagged this item as *the one place semantics can paint us into a corner*, so the
+bulk of the doc is the corner cases and a **decided** answer for each.
 
-Nothing here is committed as code. The goal is to agree the contract, then
-implement against it.
+> **Implementation status (this PR).** The contract below is implemented, with
+> tests. Sections carry an **_As implemented_** note wherever reality shifted the
+> design. Two capabilities were added after the original doc, driven by the
+> maintainer's real challenges — scene **transitions** and slow scene **loading**,
+> not pause menus: **§15 Transitions** (an animated, snapshot-based swap over a
+> framework-owned phase machine) and **§16 Loading** (a `load_tick` progress
+> protocol). **§17 Save state** is a forward-looking constraints capture (design
+> only). The demo (§11) pivoted: menu→Zoom is a fade over a real time-sliced map
+> build; menu→Hit Stop is a Pokémon-style box wipe; the stack's headline case is
+> the **house** (walk into a doorway → `push_scene` an interior; the overworld
+> survives underneath, restored on pop). Pause is modelled as intra-scene state,
+> not a pushed scene (§11).
 
 ## Table of contents
 
@@ -24,6 +33,9 @@ implement against it.
 - [12. Test plan](#12-test-plan)
 - [13. Open questions for the PR discussion](#13-open-questions-for-the-pr-discussion)
 - [14. Divergences from the roadmap starting point](#14-divergences-from-the-roadmap-starting-point)
+- [15. Transitions (implemented)](#15-transitions-implemented)
+- [16. Loading (implemented)](#16-loading-implemented)
+- [17. Save state (forward-looking)](#17-save-state-forward-looking)
 
 ---
 
@@ -279,9 +291,17 @@ Snapshot payload:
   focused_node:            UI.focused_node,
   active_navigation_group: UI.active_navigation_group,
   pressed_node:            UI.pressed_node,
-  focus_cursor:            UI.focus_cursor.dup   # dup: it's a mutated singleton hash
+  hovered_node:            UI.hovered_node,       # added post-doc (see below)
+  focus_cursor:            UI.focus_cursor.dup    # dup: it's a mutated singleton hash
 }
 ```
+
+> **_As implemented._** The snapshot gained a fifth field, `hovered_node`, which
+> postdates this doc: the hover/focus split (PR #25) made hover a separate global
+> that a resumed scene also wants back. `snapshot_focus_into` / `restore_focus_into`
+> live on `SceneManagement`; the payload is stored on the scene as `saved_focus`
+> (`attr_accessor` on `Scene`). On restore the singleton `focus_cursor` hash is
+> written in place (no setter exists), which is what makes the highlight snap back.
 
 **Rationale.** Focus is global singleton state shared by scene + cameras. Without
 snapshot/restore, resuming a gameplay scene would find `focused_node = nil` and
@@ -462,6 +482,20 @@ demo clears audio via the new scene's `perform_setup`. Under the new default
 (`change_scene` clears unless `retain_audio?`), the bgm still stops when you leave
 the menu. Behaviour preserved, demos unmodified.
 
+> **_As implemented._** `audio.clear` is gone from `Scene#perform_setup` and lives
+> in `change_scene`'s teardown, guarded `unless to.respond_to?(:retain_audio?) &&
+> to.retain_audio?`. `change_scene` *also* keeps an explicit focus-globals reset
+> (added to main post-doc, in PR #24); it's redundant with `perform_setup`'s reset
+> for a real `Scene` but is what lets a plain scene *double* — no resetting
+> `perform_setup` — transition cleanly, and the existing `scene_management_test`
+> depends on it. **`ParallaxScene` opts into `retain_audio? => true`** in the demo
+> so the menu bgm plays on into the overworld (and then survives the house
+> push/pop, which never clears) — that is where the policy becomes feelable.
+> **Shortcut scoping:** shortcuts are injected as global `dragon_input` actions,
+> but `trigger_shortcuts` runs inside `perform_input`, which the stack calls on the
+> top scene only. So a covered scene's shortcut is still *injected* (edge-detected
+> globally) but never *fired* — no extra scoping code was needed.
+
 ---
 
 ## 8. Per-scene clock
@@ -496,6 +530,17 @@ for A1's worked example and it still holds.
 **Seam note.** Removing `:clock` from `Scene`'s `delegate` list is the only
 line in `scene.rb:15` that changes; `layout`, `geometry`, `gtk`, `audio`,
 `change_scene` stay delegated (and `push_scene`/`pop_scene` get added).
+
+> **_As implemented._** `@clock` is set to 0 in both `initialize` and
+> `perform_setup` and incremented at the top of `perform_update`. Since a resumed
+> scene is *not* re-set-up, its clock continues from the frozen value — that is the
+> mechanism behind "the overworld's walk cycle holds while you're in the house."
+> The one visible difference from the old `game.clock` delegation: `scene.clock`
+> starts at 0 on each entry (the old delegation inherited the game's absolute
+> phase). The demos key on *deltas* (`clock - started_at`) or an angle, so this is
+> invisible. During a transition/loading handover, `perform_update` is skipped, so
+> `scene.clock` *and* `game.clock` freeze; the transition itself advances on its own
+> per-tick phase counter (§15), not on either clock.
 
 ---
 
@@ -544,6 +589,14 @@ counter) this is negligible. Documented so it is a known quantity, not a surpris
 if a game churns thousands of uniquely-named scene instances, target memory grows.
 A uid *pool*/reuse strategy is a future mitigation, not v1.
 
+> **_As implemented._** `Scene#uid` returns `object_id` (the §13.5 open question,
+> decided in favour of `object_id` over a game counter): zero coordination, unique,
+> never reused — so no two live scenes ever collide, at the cost that popped-target
+> names never repeat (the memory note above). `Camera#initialize` builds
+> `@output_key = "camera_#{scene.uid}_#{name}"` once (kept off the hot path, as the
+> A2 render work requires). A test stacks two scenes that share a `name` and both
+> add a `:main` camera, and asserts distinct output keys.
+
 ---
 
 ## 10. Migration & compatibility
@@ -580,24 +633,55 @@ that exercises `push`/`pop`; it does not modify existing scenes.
 
 ## 11. Demo (acceptance)
 
-New demo, per the roadmap: a **pause menu pushed over the basic-camera scene**.
+> **_As implemented — pivoted._** The original doc proposed a pushed pause menu.
+> The maintainer's actual challenges are **transitions** and **loading states**,
+> and he models a pause menu as *intra-scene state* (a reactive-view reveal), not
+> a pushed scene. The demo was rebuilt around the real cases. Each design decision
+> maps to something you can *feel*:
 
-- `Esc` in `BasicCameraScene#input` → `push_scene(PauseScene.new(:pause))`.
-- `PauseScene` is a translucent overlay (screen-space `outputs`, likely **no
-  camera** — sidesteps §9 entirely for the demo) with a "Resume" button whose
-  action calls `pop_scene`, and a "Quit to menu" button calling
-  `change_scene(to: MenuScene.new(:main))`.
-- `PauseScene` leaves `covers_below?` false so the frozen gameplay shows through,
-  dimmed by a full-screen translucent pixel.
-- **Observable acceptance:**
-  - The orbiting follow-target and camera **visibly freeze** while paused
-    (`scene.clock` frozen — no new plumbing).
-  - The pause menu is keyboard/pad navigable above the frozen scene
-    (`activate_navigation` in `PauseScene#setup`; gameplay's nav group is
-    snapshotted and restored on resume).
-  - Resume returns to gameplay with the camera HUD's selection intact.
-  - Music (if any) keeps playing across push/pop (audio never cleared), and is
-    cleared only by "Quit to menu" (`change_scene`).
+- **Transition feel + loading progress — menu → Zoom.** The Zoom entry passes
+  `transition: FadeTransition.new`. `change_scene` captures the menu's final
+  frame, tears it down, sets up `ZoomScene`, and fades to black while
+  `ZoomScene#load_tick` time-slices the 320k-tile map build (`ROWS_PER_TICK` rows
+  per frame). A `loading_view` progress bar reads over the hold; when the build
+  reports `:done`, the fade reveals the finished map. This is the maintainer's
+  exact complaint (Zoom "takes a second or two to load") turned into the
+  showcase. (§15, §16)
+- **Transition variety — menu → Hit Stop.** Passes `transition:
+  BoxWipeTransition.new`, a Pokémon-style black box that grows from centre, holds,
+  then shrinks to reveal — proving transitions are duck-typed and game-authored,
+  not a fixed fade. Hit Stop has no `load_tick`, so there is no hold: out → in.
+- **State-preserving stack — the house (menu → Parallax → doorway).** Walking the
+  hero into the marked doorway calls `push_scene(InteriorScene.new(:interior),
+  transition: FadeTransition.new)`. `InteriorScene` is opaque (`covers_below? =>
+  true`), so the overworld is not drawn while inside — a *different place*, not an
+  overlay. The overworld scene is **paused, not torn down**: its `scene.clock`
+  freezes (walk cycle holds), its `state.hero` position and camera focal point are
+  untouched, and its focus globals are snapshotted. `Exit` `pop_scene`s (with a
+  fade) and the hero is exactly where he left off. This is the "entering a house
+  changes the viewing angle/assets entirely" case, and the justification for the
+  stack existing at all.
+- **Audio policy — feelable across the flow.** `MenuScene#setup` starts `bgm`.
+  `ParallaxScene#retain_audio? => true`, so the music plays on into the overworld
+  (a `change_scene` that *doesn't* clear) and then keeps playing through the house
+  `push`/`pop` (which never clear). "Back" to the menu is a plain `change_scene`
+  that *does* clear, and the menu restarts its own bgm.
+- **Focus snapshot exercised.** `InteriorScene` activates its own navigation group
+  and its `Exit` `ButtonView` has focus brackets + a shortcut; entering/leaving
+  round-trips the overworld's focus globals through the snapshot machinery.
+
+**Pause, the recommended way (no demo needed).** A pause menu is one scene with a
+reactive view that reveals a panel when `state[:paused]` flips — the frozen world
+keeps rendering because you simply stop *updating* it:
+
+```ruby
+def input;  state[:paused] = !state[:paused] if start_pressed?; end
+def update; return if state[:paused]; end   # world frozen; render still runs
+def view;   state[:paused] ? pause_panel : hud; end
+```
+
+That is cheaper than a pushed scene (no snapshot, no target namespacing) and is
+the pattern to reach for unless the overlay is genuinely a *different scene*.
 
 ---
 
@@ -626,8 +710,20 @@ Mirrors the roadmap's test list, expressed against the doubles in
 8. **Camera target namespacing.** Two scenes with same-named cameras resolve to
    distinct target names.
 
-`script/test.sh` currently passes 133/133; C1 adds a `scene_stack_test.rb`
-alongside these.
+**Transition / loading tests (added — see §15/§16):** nil-transition path is
+byte-identical to the synchronous swap (hook order unchanged); phase sequencing
+with a scripted transition double (out → in, `on_enter` at the in boundary);
+loading parks the machine in `:hold` until `:done`; `load_tick` is called until
+`:done` and never after; the incoming scene gets no `perform_input`/`perform_update`
+until the handover completes; the snapshot target is sized during capture,
+composited while transitioning out, and cleared (released) after; push-with-
+transition then pop restores the underneath scene's clock + focus (the house
+case); and the Zoom map's time-sliced build produces a byte-identical tile layer
+to the old synchronous build (chunk-signature checksum).
+
+> **_As implemented._** `script/test.sh` passes **263/263** (baseline on main was
+> 238). New files: `test/scene_stack_test.rb` (stack, hooks, clock, focus, audio,
+> guards, namespacing) and `test/scene_transition_test.rb` (transitions + loading).
 
 ---
 
@@ -676,3 +772,163 @@ clarifications/divergences worth calling out explicitly:
    corrupt each other silently. Two smaller guards are also made explicit that the
    roadmap left implied: **same-instance double-push raises** (§6.3) and
    **popping the last scene is a no-op** (§6.9).
+
+---
+
+## 15. Transitions (implemented)
+
+An animated swap between scenes — the Pokémon "fade/wipe before the battle
+screen" case. The framework owns a **phase state machine**; a transition is a
+tiny duck-typed object that only draws an effect. Nil transition = today's
+instant swap, exactly.
+
+**API.** `change_scene(to:, transition: nil)`, `push_scene(scene, transition:
+nil)`, `pop_scene(transition: nil)`. A transition object implements three
+methods:
+
+```ruby
+out_duration                                   # frames of the "out" phase
+in_duration                                    # frames of the "in" phase
+draw(outputs, phase:, progress:, snapshot_key:, grid:)   # phase in :out/:hold/:in
+```
+
+**Where they live.** The *machinery* (phases, snapshot, timing) is in lib
+(`SceneManagement`); the *visuals* are duck-typed so a game writes its own. The
+demo ships two references (`demo/mygame/app/transitions/`): `FadeTransition`
+(fade-to-black) and `BoxWipeTransition` (a centre-out black box). Nothing
+transition-specific is in lib beyond the phase driver — promoting a built-in
+`Conjuration::Transitions::Fade` later is a one-file move.
+
+**Snapshot-based.** On transition start the framework renders the *outgoing*
+stack one final time into a dedicated fullscreen target (`"transition_snapshot"`),
+so teardown can happen immediately while the frozen last frame is still shown.
+The capture works via a `render_output` seam: `Scene#outputs` and the camera blit
+go through `game.render_output`, which is normally the real `outputs` but is
+briefly a `ScreenRedirect` (screen primitives → the snapshot target; named camera
+targets and `debug` pass through). Two one-line call-site changes; zero cost when
+not capturing.
+
+**Phase machine (framework-owned).**
+
+```
+begin_handover(mode, scene, transition)
+├─ capture_snapshot                     # outgoing stack -> "transition_snapshot"
+├─ apply_teardown(mode)                 # on_exit / on_pause fire HERE (after snapshot)
+├─ incoming.perform_setup               # incoming set up immediately (may start loading)
+└─ phase := :out
+                                        # Game#tick, while transitioning?:
+:out   clock++; each frame load_tick    # animate snapshot; incoming loads in the background
+       └─ clock ≥ out_duration → :in if loaded, else :hold
+:hold  each frame load_tick             # fully obscured; loading_view (progress bar) on top
+       └─ loaded → :in
+   (entering :in) finish_enter          # on_enter (change/push) / on_resume (pop) — AFTER load
+:in    clock++                          # reveal LIVE incoming; effect recedes
+       └─ clock ≥ in_duration → release snapshot, handover done
+```
+
+**Hook interleaving (decided).** `on_exit`/`on_pause` fire **after the snapshot is
+taken** (so the captured frame is pre-teardown) and **immediately** (teardown is
+not deferred). `on_enter`/`on_resume` fire **when the incoming scene is loaded,
+just before the in-phase reveal** — so a hook that reads loaded assets always
+runs after they exist. In the degenerate no-transition, no-load path these
+collapse to the synchronous order (`on_exit` → `setup` → `on_enter`), byte-
+identical to pre-transition C1.
+
+**Rendering during a handover.** `:out`/`:hold` blit the snapshot as the base and
+let `transition.draw` paint over it; `:in` renders the live incoming stack as the
+base then `transition.draw` recedes. The snapshot target is **released** (its
+primitives cleared) when the handover completes.
+
+**Clock / hit-stop interaction (decided).** While `transitioning?`, `Game#tick`
+runs `advance_handover` *instead of* input+update — so **no scene gets input or
+update, and every clock (game and scene) freezes** for the duration. The
+transition advances on its own per-tick phase counter (`handover[:clock]`), never
+on `game.clock`, so a stray hit-stop can't stall it. A transition supersedes an
+in-flight hit-stop's freeze (both freeze gameplay anyway); the hit-stop counter is
+untouched and resumes after.
+
+**Degenerate path.** `transition: nil` and no `load_tick` → `begin_handover`
+resolves synchronously and never sets a handover: `Game#tick` behaves exactly as
+before. This is asserted (`test_change_without_transition_stays_synchronous` plus
+the unchanged §12.1 hook-order tests).
+
+**Not yet covered (honest gaps).** (a) A transition cannot cross-fade the snapshot
+*into* the live incoming scene — v1 obscures fully at the handover point (fine for
+fade/wipe, not for a true dissolve); the `snapshot_key` is passed to `draw` so a
+game *could* sample it, but the framework doesn't composite both simultaneously.
+(b) The snapshot is one fullscreen capture; a transition that needs the incoming
+scene's first frame during `:out` (e.g. a slide-in from the side) isn't
+expressible — it'd need a second live target. (c) Nested transitions (starting one
+while another runs) are undefined, same spirit as §6.10.
+
+---
+
+## 16. Loading (implemented)
+
+A scene may implement `load_tick`, called once per frame **after setup** until it
+returns `:done`; it returns a `Float` 0..1 progress otherwise. **Absent =
+instantly ready**, so the protocol is zero-cost for every scene that doesn't need
+it (the check is a `respond_to?`).
+
+**While loading, the handover holds** — the incoming scene receives no
+`perform_input`/`perform_update` until ready (its clock stays 0), and:
+
+- **With a transition** (§15): the `:hold` phase covers the load. The framework
+  draws the transition's full obscure and then the scene's `loading_view(progress)`
+  on top, so a progress bar reads over the black.
+- **Without a transition:** the framework renders a black backdrop plus
+  `loading_view(progress)` if defined (else just black). *Decision:* the honest v1
+  default is black-plus-optional-`loading_view`, not "keep showing the previous
+  scene" — the previous scene is already torn down (change) or would need to keep
+  updating (it must not). `on_enter` fires when `:done`, then normal ticking
+  resumes.
+
+**Zoom, the showcase.** `ZoomScene` built its 400×400 grid (320k tiles) inline in
+`setup` — the "second or two" stall the maintainer named. It now inits the layer
+in `setup` and bakes `ROWS_PER_TICK` rows per `load_tick`, reporting progress;
+menu→Zoom runs it behind a `FadeTransition` with the progress bar in
+`loading_view`. Same total work, spread across frames, hidden behind the fade. A
+test (`test_zoom_sliced_build_matches_synchronous`) proves the sliced build yields
+a **byte-identical** tile layer to a synchronous one (chunk-signature checksum),
+so the slicing can't silently drop or duplicate a row.
+
+**Not yet covered (honest gaps).** Loading is cooperative and single-threaded —
+`load_tick` must budget its own per-frame work (DR/mruby has no threads for this).
+There's no async I/O primitive (streaming a file, decoding audio) — a scene that
+needs one still blocks inside its `load_tick`. Progress is whatever the scene
+reports; the framework doesn't estimate it.
+
+---
+
+## 17. Save state (forward-looking)
+
+*Design-only — not built. Captured here so the decisions above stay cheap to
+serialise later, per the maintainer's ask for "an easy way to save framework
+state on top of custom game data."*
+
+1. **The contract that keeps saves cheap.** A scene must be reconstructible from
+   `(class, name, its name-keyed state)` — nothing load-bearing may live only in
+   ivars. This is the §6.5 two-tier model made a hard rule. Audited against this
+   PR's additions: **per-scene `clock`** is transient render polish (an ivar) — a
+   save captures the *scene identity + its `state`*, and the clock restarts at 0 on
+   rehydrate (acceptable; the demos key on deltas). The **stack** is serialisable
+   as an ordered list of `(class, name)` plus each scene's name-keyed `state`.
+   **Transitions and loading are transient by design** — non-serialisable; a save
+   taken mid-transition captures the *post-handover* state (the incoming scene,
+   loaded), never a half-played wipe.
+2. **Framework state a save needs beyond game data:** current stack identities
+   (ordered `(class, name)`); per-scene `state` blobs; each named camera's focal
+   points (`current` + `target` x/y/zoom) per scene; audio prefs (mute/gain).
+   `dragon_input` already persists rebinds via its own `Storage` — a savegame must
+   **not** duplicate those.
+3. **Sketch (not committed):**
+
+   ```ruby
+   game.save_state        # => Hash: framework state (above) merged over game.state
+   game.load_state(hash)  # rehydrate state + cameras, then change_scene to the saved top
+   ```
+
+   `load_state` rebuilds the stack bottom scene first via `change_scene`, then
+   `push_scene`s the rest, restoring each scene's `state` before its `setup` reads
+   it. Left for a later PR; the point of this section is that the C1 decisions
+   above already satisfy the contract in (1).
