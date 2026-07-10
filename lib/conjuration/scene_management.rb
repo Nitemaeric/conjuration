@@ -155,9 +155,6 @@ module Conjuration
         scene_stack.reverse_each { |entry| entry.on_exit if entry.respond_to?(:on_exit) }
         scene_stack.clear
         reset_focus_globals
-        # Audio policy lives on the transition, never on push/pop: only a full
-        # scene change may clear, and only when the incoming doesn't opt to retain.
-        audio.clear unless scene.respond_to?(:retain_audio?) && scene.retain_audio?
         scene_stack.push(scene)
       when :push
         paused = current_scene

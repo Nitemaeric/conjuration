@@ -449,54 +449,30 @@ transitions to the end of the tick) if a real need appears.
 
 ---
 
-## 7. Audio policy
+## 7. Audio — deliberately unscoped
 
-**Move `audio.clear` out of `Scene#perform_setup`** and into a policy consulted
-**only by `change_scene`**:
+**Decision (maintainer, 2026-07): the lifecycle does not touch audio at all.**
+No `audio.clear` anywhere — not in `perform_setup` (removed), not in
+`change_scene`, never on push/pop. Audio is the game's domain until a
+**situation matrix** is defined; designing a "recommended structure" (the
+earlier `retain_audio?` draft) before enumerating the situations was backwards.
 
-```ruby
-# in change_scene, before the incoming scene's perform_setup:
-audio.clear unless to.retain_audio?
+Situations the matrix must cover before any API is proposed:
 
-# Scene, overridable, default false via respond_to?:
-def retain_audio? = false     # opt in to keep the previous scene's audio playing
-```
+- bgm persisting across a scene change (menu music continuing into gameplay —
+  the case that invalidated clear-by-default);
+- per-area themes (leave town, enter dungeon: stop one, start another — with or
+  without crossfade);
+- transition-coupled audio (Pokémon battle sting timed to the wipe);
+- sfx outliving their scene (explosion tail crossing a change);
+- overlay behaviour (pause muffling/ducking vs. continuing untouched);
+- loading screens (silence? continue? sting?).
 
-- `change_scene`: clears audio **by default** (preserves today's behaviour), so a
-  scene that wants cross-scene music sets `retain_audio? => true`.
-- `push_scene` / `pop_scene`: **never** clear audio. Music started under gameplay
-  keeps playing under the pause menu, which is the whole point.
-
-**Why on the incoming scene (not the game).** The scene being *entered* is the one
-that knows whether it wants the previous soundscape to survive (a results screen
-keeping the level's music vs. a menu wanting silence). A game that wants a blanket
-policy can still override `change_scene` or set a shared module flag; the scene
-predicate is the low-ceremony default. This is a **breaking-change candidate** and
-must be called out in the changelog: any game relying on "entering a scene silences
-everything" is unaffected (that is still the default), but the *mechanism* moved,
-so a game that subclassed and called `super` in `perform_setup` for the clear will
-need to know it no longer happens there.
-
-**Demo check.** `MenuScene#setup` starts `bgm`; today every `change_scene` into a
-demo clears audio via the new scene's `perform_setup`. Under the new default
-(`change_scene` clears unless `retain_audio?`), the bgm still stops when you leave
-the menu. Behaviour preserved, demos unmodified.
-
-> **_As implemented._** `audio.clear` is gone from `Scene#perform_setup` and lives
-> in `change_scene`'s teardown, guarded `unless to.respond_to?(:retain_audio?) &&
-> to.retain_audio?`. `change_scene` *also* keeps an explicit focus-globals reset
-> (added to main post-doc, in PR #24); it's redundant with `perform_setup`'s reset
-> for a real `Scene` but is what lets a plain scene *double* — no resetting
-> `perform_setup` — transition cleanly, and the existing `scene_management_test`
-> depends on it. **`ParallaxScene` opts into `retain_audio? => true`** in the demo
-> so the menu bgm plays on into the overworld (and then survives the house
-> push/pop, which never clears) — that is where the policy becomes feelable.
-> **Shortcut scoping:** shortcuts are injected as global `dragon_input` actions,
-> but `trigger_shortcuts` runs inside `perform_input`, which the stack calls on the
-> top scene only. So a covered scene's shortcut is still *injected* (edge-detected
-> globally) but never *fired* — no extra scoping code was needed.
-
----
+Consequences today: the menu's bgm keeps playing in every demo scene (Daniel:
+"wanting to retain the music on scene change is completely valid"). A game
+wanting the old silence-on-change writes `audio.clear` in its own `setup` —
+one line, game-owned. Whatever structure eventually emerges belongs in the
+`dragon_audio` shape per the lean-core principles, not in scene plumbing.
 
 ## 8. Per-scene clock
 

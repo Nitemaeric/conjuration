@@ -35,7 +35,6 @@ class StackHost
 end
 
 # Records every lifecycle call into a shared log so ordering is asserted exactly.
-# Deliberately does NOT define retain_audio? (so change_scene clears by default).
 class RecordingScene
   attr_accessor :saved_focus
   attr_reader :name
@@ -59,12 +58,6 @@ class RecordingScene
   def on_exit;   @log << [@name, :on_exit];   end
   def on_pause;  @log << [@name, :on_pause];  end
   def on_resume; @log << [@name, :on_resume]; end
-end
-
-class RetainAudioScene < RecordingScene
-  def retain_audio?
-    true
-  end
 end
 
 # A scene whose clock advances one per perform_update, exactly like Conjuration::Scene.
@@ -256,28 +249,17 @@ ensure
   Conjuration::UI.focus_cursor[:w] = 0
 end
 
-# --- audio policy ---------------------------------------------------------
+# --- audio ----------------------------------------------------------------
 
-def test_audio_cleared_on_change_unless_retained(args, assert)
+def test_framework_never_touches_audio(args, assert)
   host = StackHost.new
   host.current_scene = RecordingScene.new(:a, [])
 
   host.change_scene(to: RecordingScene.new(:b, []))
-  assert.equal!(host.audio.clears, 1, "change clears audio by default")
-
-  host.change_scene(to: RetainAudioScene.new(:c, []))
-  assert.equal!(host.audio.clears, 1, "retain_audio? scene keeps audio")
-end
-
-def test_audio_never_cleared_on_push_or_pop(args, assert)
-  host = StackHost.new
-  stack_of(host, RecordingScene.new(:a, []), RecordingScene.new(:b, []))
-  before = host.audio.clears
-
-  host.pop_scene
   host.push_scene(RecordingScene.new(:c, []))
+  host.pop_scene
 
-  assert.equal!(host.audio.clears, before, "push/pop never clear audio (bgm survives a pause)")
+  assert.equal!(host.audio.clears, 0, "audio is the game's domain: no lifecycle event clears it")
 end
 
 # --- guards ---------------------------------------------------------------

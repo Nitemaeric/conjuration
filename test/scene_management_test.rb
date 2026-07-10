@@ -1,5 +1,5 @@
-# change_scene now owns the audio-clear policy (moved out of Scene#perform_setup),
-# so a host needs a clearable audio.
+# The lifecycle never touches audio, but the host mirrors Game's surface;
+# the spy doubles as the regression guard (clears must stay 0).
 class AudioSpy
   attr_reader :clears
 

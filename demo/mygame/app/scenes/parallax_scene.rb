@@ -96,13 +96,6 @@ class ParallaxScene < Conjuration::Scene
     end
   end
 
-  # Keep the menu's bgm playing into the overworld (change_scene clears audio by
-  # default; opting to retain proves the policy — the music then also survives
-  # the house push/pop, which never clears).
-  def retain_audio?
-    true
-  end
-
   def input
     hero = state.hero
     # Raw left_right, not the move_* actions: DR's composite keeps the arrows and
