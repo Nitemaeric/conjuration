@@ -155,9 +155,11 @@ unchanged; no public constant moves.
 
 ## Deferred — decisions, with reasons
 
-- **Audio buses/mixer**: deferred to raw DR + documented idioms. When a real
-  game demands it, the shape is a standalone `dragon_audio` (buses, crossfade,
-  sfx pooling) with `retain_audio?` already providing the framework hook.
+- **Audio**: the lifecycle deliberately never touches audio (no clears, no
+  policy hooks) — the situation matrix (persist-across-change, per-area themes,
+  transition stings, sfx tails, overlay ducking) must be enumerated before any
+  structure is designed. When a real game forces it, the shape is a standalone
+  `dragon_audio` (buses, crossfade, sfx pooling), not scene plumbing.
 - **Camera feel (deadzone/lookahead/regions)**: fails the admission test —
   hand-rollable on existing seams. Ships as the docs recipe (Track F).
 - **World tooling** (Tiled importer, trigger zones, darkness/post hook):
