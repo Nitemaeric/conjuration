@@ -697,9 +697,17 @@ transition then pop restores the underneath scene's clock + focus (the house
 case); and the Zoom map's time-sliced build produces a byte-identical tile layer
 to the old synchronous build (chunk-signature checksum).
 
-> **_As implemented._** `script/test.sh` passes **263/263** (baseline on main was
-> 238). New files: `test/scene_stack_test.rb` (stack, hooks, clock, focus, audio,
-> guards, namespacing) and `test/scene_transition_test.rb` (transitions + loading).
+**Loading view root tests (§16):** the root renders through the reactive path
+(nodes exist, layout resolves, no justify fallbacks, primitives reach the
+screen); per-frame progress re-renders reconcile in place (stable node identity,
+updated width/label); the root is discarded once loading completes (no
+post-handover render, no leak); and it is invisible to focus/navigation
+(`interactive_nodes` empty, focus globals untouched). The demo smoke tests also
+build Zoom's `loading_view` against the real layout machinery.
+
+> **_As implemented._** `script/test.sh` passes **267/267**. New files:
+> `test/scene_stack_test.rb` (stack, hooks, clock, focus, guards, namespacing)
+> and `test/scene_transition_test.rb` (transitions + loading + the loading root).
 
 ---
 
@@ -850,14 +858,44 @@ it (the check is a `respond_to?`).
 `perform_input`/`perform_update` until ready (its clock stays 0), and:
 
 - **With a transition** (§15): the `:hold` phase covers the load. The framework
-  draws the transition's full obscure and then the scene's `loading_view(progress)`
-  on top, so a progress bar reads over the black.
-- **Without a transition:** the framework renders a black backdrop plus
-  `loading_view(progress)` if defined (else just black). *Decision:* the honest v1
-  default is black-plus-optional-`loading_view`, not "keep showing the previous
-  scene" — the previous scene is already torn down (change) or would need to keep
-  updating (it must not). `on_enter` fires when `:done`, then normal ticking
-  resumes.
+  draws the transition's full obscure and then the loading view root (below) on
+  top, so a progress bar reads over the black.
+- **Without a transition:** the framework renders a black backdrop plus the
+  loading view root if the scene defines `loading_view` (else just black).
+  *Decision:* the honest v1 default is black-plus-optional-view, not "keep showing
+  the previous scene" — the previous scene is already torn down (change) or would
+  need to keep updating (it must not). `on_enter` fires when `:done`, then normal
+  ticking resumes.
+
+**The loading phase hosts a real view root.** `loading_view(progress)` is a
+**view method that builds nodes** — the same contract as `view`/`hud`, invoked
+inside a framework-owned `Conjuration::UI` root, never a method that writes raw
+`outputs.primitives` (the demos are 100% reactive, and the loading phase is no
+exception). Lifecycle of the root, owned by the handover controller
+(`SceneManagement`):
+
+- **Built when loading starts** (`begin_handover`, only when the incoming scene
+  is not instantly ready *and* defines `loading_view`): a plain `UI.build` root
+  whose registered view block invokes
+  `incoming.loading_view(handover[:load_progress])`.
+- **Progress reaches the view as an argument, props-style.** The view block
+  closes over the live handover, so each frame's `render_view` re-invokes
+  `loading_view` with the fresh progress — the existing idiom (view blocks close
+  over live state; components take props), and it keeps `loading_view` a pure
+  function of its argument, testable standalone.
+- **Rendered each loading frame through the normal reactive path**
+  (`render_view` → `calculate_layout` → `primitives` onto the screen), so the
+  progress bar reconciles in place — stable node identity, only changed props
+  written — instead of being rebuilt.
+- **Discarded when the handover completes**; no subsequent frame renders it.
+- **Render-only.** The root is never wired into any input loop: input/update are
+  suspended for the whole handover, focus/hover/shortcut queries only consult
+  scene/camera `ui`s, and the focus indicator never considers it. Loading is
+  non-interactive by construction.
+
+(World-content baking — `ZoomScene.paint_row` filling the `TileLayer` — is
+deliberately **not** a view concern: it's retained world content drawn through
+cameras, not UI.)
 
 **Zoom, the showcase.** `ZoomScene` built its 400×400 grid (320k tiles) inline in
 `setup` — the "second or two" stall the maintainer named. It now inits the layer

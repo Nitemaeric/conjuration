@@ -44,6 +44,20 @@ class LoadingScene < RecordingScene
   end
 end
 
+# A loading scene with a view-building loading_view — the new contract: node
+# emission inside the framework's loading root, no raw outputs writes.
+class LoadingViewScene < LoadingScene
+  include Conjuration::UI::Builder
+
+  BAR_W = 480
+
+  def loading_view(progress)
+    node({ x: 640, y: 420, text: "Loading #{(progress * 100).to_i}%", anchor_x: 0.5 }, id: :loading_label)
+    node({ x: 400, y: 340, w: BAR_W, h: 24, path: :pixel, r: 40, g: 40, b: 48 }, id: :loading_track)
+    node({ x: 400, y: 340, w: BAR_W * progress, h: 24, path: :pixel, r: 120, g: 200, b: 130 }, id: :loading_fill)
+  end
+end
+
 # --- degenerate (no-transition) path --------------------------------------
 
 def test_change_without_transition_stays_synchronous(args, assert)
@@ -237,4 +251,91 @@ def test_zoom_sliced_build_matches_synchronous(args, assert)
 
   assert.equal!(zoom_chunk_signature(sliced), zoom_chunk_signature(synchronous),
                 "the time-sliced build produces the identical tile layer")
+end
+
+# --- loading view root ------------------------------------------------------
+
+def loading_ui_of(host)
+  handover = host.instance_variable_get(:@handover)
+  handover && handover[:loading_ui]
+end
+
+def test_loading_root_renders_through_reactive_path(args, assert)
+  host = StackHost.new
+  host.current_scene = RecordingScene.new(:a, [])
+  incoming = LoadingViewScene.new(:b, [], frames: 4)
+
+  Conjuration::UI.warnings.clear
+  host.change_scene(to: incoming) # no transition: black + loading root
+
+  ui = loading_ui_of(host)
+  assert.true!(!ui.nil?, "a loading_view scene gets a dedicated view root for the handover")
+
+  host.outputs.primitives.clear
+  host.step # one loading frame
+
+  assert.true!(!ui.find(:loading_track).nil?, "the view's nodes exist in the root")
+  fill = ui.find(:loading_fill)
+  assert.equal!(fill.object.w, LoadingViewScene::BAR_W * 0.25, "layout ran with the reported progress")
+
+  fallbacks = Conjuration::UI.warnings.select { |warning| warning.include?("falling back to :start") }
+  assert.equal!(fallbacks, [], "the loading root lays out without justify fallbacks")
+
+  emitted = host.outputs.primitives.flatten
+  assert.true!(emitted.any? { |primitive| primitive.respond_to?(:[]) && primitive[:text].to_s.start_with?("Loading") },
+               "the root's primitives reach the screen via the normal reactive path")
+end
+
+def test_loading_root_reconciles_progress_across_frames(args, assert)
+  host = StackHost.new
+  host.current_scene = RecordingScene.new(:a, [])
+  incoming = LoadingViewScene.new(:b, [], frames: 4)
+  host.change_scene(to: incoming)
+
+  ui = loading_ui_of(host)
+  host.step # 25%
+  fill_before = ui.find(:loading_fill)
+  label_before = ui.find(:loading_label)
+
+  host.step # 50%
+  fill_after = ui.find(:loading_fill)
+
+  assert.true!(fill_before.equal?(fill_after), "the fill node is the same object across loading frames (reconciled, not rebuilt)")
+  assert.equal!(fill_after.object.w, LoadingViewScene::BAR_W * 0.5, "its width advanced with the progress")
+  assert.true!(label_before.equal?(ui.find(:loading_label)), "the label node identity is stable too")
+  assert.equal!(ui.find(:loading_label).object.text, "Loading 50%", "and its text re-derived")
+end
+
+def test_loading_root_discarded_after_load_completes(args, assert)
+  host = StackHost.new
+  host.current_scene = RecordingScene.new(:a, [])
+  incoming = LoadingViewScene.new(:b, [], frames: 2)
+  host.change_scene(to: incoming)
+
+  10.times { host.step if host.transitioning? }
+  assert.false!(host.transitioning?, "the handover completed")
+  assert.nil!(loading_ui_of(host), "no handover (and no loading root) is retained")
+
+  host.outputs.primitives.clear
+  host.step # a normal post-load frame
+
+  emitted = host.outputs.primitives.flatten
+  assert.false!(emitted.any? { |primitive| primitive.respond_to?(:[]) && primitive[:text].to_s.start_with?("Loading") },
+                "subsequent frames render no loading nodes")
+end
+
+def test_loading_root_is_invisible_to_focus_and_navigation(args, assert)
+  host = StackHost.new
+  host.current_scene = RecordingScene.new(:a, [])
+  incoming = LoadingViewScene.new(:b, [], frames: 4)
+  host.change_scene(to: incoming)
+
+  ui = loading_ui_of(host)
+  host.step
+  host.step
+
+  assert.equal!(ui.interactive_nodes, [], "the loading root exposes no interactive nodes")
+  assert.nil!(Conjuration::UI.focused_node, "nothing in the loading root can take focus")
+  assert.nil!(Conjuration::UI.hovered_node, "nor hover")
+  assert.nil!(Conjuration::UI.pressed_node, "nor press")
 end

@@ -76,6 +76,33 @@ ensure
   DragonInput.reset!
 end
 
+# Zoom's loading_view builds nodes inside a framework-owned loading root — the
+# same reactive machinery as the HUDs, driven here with a live progress value.
+def test_zoom_loading_view_layout(args, assert)
+  scene = ZoomScene.new(:smoke)
+  progress = { value: 0.25 }
+
+  Conjuration::UI.warnings.clear
+  ui = Conjuration::UI.build
+  ui.view { scene.loading_view(progress[:value]) }
+  ui.render_view
+  ui.calculate_layout
+  assert_no_justify_fallbacks!(assert, "zoom_loading")
+
+  track = ui.find(:loading_track)
+  fill = ui.find(:loading_fill)
+  assert.equal!(fill.object.w, track.object.w * 0.25, "the fill spans the reported fraction of the track")
+  assert.true!(ui.find(:loading_label).object.text.include?("25%"), "the label reads the same progress")
+
+  progress[:value] = 0.75
+  ui.render_view
+  ui.calculate_layout
+
+  assert.true!(fill.equal?(ui.find(:loading_fill)), "the fill node reconciles in place across loading frames")
+  assert.equal!(fill.object.w, track.object.w * 0.75, "and its width follows the progress")
+  assert.equal!(ui.interactive_nodes, [], "the loading view is render-only: nothing interactive")
+end
+
 def test_ecs_hud_layout(args, assert)
   ui = demo_hud_ui(ECSScene)
   assert_no_justify_fallbacks!(assert, "ecs")

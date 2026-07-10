@@ -138,7 +138,7 @@ module Conjuration
         return
       end
 
-      @handover = {
+      handover = {
         mode: mode,
         incoming: incoming,
         transition: transition,
@@ -147,6 +147,22 @@ module Conjuration
         loaded: loaded,
         load_progress: loaded ? 1.0 : 0.0
       }
+      handover[:loading_ui] = build_loading_ui(handover) if !loaded && incoming.respond_to?(:loading_view)
+      @handover = handover
+    end
+
+    # Render-only view root for the loading phase, driven by the same reactive
+    # machinery as scene.ui/camera.ui. The view block closes over the handover,
+    # so each render_view re-invokes loading_view with the live progress —
+    # progress reaches the view as a plain argument, props-style, and
+    # loading_view stays a pure function of it. The root is never wired into any
+    # input loop (input/update are suspended for the whole handover), so its
+    # nodes can't take focus, hover, or shortcuts.
+    def build_loading_ui(handover)
+      incoming = handover[:incoming]
+      ui = UI.build
+      ui.view { incoming.loading_view(handover[:load_progress]) }
+      ui
     end
 
     def apply_teardown(mode, scene)
@@ -194,6 +210,7 @@ module Conjuration
     def finish_handover(handover)
       finish_enter(handover[:mode], handover[:incoming]) if handover[:transition].nil?
       release_snapshot
+      handover[:loading_ui] = nil # discarded with the handover; never rendered again
       @handover = nil
     end
 
@@ -314,9 +331,9 @@ module Conjuration
 
       if transition.nil?
         # Loading with no transition: a black backdrop plus the scene's own
-        # loading_view (a progress bar), or just black if it defines none.
+        # loading view root (a progress bar), or just black if it defines none.
         outputs.primitives << { x: 0, y: 0, w: grid.w, h: grid.h, path: :pixel, r: 0, g: 0, b: 0 }
-        draw_loading_view(handover)
+        render_loading_ui(handover)
         return
       end
 
@@ -325,20 +342,26 @@ module Conjuration
         blit_snapshot
         transition.draw(outputs, phase: :out, progress: phase_progress(handover, transition.out_duration), snapshot_key: SNAPSHOT_KEY, grid: grid)
       when :hold
-        # Fully obscured by the transition; the loading_view (progress bar) reads
-        # on top of it while the incoming scene builds.
+        # Fully obscured by the transition; the loading view root (progress bar)
+        # reads on top of it while the incoming scene builds.
         blit_snapshot
         transition.draw(outputs, phase: :hold, progress: 1.0, snapshot_key: SNAPSHOT_KEY, grid: grid)
-        draw_loading_view(handover)
+        render_loading_ui(handover)
       when :in
         render_stack
         transition.draw(outputs, phase: :in, progress: phase_progress(handover, transition.in_duration), snapshot_key: SNAPSHOT_KEY, grid: grid)
       end
     end
 
-    def draw_loading_view(handover)
-      incoming = handover[:incoming]
-      incoming.loading_view(handover[:load_progress]) if incoming.respond_to?(:loading_view)
+    # The normal reactive path (render_view/calculate_layout/primitives), scoped
+    # to the loading root and only for the frames the loading phase is visible.
+    def render_loading_ui(handover)
+      ui = handover[:loading_ui]
+      return unless ui
+
+      ui.render_view
+      ui.calculate_layout
+      outputs.primitives << ui.primitives
     end
 
     def phase_progress(handover, duration)

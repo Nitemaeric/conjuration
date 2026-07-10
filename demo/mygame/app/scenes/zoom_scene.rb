@@ -53,16 +53,17 @@ class ZoomScene < Conjuration::Scene
     @build_row >= @dim ? :done : @build_row.to_f / @dim
   end
 
-  # Shown by the framework while loading (under a transition's hold, or on a bare
-  # black screen without one). A labelled progress bar over the map build.
+  # A view method: builds nodes inside the framework's render-only loading root
+  # (under a transition's hold, or on a bare black screen without one), re-derived
+  # each loading frame as progress advances. A labelled progress bar.
   def loading_view(progress)
     bar_w = 480
     bar_x = grid.w / 2 - bar_w / 2
     bar_y = grid.h / 2 - 16
 
-    outputs.primitives << { x: grid.w / 2, y: bar_y + 60, text: "Building world  #{(progress * 100).to_i}%", size_enum: 2, anchor_x: 0.5, anchor_y: 0.5, r: 235, g: 235, b: 240 }
-    outputs.primitives << { x: bar_x, y: bar_y, w: bar_w, h: 24, path: :pixel, r: 40, g: 40, b: 48 }
-    outputs.primitives << { x: bar_x, y: bar_y, w: bar_w * progress, h: 24, path: :pixel, r: 120, g: 200, b: 130 }
+    node({ x: grid.w / 2, y: bar_y + 60, text: "Building world  #{(progress * 100).to_i}%", size_enum: 2, anchor_x: 0.5, anchor_y: 0.5, r: 235, g: 235, b: 240 }, id: :loading_label)
+    node({ x: bar_x, y: bar_y, w: bar_w, h: 24, path: :pixel, r: 40, g: 40, b: 48 }, id: :loading_track)
+    node({ x: bar_x, y: bar_y, w: bar_w * progress, h: 24, path: :pixel, r: 120, g: 200, b: 130 }, id: :loading_fill)
   end
 
   def hud(camera)
