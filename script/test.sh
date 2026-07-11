@@ -31,7 +31,13 @@ preload=(
   lib/conjuration/node.rb
   lib/conjuration/vector.rb
   lib/conjuration/input_source.rb
-  lib/conjuration/ui.rb
+  lib/conjuration/ui/reconciler.rb
+  lib/conjuration/ui/navigation.rb
+  lib/conjuration/ui/layout.rb
+  lib/conjuration/ui/text.rb
+  lib/conjuration/ui/scroll.rb
+  lib/conjuration/ui/view.rb
+  lib/conjuration/ui/node.rb
   lib/conjuration/ui_management.rb
   lib/conjuration/camera.rb
   lib/conjuration/camera_management.rb
