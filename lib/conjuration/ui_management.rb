@@ -1,9 +1,24 @@
 module Conjuration
+  # Scene/camera integration for the UI tree: builds the tree, drives input
+  # (hover, focus, shortcuts, scroll), and renders primitives each frame.
+  #
+  # Mixed into {Conjuration::Scene} and cameras that host HUD trees.
+  #
+  # @note Navigation is inert until a group is activated; nil
+  #   +UI.active_navigation_group+ means gameplay owns input and menus stay dormant.
+  # @note Hover never writes focus; hover tracks mouse, focus tracks keyboard/pad.
+  # @note Focus is retained but the indicator is hidden while the mouse is the
+  #   active device (+inputs.last_active == :mouse+).
+  # @note Shortcuts fire without focus; they are global accelerators that run
+  #   when the declared shortcut edge-presses, regardless of focus.
   module UIManagement
     # node() emits into the descriptor build context, so a scene's `view` (or a
     # camera's `camera.ui.view { ... }`) can declare its tree with `self` intact.
     include UI::Builder
 
+    # The built UI tree root for this scene/camera.
+    #
+    # @return [Conjuration::UI::Node]
     attr_reader :ui
 
     def initialize(...)
@@ -14,12 +29,32 @@ module Conjuration
     # Turn UI navigation on for the named pane `group`. The game owns this — call
     # it when a menu opens, and reassign UI.active_navigation_group yourself to
     # move between panes.
+    #
+    # @param group [Symbol, Object] navigation group id (matches +group:+ on nodes)
+    # @return [void]
+    # @note Navigation is inert until a group is activated; nil
+    #   +UI.active_navigation_group+ means gameplay owns input.
+    # @example Activate and cycle groups (from UIScene)
+    #   NAV_GROUPS = [:hud, :party, :skills, :list].freeze
+    #
+    #   def input
+    #     if Conjuration::UI.active_navigation_group.nil? && inputs.last_active != :mouse
+    #       activate_navigation(:skills)
+    #     elsif Conjuration::UI.active_navigation_group && inputs.keyboard.key_down.tab
+    #       current = NAV_GROUPS.index(Conjuration::UI.active_navigation_group) || -1
+    #       activate_navigation(NAV_GROUPS[(current + 1) % NAV_GROUPS.length])
+    #     end
+    #   end
     def activate_navigation(group)
       UI.active_navigation_group = group
     end
 
     # Turn UI navigation off and drop the highlight; gameplay owns the input
     # again until something reactivates it.
+    #
+    # @return [void]
+    # @note Navigation is inert until a group is activated; nil
+    #   +UI.active_navigation_group+ means gameplay owns input and menus stay dormant.
     def deactivate_navigation
       UI.active_navigation_group = nil
       UI.focused_node = nil
@@ -215,6 +250,10 @@ module Conjuration
     # only changed props and clean subtrees early-out of layout, so this is
     # near-free when nothing changed. Scene and camera share it, each passing its
     # own outputs (screen HUD vs. viewport target).
+    #
+    # @param outputs [Object] DragonRuby outputs target (e.g. +args.outputs+ or a
+    #   camera render target)
+    # @return [void]
     def render_ui(outputs)
       ui.render_view
       ui.calculate_layout
@@ -246,6 +285,16 @@ module Conjuration
     # game styling. Hidden (but retained) while the mouse is the active device;
     # nil unless THIS ui owns the focused node (focus is a shared global, reached
     # by every scene + camera each tick).
+    #
+    # Override per scene/camera to opt in or out of the built-in ring.
+    #
+    # @return [Boolean] whether the built-in focus indicator may draw
+    # @note Focus is retained but the indicator is hidden while
+    #   +inputs.last_active == :mouse+.
+    # @example Opt in (from UIScene)
+    #   def focus_indicator_enabled?
+    #     true
+    #   end
     def focus_indicator_enabled?
       UI.focus_indicator_default
     end
