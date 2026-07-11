@@ -6,6 +6,11 @@ module Conjuration
       root
     end
 
+    # A layout node combining flexbox geometry, reconciliation, navigation, text wrapping,
+    # and scroll clipping into one tree structure. Nodes are built via node() calls or UI.build,
+    # laid out flexbox-style, and optionally reconciled frame-to-frame from a declarative view.
+    # The retained node tree survives layout invalidation and reconciliation, preserving scroll
+    # offset, focus, and measurement caches across re-renders.
     class Node < Conjuration::Node
       include Reconciler
       include Layout
@@ -29,6 +34,60 @@ module Conjuration
 
       delegate :first, :last, to: :children
 
+      # Create a node with flexbox layout keywords and render/geometry data.
+      #
+      # Node keywords define layout and interactivity; anything else is render data (sprites, text,
+      # colors, computed geometry). Both are stored in `object` so layout can compute geometry into
+      # it. The reconciler snapshots declared-only state to diff frame-to-frame.
+      #
+      # @param object_hash [Hash, nil] render data; nil means create from **object keywords
+      # @param id [Symbol, nil] unique identifier; nil = anonymous node
+      # @param direction [Symbol] main axis: :column (default, vertical) or :row (horizontal)
+      # @param justify [Symbol] main-axis distribution (default: :start):
+      #   - :start — children at main-axis start
+      #   - :center — children centered; requires resolved main-axis size (warns if unresolved)
+      #   - :end — children at main-axis end; never requires size resolution
+      #   - :between — space children to fill; first at start, last at end
+      #   - :around — space children equally with half-spacing at edges
+      #   - :evenly — equal space everywhere including edges
+      # @param align [Symbol] cross-axis alignment (default: :start):
+      #   - :start — children at cross-axis start
+      #   - :center — children centered on cross-axis
+      #   - :end — children at cross-axis end
+      #   - :stretch — children span the container's cross-axis size
+      # @param gap [Numeric] space between children (default: 0)
+      # @param padding [Numeric, Array, Hash] space inside edges (default: 0); can be:
+      #   - Single value: applies to all edges
+      #   - Two-element Array [horizontal, vertical]
+      #   - Hash {left:, right:, top:, bottom:} with defaults for missing keys
+      # @param visible [Boolean] render and interact if true (and all ancestors visible); default true
+      # @param position [Symbol] :static (default, in-flow) or :absolute (out-of-flow);
+      #   absolute nodes positioned by insets, don't consume flow space
+      # @param top [Numeric, nil] out-of-flow vertical position; inset from parent's padding-box top edge
+      # @param right [Numeric, nil] out-of-flow horizontal position; inset from parent's padding-box right edge
+      # @param bottom [Numeric, nil] out-of-flow vertical position; inset from parent's padding-box bottom edge
+      # @param left [Numeric, nil] out-of-flow horizontal position; inset from parent's padding-box left edge
+      # @param group [Symbol, nil] named navigation group; nil inherits nearest ancestor's group
+      # @param overflow [Symbol, nil] :scroll clips children to this node's box and scrolls via scroll_offset;
+      #   nil (default) lays out normally
+      # @param wrap [Boolean, nil] text wrapper container; nil (default) is non-wrapping
+      # @param text_break [Symbol, Boolean] text break mode when wrapped (default: :word):
+      #   - :word — break on spaces
+      #   - :letter — break anywhere (mid-word)
+      #   - false — never wrap
+      # @param shortcut [Hash, nil] accelerator trigger {keyboard: :key, controller: :button};
+      #   nil (default) means no shortcut; fire queries shortcut_action_name
+      # @param object [Hash] remaining keyword arguments become render data
+      # @param block [Proc] nested node() calls to build children
+      #
+      # @note Out-of-flow insets are kept off the object hash to avoid shadowing computed
+      #   geometry accessors (object.left, object.top) which would go stale across re-layouts.
+      #
+      # @note Retained-mode layout: nodes start dirty and are recomputed only when invalidate!
+      #   marks them. Render-only changes (color, sprite path) don't force relayout.
+      #
+      # @see Node#node for a convenience wrapper
+      # @see UI.build for the typical entry point
       def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
@@ -81,8 +140,25 @@ module Conjuration
         instance_exec(&block) if block_given?
       end
 
-      # node()'s keyword contract is Node.new's (the single source of node-keyword
-      # defaults); forward through rather than restate every keyword here.
+      # Create a child node and add it to this node's children.
+      #
+      # The child's keywords follow Node.new's contract (the single source of node-keyword defaults).
+      #
+      # @param object_hash [Hash, nil] render data
+      # @param opts [Hash] node keywords (id, direction, justify, align, gap, padding, visible, position, etc.)
+      # @param block [Proc] nested node() calls to build children
+      # @return [Node] the new child node
+      #
+      # @note Adding a node calls clear_structure_cache! and invalidate!, rebuilding descendant
+      #   maps and marking the tree for relayout.
+      #
+      # @see Node#initialize for keyword details
+      #
+      # @example Nested node tree
+      #   node({ w: 100, h: 50, path: 'sprites/button.png', action: -> { puts 'clicked' } },
+      #        id: :button, justify: :center, align: :center) do
+      #     node({ text: 'Click me!', r: 255, g: 255, b: 255 }, id: :label)
+      #   end
       def node(object_hash = nil, **opts, &block)
         element = Node.new(object_hash, **opts, &block)
         element.parent = self
@@ -92,6 +168,14 @@ module Conjuration
         element
       end
 
+      # Find a descendant node by id.
+      #
+      # @param id [Symbol, String] node identifier (converted to symbol)
+      # @return [Node, nil] the descendant node, or nil if not found
+      #
+      # @example
+      #   button = ui.find(:my_button)
+      #   button.visible = false if button
       def find(id)
         descendants[id.to_sym]
       end
@@ -104,6 +188,11 @@ module Conjuration
         Geometry.find_intersect_rect(rect, interactive_nodes)
       end
 
+      # All descendants keyed by id, memoized and invalidated on structural changes.
+      #
+      # @return [Hash[Symbol => Node]] id -> node map; empty entries for nil ids skipped
+      #
+      # @note This hash is rebuilt on every clear_structure_cache! (node added/removed).
       def descendants
         @descendants ||= begin
           nodes.each_with_object({}) do |node, hash|
@@ -112,13 +201,21 @@ module Conjuration
         end
       end
 
+      # All nodes in this subtree (self and all descendants), memoized.
+      #
+      # @return [Array<Node>] depth-first traversal including self
+      #
+      # @note Cleared on structural change (node added/removed).
       def nodes
         @nodes ||= [self, *children.flat_map(&:nodes)].compact
       end
 
-      # A structural change (a node added/removed) invalidates the memoized node
-      # and descendant lists here and in every ancestor that contains this
-      # subtree, so they rebuild on next access.
+      # Clear all memoized structure (nodes, descendants, interactive_nodes).
+      #
+      # Called when children are added/removed; propagates up to every ancestor so they rebuild
+      # their memos on next access.
+      #
+      # @return [nil]
       def clear_structure_cache!
         @nodes = nil
         @descendants = nil
@@ -128,8 +225,12 @@ module Conjuration
         parent&.clear_structure_cache!
       end
 
-      # Like clear_structure_cache! but keeps the @nodes/@descendants memos — only
-      # the interactive-ness caches go stale on a visible/disabled/shortcut flip.
+      # Clear interactive-ness caches (interactive_nodes, navigation_groups, shortcut_nodes).
+      #
+      # Called when a node's visibility, disabled state, or shortcut changes; propagates up to
+      # every ancestor. Keeps nodes/descendants memos alive.
+      #
+      # @return [nil]
       def clear_interactive_cache!
         @interactive_nodes = nil
         @navigation_groups = nil
@@ -137,14 +238,25 @@ module Conjuration
         parent&.clear_interactive_cache!
       end
 
+      # All styled objects emitted by this subtree (flat, render-order list).
+      #
+      # Scroll containers emit their render targets + scrollbars instead of recursing, so
+      # overflowing children don't leak. Text nodes emit wrapped primitives.
+      #
+      # @return [Array<Object>] renderable primitive objects
       def primitives
         collect_primitives([])
       end
 
-      # Walk the tree emitting each renderable node's styled object — but a scroll
-      # container emits a sprite of its (clipped) render target plus its scrollbar
-      # instead of recursing, so overflowing children don't leak into the flat
-      # list. render_scroll_targets fills those targets before this is emitted.
+      # Walk the tree emitting each renderable node's styled object.
+      #
+      # Scroll containers emit a sprite of their clipped render target plus scrollbar instead of
+      # recursing, so children stay clipped. Wrapped text emits its lines.
+      #
+      # @param acc [Array<Object>] accumulator for primitives
+      # @return [Array<Object>] same as acc, mutated with this subtree's primitives
+      #
+      # @private Used internally; prefer primitives().
       def collect_primitives(acc)
         if scroll?
           # The container's background + children are painted into its render
@@ -213,7 +325,16 @@ module Conjuration
         return %i[solid label sprite line border].include?(primitive_marker)
       end
 
-      # No layout clear: `visible` is in the layout signature, so invalidate! relayouts.
+      # Mutate the visibility flag without forcing layout recalculation.
+      #
+      # Visibility is baked into the layout signature, so invalidate! would trigger a relayout
+      # anyway. This method just clears interactive caches and returns the value.
+      #
+      # @param value [Boolean] new visibility state
+      # @return [Boolean] the value assigned
+      #
+      # @note Setting visible: false hides this node and all descendants from rendering,
+      #   interaction, and navigation.
       def visible=(value)
         return if @visible == value
 
@@ -221,9 +342,12 @@ module Conjuration
         clear_interactive_cache!
       end
 
-      # Visible only if this node and every ancestor is visible. Effective
-      # visibility is read here rather than assigned down the tree, so the
-      # per-frame relayout can't clobber a node's own `visible` setting.
+      # Test whether this node and all ancestors are visible.
+      #
+      # @return [Boolean] true only if this node and every ancestor is visible
+      #
+      # @note Effective visibility is computed here rather than assigned down the tree, so
+      #   per-frame relayout can't clobber a node's own `visible` setting.
       def visible_in_tree?
         node = self
         while node
