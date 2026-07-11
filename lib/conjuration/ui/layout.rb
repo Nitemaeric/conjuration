@@ -4,14 +4,31 @@ module Conjuration
     # and absolute positioning. Mixed into Node — the geometry it computes lands
     # on each node's object hash.
     module Layout
+      # Test whether this node needs layout calculation.
+      #
+      # @return [Boolean] true if marked dirty or has never been laid out
+      #
+      # @see Node#invalidate!
+      # @see Node#calculate_layout
       def dirty?
         @dirty
       end
 
       # Mark this node for relayout — but only if a layout-relevant input actually
-      # changed since it was last laid out. A no-op write (same value) or a
-      # render-only change (colour, sprite) leaves it clean. Then propagate up so
-      # the per-frame relay reaches it (a child's size change reflows its parent).
+      # changed since it was last laid out.
+      #
+      # A no-op write (same value) or a render-only change (color, sprite) leaves the
+      # node clean. When the node is marked dirty, the mark propagates up so the
+      # per-frame relay reaches it (a child's size change reflows its parent).
+      #
+      # @return [nil]
+      #
+      # @note invalidate! is change-aware via layout_signature comparison, so a
+      #   render-only change (color, path) doesn't force relayout. Structural changes
+      #   (visible: true→false, text content, children added/removed) do mark dirty.
+      #
+      # @see Node#mark_dirty!
+      # @see Node#layout_signature
       def invalidate!
         return if @dirty
         return if layout_signature == @laid_out_signature
@@ -20,8 +37,16 @@ module Conjuration
       end
 
       # Set this node and its ancestors dirty so the relay traverses to it,
-      # short-circuiting at the first already-dirty node. Unlike invalidate! it
-      # doesn't re-test the signature — ancestors just need to be reachable.
+      # short-circuiting at the first already-dirty node.
+      #
+      # Unlike invalidate! it doesn't re-test the signature — ancestors just need
+      # to be reachable. Used when structure changes and signature is ambiguous.
+      #
+      # @return [nil]
+      #
+      # @note Used internally after structural changes (node added/removed).
+      #
+      # @see Node#invalidate!
       def mark_dirty!
         return if @dirty
 
@@ -29,9 +54,16 @@ module Conjuration
         parent&.mark_dirty!
       end
 
-      # The layout-relevant inputs: geometry, layout properties, text, and child
-      # count. Render-only fields (colour, path, alpha) are deliberately excluded,
-      # so changing them never forces a relayout.
+      # The layout-relevant inputs: geometry, layout properties, text, and child count.
+      #
+      # Render-only fields (color, path, alpha) are deliberately excluded, so changing
+      # them never forces a relayout.
+      #
+      # @return [Array] signature tuple compared by value
+      #
+      # @private Used internally by invalidate!.
+      #
+      # @see Node#invalidate!
       def layout_signature
         [
           object.x, object.y, object.w, object.h, object.anchor_x, object.anchor_y, object.text,
@@ -41,16 +73,29 @@ module Conjuration
         ]
       end
 
-      # Force the whole subtree dirty — e.g. on orientation change, where every
-      # grid-relative value has to be recomputed.
+      # Force the entire subtree dirty — used on orientation change or other
+      # global reflows where every grid-relative value must be recomputed.
+      #
+      # @return [nil]
+      #
+      # @note Heavier than invalidate!; use sparingly.
+      #
+      # @see Node#invalidate!
       def invalidate_subtree!
         @dirty = true
         children.each(&:invalidate_subtree!)
       end
 
-      # Resolve this node's own intrinsic size from its text, if any. When the
-      # parent opted into wrapping (wrap: true), the text breaks across lines to
-      # the parent's content width and the node sizes to the wrapped block.
+      # Resolve this node's intrinsic size from its text, if any.
+      #
+      # When the parent opted into wrapping (wrap: true), the text breaks across lines
+      # to the parent's content width and the node sizes to the wrapped block.
+      #
+      # @return [nil]
+      #
+      # @note Called early in calculate_layout, before children are positioned.
+      #
+      # @see Node#inner_width
       def measure!
         return unless object.has_key?(:text)
 
@@ -63,11 +108,38 @@ module Conjuration
         end
       end
 
-      # This node's content width — its box minus left/right padding.
+      # This node's content width — its box width minus left/right padding.
+      #
+      # Used to constrain text wrapping and child layouts.
+      #
+      # @return [Numeric] inner width in pixels
+      #
+      # @see Node#padding
       def inner_width
         object.w - padding_left - padding_right
       end
 
+      # Calculate flexbox layout for this node and all descendants.
+      #
+      # Measures text, distributes flow children, positions absolute children,
+      # and recurses to set up the retained-mode layout tree. Skipped if not dirty
+      # unless force: true.
+      #
+      # @param force [Boolean] recalculate even if not dirty (default: false)
+      # @return [nil]
+      #
+      # @note Layout computes into object (x, y, w, h, anchor_x, anchor_y); each
+      #   node's declared state is preserved in @declared for reconciliation diffing.
+      #
+      # @note The root (id: :root) is skipped—its children are laid out without
+      #   repositioning (they use their own computed positions).
+      #
+      # @note When justify uses :center, :between, :around, or :evenly, the main-axis
+      #   size must be resolved (non-nil), or the method falls back to :start and warns.
+      #   :start and :end never need size resolution.
+      #
+      # @see Node#dirty?
+      # @see Node#invalidate!
       def calculate_layout(force: false)
         return unless @dirty || force
 
@@ -111,6 +183,11 @@ module Conjuration
         @children.each { |child| child.calculate_layout(force: cascade) }
       end
 
+      # Test whether this node is out-of-flow positioned.
+      #
+      # @return [Boolean] true if position == :absolute
+      #
+      # @see Node#position
       def absolute?
         position == :absolute
       end

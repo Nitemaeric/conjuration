@@ -1,3 +1,9 @@
+# Declarative flexbox-style UI layout, reconciliation, and navigation.
+module Conjuration
+  module UI
+  end
+end
+
 require_relative "ui/reconciler"
 require_relative "ui/navigation"
 require_relative "ui/layout"
