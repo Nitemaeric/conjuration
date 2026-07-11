@@ -1,5 +1,23 @@
+# The lifecycle never touches audio, but the host mirrors Game's surface;
+# the spy doubles as the regression guard (clears must stay 0).
+class AudioSpy
+  attr_reader :clears
+
+  def initialize
+    @clears = 0
+  end
+
+  def clear
+    @clears += 1
+  end
+end
+
 class SceneManagementHost
   include Conjuration::SceneManagement
+
+  def audio
+    @audio ||= AudioSpy.new
+  end
 end
 
 class SetupCountingScene

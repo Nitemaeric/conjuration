@@ -54,6 +54,9 @@ preload=(
   demo/mygame/app/views/prompt_view.rb
   demo/mygame/app/views/shortcut_badge_view.rb
   demo/mygame/app/views/button_view.rb
+  demo/mygame/app/transitions/fade_transition.rb
+  demo/mygame/app/transitions/box_wipe_transition.rb
+  demo/mygame/app/scenes/interior_scene.rb
   demo/mygame/app/scenes/basic_camera_scene.rb
   demo/mygame/app/scenes/hit_stop_scene.rb
   demo/mygame/app/scenes/zoom_scene.rb

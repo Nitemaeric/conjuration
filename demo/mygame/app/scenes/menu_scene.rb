@@ -1,4 +1,6 @@
 require "app/views/button_view.rb"
+require "app/transitions/fade_transition.rb"
+require "app/transitions/box_wipe_transition.rb"
 require_relative "basic_camera_scene"
 require_relative "multiple_cameras_scene"
 require_relative "ui_scene"
@@ -104,7 +106,9 @@ class MenuScene < Conjuration::Scene
 
   def menu
     entries = menu_items.map do |item|
-      { id: item[:id], label: item[:label], action: -> { change_scene(to: item[:scene].new(item[:id])) } }
+      # item[:transition] is a factory (fresh instance per launch), or nil for the
+      # instant swap every demo used before transitions existed.
+      { id: item[:id], label: item[:label], action: -> { change_scene(to: item[:scene].new(item[:id]), transition: item[:transition] && item[:transition].call) } }
     end
     entries << { id: :quit, label: "Quit", action: -> { gtk.request_quit } } if gtk.can_close_window?
 
@@ -132,8 +136,10 @@ class MenuScene < Conjuration::Scene
       { id: :basic_camera, label: "Basic Camera", scene: BasicCameraScene },
       { id: :multiple_cameras, label: "Multiple Cameras", scene: MultipleCamerasScene },
       { id: :ui, label: "UI", scene: UIScene },
-      { id: :zoom, label: "Zoom", scene: ZoomScene },
-      { id: :hit_stop, label: "Hit Stop", scene: HitStopScene },
+      # Zoom fades out and shows a real load-progress bar while its 320k-tile map
+      # builds; Hit Stop wipes in with a Pokemon-style box.
+      { id: :zoom, label: "Zoom", scene: ZoomScene, transition: -> { FadeTransition.new } },
+      { id: :hit_stop, label: "Hit Stop", scene: HitStopScene, transition: -> { BoxWipeTransition.new } },
       { id: :reactive, label: "Reactive", scene: ReactiveScene },
       { id: :ecs, label: "ECS (draco)", scene: ECSScene },
       { id: :parallax, label: "Parallax", scene: ParallaxScene },

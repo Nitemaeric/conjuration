@@ -29,11 +29,18 @@ module Conjuration
       # skips the pump for games that never use input.
       DragonInput.tick(args) if DragonInput.config
 
-      if @hit_stop && @hit_stop > 0
+      if transitioning?
+        # A transition/loading handover owns the tick: input and update (and thus
+        # every clock, game and scene) are suspended until the incoming scene is
+        # ready and revealed.
+        advance_handover
+      elsif @hit_stop && @hit_stop > 0
         @hit_stop -= 1
       else
         perform_input
-        perform_update
+        # A transition begun from input (e.g. walking into a doorway) suspends the
+        # rest of the tick, so update never lands on the freshly-swapped scene.
+        perform_update unless transitioning?
       end
 
       perform_render

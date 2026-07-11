@@ -27,7 +27,9 @@ module Conjuration
     def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
 
-      @output_key = "camera_#{name}"
+      # Namespace by scene instance: two stacked scenes that both add a `:main`
+      # camera would otherwise share (and corrupt) one global render target.
+      @output_key = "camera_#{scene.uid}_#{name}"
 
       @current = FocalPoint.new(self, **current)
       @target = FocalPoint.new(self, **current)
@@ -406,8 +408,9 @@ module Conjuration
 
       render_debug_overlay if debug?
 
-      # Blit the camera's viewport onto its rect on the screen.
-      game.outputs.primitives << {
+      # Blit the camera's viewport onto its rect on the screen. Through
+      # render_output so a transition snapshot captures the composed frame.
+      game.render_output.primitives << {
         x: x,
         y: y,
         w: w,
