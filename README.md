@@ -146,3 +146,36 @@ iso.to_grid(x, y)        # => { col:, row: } which tile a world point falls in
 - `Projection::TopDown` is the identity mapping with the same contract, so isometric reads as one option in a family rather than a special case — swap the projection object and the same tile/pick code drives either view.
 
 See [isometric_scene.rb](demo/mygame/app/scenes/isometric_scene.rb): a diamond `TileLayer` floor, a hand-authored heightmap with a raised plateau (top diamond plus a stacked "cliff face"), elevation-aware mouse picking via the probe above, and a knight whose feet follow the terrain height while walking behind then in front of raised ground purely from `z: col + row`.
+
+## API docs & editor support
+
+YARD documentation is available for the public API (input, scheduling, animation, geometry, and core utilities).
+
+### Generating documentation
+
+Under CRuby, install YARD and generate HTML docs:
+
+```sh
+gem install --user-install yard
+yard doc
+yard server  # visit http://localhost:8808
+```
+
+### Editor autocomplete
+
+Configure [Solargraph](https://solargraph.org) to enable inline documentation and autocomplete:
+
+1. Clone [dragonruby-yard-doc](https://github.com/Nitemaeric/dragonruby-yard-doc) as a sibling directory:
+   ```
+   ../dragonruby-yard-doc/
+   ```
+
+2. Create or update `.solargraph.yml` in your game directory with:
+   ```yaml
+   include:
+     - lib/**/*.rb
+     - demo/mygame/app/**/*.rb
+     - ../dragonruby-yard-doc/*.rb
+   ```
+
+Solargraph will load YARD docs from Conjuration's lib and the dragonruby stubs, enabling code completion in VS Code and other editors.
