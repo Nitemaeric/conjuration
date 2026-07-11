@@ -13,12 +13,21 @@ module Conjuration
 
     attr_reader :name
 
-    delegate :layout, :geometry, :gtk, :audio, :change_scene, :clock, to: :game
+    # Advances one per active-top update (frozen while paused or during a hit
+    # stop). Key scene animations to this, not Kernel.tick_count.
+    attr_reader :clock
+
+    # Where push/pop stashes this scene's focus/navigation globals while it is
+    # paused underneath an overlay (see SceneManagement).
+    attr_accessor :saved_focus
+
+    delegate :layout, :geometry, :gtk, :audio, :change_scene, :push_scene, :pop_scene, to: :game
 
     def initialize(name, **config)
       @name = name
 
       @state_key = "scene_#{name}"
+      @clock = 0
 
       super(
         config: config,
@@ -27,14 +36,23 @@ module Conjuration
       )
     end
 
+    # Per-instance token so stacked scenes that both add a `:main` camera get
+    # distinct render targets (camera.rb keys targets by scene.uid). object_id is
+    # unique and never reused, so no two live scenes ever collide.
+    def uid
+      object_id
+    end
+
     def state
       game.state[@state_key] ||= {}
     end
 
     # Screen-space output for HUD/backgrounds. World content is drawn through
-    # cameras via #draw_world, not into a scene-sized render target.
+    # cameras via #draw_world, not into a scene-sized render target. Routed
+    # through render_output so a transition can capture a frame into a snapshot
+    # target (normally this is just game.outputs).
     def outputs
-      game.outputs
+      game.render_output
     end
 
     def debug_inspect
@@ -49,7 +67,10 @@ module Conjuration
     private
 
     def perform_setup
-      audio.clear
+      # Audio is no longer cleared here — that policy moved to the change_scene
+      # path (SceneManagement) so a pushed overlay never silences the scene it
+      # pauses. See docs/design/scene-lifecycle.md §7.
+      @clock = 0
       UI.focused_node = nil
       UI.hovered_node = nil
       UI.pressed_node = nil
@@ -67,6 +88,8 @@ module Conjuration
     end
 
     def perform_update
+      @clock += 1 # advances only while this scene is the active top
+
       super
 
       update if respond_to?(:update)
