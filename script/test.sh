@@ -38,6 +38,7 @@ preload=(
   lib/conjuration/tile_layer.rb
   lib/conjuration/projection.rb
   lib/conjuration/scheduler.rb
+  lib/conjuration/animation.rb
   lib/conjuration/scene.rb
   lib/conjuration/scene_management.rb
   lib/conjuration/game.rb
