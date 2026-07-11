@@ -85,6 +85,8 @@ module Conjuration
       render if respond_to?(:render)
 
       if debug?
+        render_game_debug_panel
+
         gtk.framerate_diagnostics_primitives
           .select { |primitive| primitive[:primitive_marker] == :label && !primitive[:text].start_with?("FPS") }
           .map { |primitive| primitive[:text] }
@@ -92,6 +94,42 @@ module Conjuration
             outputs.debug << primitive
           end
       end
+    end
+
+    # Screen-space state panel, anchored top-left so it clears the demo's
+    # top-right FPS readout. Guarded here as well as at the call site: builds
+    # nothing when debug is off. The scene stack and transition/loading phase
+    # (unmerged PR #19) are a per-line addition to #game_debug_panel_lines.
+    def render_game_debug_panel
+      return unless debug?
+
+      top = grid.h - 8
+      game_debug_panel_lines.each_with_index do |text, index|
+        outputs.debug << { x: 8, y: top - index * 18, text: text, size_px: 14, r: 255, g: 255, b: 255, anchor_y: 1 }
+      end
+    end
+
+    def game_debug_panel_lines
+      scene = current_scene
+      camera = scene.respond_to?(:focused_camera) ? scene.focused_camera : nil
+
+      [
+        "scene: #{scene_debug_label(scene)}",
+        "clock: #{clock}  hit-stop: #{@hit_stop || 0}",
+        "camera: #{camera ? camera.name : "-"}",
+        "ui: focus=#{node_debug_id(UI.focused_node)} hover=#{node_debug_id(UI.hovered_node)} nav=#{UI.active_navigation_group || "-"}"
+      ]
+    end
+
+    def scene_debug_label(scene)
+      return "-" unless scene
+
+      name = scene.respond_to?(:name) ? scene.name : nil
+      name ? "#{scene.class.name} (#{name})" : scene.class.name
+    end
+
+    def node_debug_id(node)
+      node ? node.id : "-"
     end
   end
 end

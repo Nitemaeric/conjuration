@@ -38,6 +38,10 @@ class RenderTargetDouble
   def primitives
     @primitives ||= []
   end
+
+  def debug
+    @debug ||= []
+  end
 end
 
 # args.outputs: the screen, plus named render targets via outputs[:name].
@@ -48,6 +52,10 @@ class OutputsDouble
 
   def primitives
     @primitives ||= []
+  end
+
+  def debug
+    @debug ||= []
   end
 
   def targets
@@ -67,7 +75,11 @@ class GameDouble
   def events; @events ||= EventsDouble.new; end
   def state; @state ||= {}; end
   def audio; @audio ||= {}; end
-  def debug?; false; end
+
+  # Off by default so the lib's debug? paths stay dormant across the suite; the
+  # overlay tests flip it on for a single camera and reset it after.
+  attr_writer :debug
+  def debug?; @debug || false; end
 
   attr_accessor :inputs
 
