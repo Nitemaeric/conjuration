@@ -3,6 +3,7 @@ module Conjuration
     include BaseLifecycleMethods
     include CameraManagement
     include UIManagement
+    include Scheduling
 
     attr_accessor :config, :w, :h
 
@@ -69,6 +70,8 @@ module Conjuration
       super
 
       update if respond_to?(:update)
+
+      tick_schedules # keyed to the (game) clock, which holds during a hit stop
     end
 
     def perform_render
