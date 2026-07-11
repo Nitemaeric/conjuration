@@ -279,6 +279,123 @@ def test_deferred_draws_transform_like_immediate_draws(args, assert)
   assert.close!(vp[:w], 80, "deferred draw is zoom-scaled like an immediate one")
 end
 
+# Draw-order inspector (Camera#dump_draw_order). The dump reads through the same
+# #each_ordered_draw the render flush uses, so its order can't drift from what DR
+# composites. Value tokens are `key=value`; this pulls one out of a prim line.
+
+def draw_order_field(line, key)
+  token = line.split(" ").find { |t| t.start_with?("#{key}=") }
+  token && token.split("=", 2)[1]
+end
+
+def test_dump_draw_order_matches_the_actual_flush_order(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "top" }, z: 5)
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "bottom" }, z: -5)
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "mid" }, z: 0)
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "mid2" }, z: 0)
+
+  dump_order = cam.dump_draw_order.split("\n")
+    .select { |l| l.start_with?("prim ") }
+    .map { |l| draw_order_field(l, "tag") }
+
+  cam.send(:flush_ordered_draws)
+  flush_order = cam.outputs.primitives.map { |p| p[:dbg] }
+
+  assert.equal!(dump_order, ["bottom", "mid", "mid2", "top"], "dump lists prims in z then emission order")
+  assert.equal!(dump_order, flush_order, "dump order equals the real flush order (shared comparator)")
+end
+
+def test_dump_draw_order_header_fields(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 2 })
+  cam.outputs.primitives.clear
+
+  lines = cam.dump_draw_order.split("\n")
+  cam_line = lines.find { |l| l.start_with?("camera ") }
+  view_line = lines.find { |l| l.start_with?("view ") }
+
+  assert.true!(lines[0].start_with?("# conjuration draw-order dump v1"), "versioned header comment")
+  assert.equal!(draw_order_field(cam_line, "name"), "test", "camera name in the header")
+  assert.equal!(draw_order_field(cam_line, "x"), "640", "camera focal x")
+  assert.equal!(draw_order_field(cam_line, "zoom"), "2", "camera zoom")
+  assert.equal!(draw_order_field(view_line, "w"), "640.0", "view width reflects the 2x zoom")
+end
+
+def test_dump_draw_order_tag_passthrough_and_absence(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "hero" }, z: 1)
+  cam.draw({ x: 120, y: 100, w: 10, h: 10 }, z: 2) # no dbg tag
+
+  prim_lines = cam.dump_draw_order.split("\n").select { |l| l.start_with?("prim ") }
+  tagged = prim_lines.find { |l| draw_order_field(l, "z") == "1" }
+  untagged = prim_lines.find { |l| draw_order_field(l, "z") == "2" }
+
+  assert.equal!(draw_order_field(tagged, "tag"), "hero", "a dbg-tagged prim carries its tag into the dump")
+  assert.equal!(draw_order_field(untagged, "tag"), "", "an untagged prim serialises an empty tag")
+end
+
+def test_draw_carries_dbg_only_when_present(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.draw({ x: 100, y: 100, w: 10, h: 10 })                 # untagged immediate
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "flagged" }) # tagged immediate
+
+  plain, flagged = cam.outputs.primitives
+  assert.true!(!plain.key?(:dbg), "an untagged primitive never gains a dbg key (free on the render path)")
+  assert.equal!(flagged[:dbg], "flagged", "a tagged primitive rides dbg through to_viewport unchanged")
+end
+
+def test_dump_draw_order_writes_to_an_io_ish_sink(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "a" }, z: 1)
+
+  sink = []
+  returned = cam.dump_draw_order(sink)
+
+  assert.equal!(sink.length, 1, "the io-ish sink received the text via <<")
+  assert.equal!(sink.first, returned, "the returned text is exactly what was written")
+  assert.true!(sink.first.include?("tag=a"), "the sink holds the serialised prim")
+end
+
+def test_dump_draw_order_defaults_to_a_sandboxed_gtk_write(args, assert)
+  cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
+  cam.outputs.primitives.clear
+
+  text = cam.dump_draw_order
+  write = cam.gtk.last_write
+
+  assert.equal!(write[:path], "draw_order_test.txt", "nil arg routes to a per-camera sandboxed filename")
+  assert.equal!(write[:contents], text, "gtk.write_file gets the same text that is returned")
+end
+
+def test_dump_draw_order_string_path_routes_through_gtk(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+
+  cam.dump_draw_order("custom_dump.txt")
+  assert.equal!(cam.gtk.last_write[:path], "custom_dump.txt", "a String path is treated as a gtk write target")
+end
+
+def test_dump_draw_order_keeps_no_state_between_calls(args, assert)
+  cam = make_camera
+  cam.outputs.primitives.clear
+  cam.view_rect # warm the per-frame view memo so it isn't counted as new state
+
+  before = cam.instance_variables.sort
+  cam.draw({ x: 100, y: 100, w: 10, h: 10, dbg: "a" }, z: 1)
+  cam.dump_draw_order([])
+  cam.send(:flush_ordered_draws)
+
+  assert.equal!(cam.instance_variables.sort, before, "dumping introduces no new instance variables")
+  assert.true!(cam.instance_variable_get(:@draw_buffer).empty?, "the buffer still drains on flush")
+end
+
 def test_follow_points_target_at_the_object_each_tick(args, assert)
   cam = make_camera(current: { x: 640, y: 360, zoom: 1 })
   object = { x: 1000, y: 800 }

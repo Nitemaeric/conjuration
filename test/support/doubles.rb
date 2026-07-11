@@ -29,6 +29,14 @@ class GtkDouble
   def read_file(*)
     nil
   end
+
+  # No write sandbox either: record the last write so tests can assert the
+  # path-routing branch of Camera#dump_draw_order without touching disk.
+  def write_file(path, contents)
+    @last_write = { path: path, contents: contents }
+  end
+
+  attr_reader :last_write
 end
 
 # A render target: tracks its size and accumulates primitives.
