@@ -2,7 +2,23 @@ module Conjuration
   module UI
     # overflow: :scroll containers — clipping children into a render target,
     # offsetting by scroll_offset, and drawing a scrollbar. Mixed into Node.
+    #
+    # Public properties (via node declarations / accessors):
+    # - +overflow: :scroll+ enables scrolling on the container
+    # - +scroll_offset+ (read/write) how far content is scrolled, in pixels
+    # - +max_scroll+ (read) how far content can scroll past the box
+    #
+    # @example Scrollable list panel (from UIScene)
+    #   node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, path: :pixel },
+    #        id: :scroll_list, overflow: :scroll, padding: 12, gap: 8, group: :list) do
+    #     16.times do |i|
+    #       node({ text: "Scrollable item #{i + 1}", r: 230, g: 230, b: 240 }, id: "item_#{i + 1}")
+    #     end
+    #   end
     module Scroll
+      # Whether this node is an +overflow: :scroll+ container.
+      #
+      # @return [Boolean]
       def scroll?
         overflow == :scroll
       end
@@ -10,6 +26,8 @@ module Conjuration
       # Render each scroll container's children into its render target, translated
       # to target-local space and shifted by scroll_offset. Call once per frame,
       # before emitting primitives.
+      #
+      # @return [void]
       def render_scroll_targets
         nodes.each { |node| node.render_scroll_target if node.scroll? }
       end
@@ -36,6 +54,8 @@ module Conjuration
       end
 
       # The blit of a scroll container's render target at its on-screen box.
+      #
+      # @return [Hash] sprite hash with +x+, +y+, +w+, +h+, +path+
       def scroll_sprite
         { x: object.left, y: object.bottom, w: object.w, h: object.h, path: scroll_target_path }
       end
@@ -59,11 +79,15 @@ module Conjuration
       end
 
       # How far the content can scroll past the box (0 when it already fits).
+      #
+      # @return [Numeric] maximum scroll offset in pixels
       def max_scroll
         [content_height - object.h, 0].max
       end
 
       # A thin thumb on the right edge, sized and placed by the scroll position.
+      #
+      # @return [Array<Hash>] zero or one solid primitive for the thumb
       def scrollbar_primitives
         return [] if max_scroll <= 0
 
