@@ -22,6 +22,7 @@ module Conjuration
       attr_accessor :scroll_offset
       attr_reader :wrap, :text_break
       attr_reader :shortcut
+      attr_reader :grow
       attr_writer :declared
       # The view component this node was mounted for (nil for a plain node) —
       # part of its reconcile identity, so a type swap at the same key remounts.
@@ -29,7 +30,8 @@ module Conjuration
 
       delegate :first, :last, to: :children
 
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, **object, &block)
+      # @param grow [Numeric, nil] flex grow factor; nil (default) = no growth
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         @children = []
@@ -73,6 +75,8 @@ module Conjuration
         # draws nothing for it — display is game code, keyed off the injected
         # action's name (shortcut_action_name). nil (default) means no work.
         @shortcut = shortcut
+
+        @grow = grow
 
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
@@ -219,6 +223,13 @@ module Conjuration
 
         @visible = value
         clear_interactive_cache!
+      end
+
+      def grow=(value)
+        return if @grow == value
+
+        @grow = value
+        invalidate!
       end
 
       # Visible only if this node and every ancestor is visible. Effective

@@ -5,13 +5,13 @@ module Conjuration
     # split a call's keywords from its object props.
     NODE_KEYWORDS = %i[
       id direction justify align gap padding visible position
-      top right bottom left group overflow wrap text_break shortcut
+      top right bottom left group overflow wrap text_break shortcut grow
     ].freeze
 
     # Node keywords that map to a writable attribute and can therefore change
     # frame-to-frame under reconciliation. Structural keywords fixed at creation
     # (overflow, wrap, text_break, the insets) are intentionally excluded.
-    RECONCILABLE_OPTS = %i[direction justify align gap padding visible position group shortcut].freeze
+    RECONCILABLE_OPTS = %i[direction justify align gap padding visible position group shortcut grow].freeze
 
     # A lightweight snapshot of one node() call: the resolved object hash, its
     # node-keyword options, and child descriptors. The reconciler diffs these

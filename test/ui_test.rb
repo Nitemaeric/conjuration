@@ -887,3 +887,155 @@ def test_shortcut_reconciles_like_a_node_opt(args, assert)
 ensure
   DragonInput.reset!
 end
+
+# --- main-axis grow (flex-grow) -----------------------------------------------
+# Container is 400x400. grow expands a child's main size by its share of leftover
+# free space (inner main size − Σ bases − gaps). No shrink when leftover ≤ 0.
+
+def test_row_single_grow_fills_leftover(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+  end
+  n1 = c.find(:n1)
+
+  # leftover = 400 - 100 = 300; n1.w = 100 + 300
+  assert.equal!(n1.object.w, 400, "single grow:1 child absorbs the full leftover")
+end
+
+def test_row_two_grow_factors_split_leftover_2_to_1(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 2)
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2, grow: 1)
+  end
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  # leftover = 400 - 200 = 200; n1 gets 2/3, n2 gets 1/3
+  assert.close!(n1.object.w, 100 + 200 * 2 / 3.0, "n1 takes two thirds of leftover")
+  assert.close!(n2.object.w, 100 + 200 * 1 / 3.0, "n2 takes one third of leftover")
+end
+
+def test_column_single_grow_fills_leftover(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+  end
+  n1 = c.find(:n1)
+
+  assert.equal!(n1.object.h, 400, "column grow:1 child absorbs the full leftover height")
+end
+
+def test_column_two_grow_factors_split_leftover_2_to_1(args, assert)
+  c = build_container(direction: :column, justify: :start, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 2)
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2, grow: 1)
+  end
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  assert.close!(n1.object.h, 100 + 200 * 2 / 3.0, "n1 takes two thirds of leftover height")
+  assert.close!(n2.object.h, 100 + 200 * 1 / 3.0, "n2 takes one third of leftover height")
+end
+
+def test_grow_leftover_excludes_padding_and_gaps(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start, padding: 20, gap: 10) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2)
+  end
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  # inner = 400 - 40 = 360; used = 100 + 100 + 10 = 210; leftover = 150
+  assert.equal!(n1.object.w, 250, "grow fills leftover after padding and gap")
+  assert.equal!(n2.object.w, 100, "non-grow sibling stays at its basis")
+end
+
+def test_grow_expands_from_explicit_basis(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 50, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n2)
+  end
+  n1 = c.find(:n1)
+
+  # leftover = 400 - 150 = 250; n1.w = 50 + 250
+  assert.equal!(n1.object.w, 300, "final size is basis plus full leftover share")
+end
+
+def test_grow_noop_when_leftover_non_positive(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 250, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+    node({ w: 250, h: 100, primitive_marker: :solid }, id: :n2, grow: 1)
+  end
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  # used = 500 > inner 400; leftover negative → no shrink in v1
+  assert.equal!([n1.object.w, n2.object.w], [250, 250], "sizes untouched when leftover ≤ 0")
+end
+
+def test_absolute_child_neither_grows_nor_counts_toward_leftover(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+    node({ w: 50, h: 50, primitive_marker: :solid }, id: :badge, position: :absolute, top: 0, right: 0, grow: 1)
+  end
+  n1, badge = c.find(:n1), c.find(:badge)
+
+  # absolute is out of flow: leftover = 400 - 100 = 300
+  assert.equal!(n1.object.w, 400, "only the in-flow grower expands")
+  assert.equal!(badge.object.w, 50, "absolute child keeps its declared size")
+end
+
+def test_grow_on_unresolved_main_size_warns_and_skips(args, assert)
+  Conjuration::UI.warnings.clear
+
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container, direction: :column) do
+      node({ h: 100 }, id: :toolbar, direction: :row) do
+        node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
+      end
+    end
+  end
+
+  n1 = ui.find(:n1)
+  assert.equal!(n1.object.w, 100, "size stays at basis when container width is unresolved")
+  assert.equal!(
+    Conjuration::UI.warnings.any? { |warning| warning.include?(":toolbar") && warning.include?("width") && warning.include?("grow") },
+    true,
+    "unresolved main size is flagged once"
+  )
+end
+
+class GrowReconcileHost
+  include Conjuration::UI::Builder
+
+  attr_accessor :grow_factor
+
+  def initialize
+    @grow_factor = nil
+  end
+
+  def view
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :container, direction: :row) do
+      node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: @grow_factor)
+    end
+  end
+end
+
+def test_grow_reconciles_and_relayouts(args, assert)
+  host = GrowReconcileHost.new
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+  root.render_view
+  root.calculate_layout
+  n1 = root.find(:n1)
+  assert.equal!(n1.object.w, 100, "no grow → basis width")
+
+  host.grow_factor = 1
+  root.render_view
+  root.calculate_layout
+  assert.equal!(root.find(:n1).grow, 1, "grow is written onto the retained node")
+  assert.equal!(root.find(:n1).object.w, 400, "re-render with grow:1 fills leftover")
+end
+
+def test_no_grow_tree_layout_unchanged(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start, &two_solids)
+  n1, n2 = c.find(:n1), c.find(:n2)
+
+  assert.equal!([n1.object.x, n1.object.w, n1.object.h], [0, 100, 100], "n1 geometry matches pre-grow baseline")
+  assert.equal!([n2.object.x, n2.object.w, n2.object.h], [100, 100, 100], "n2 geometry matches pre-grow baseline")
+end
