@@ -24,7 +24,11 @@ class BarView < Conjuration::UI::View
       node({ w: LABEL_WIDTH, h: 26 }, id: "pct_#{id}", justify: :center, align: :center) do
         node({ text: "#{progress.to_i}%", r: 210, g: 210, b: 220 })
       end
-      node({ w: BAR_MAX * progress / 100, h: 18, path: :pixel, r: 120, g: 200, b: 120 }, id: "fill_#{id}")
+      # Factors needn't sum to 1: progress vs its remainder splits the track.
+      node({ w: BAR_MAX, h: 18 }, id: "track_#{id}", direction: :row) do
+        node({ w: 0, h: 18, path: :pixel, r: 120, g: 200, b: 120 }, id: "fill_#{id}", grow: progress)
+        node({ h: 18 }, id: "space_#{id}", grow: 100 - progress)
+      end
     end
   end
 end
