@@ -62,8 +62,11 @@ class ZoomScene < Conjuration::Scene
     bar_y = grid.h / 2 - 16
 
     node({ x: grid.w / 2, y: bar_y + 60, text: "Building world  #{(progress * 100).to_i}%", size_enum: 2, anchor_x: 0.5, anchor_y: 0.5, r: 235, g: 235, b: 240 }, id: :loading_label)
-    node({ x: bar_x, y: bar_y, w: bar_w, h: 24, path: :pixel, r: 40, g: 40, b: 48 }, id: :loading_track)
-    node({ x: bar_x, y: bar_y, w: bar_w * progress, h: 24, path: :pixel, r: 120, g: 200, b: 130 }, id: :loading_fill)
+    # The fill/spacer grow factors ARE the progress fraction — no width math.
+    node({ x: bar_x, y: bar_y, w: bar_w, h: 24, path: :pixel, r: 40, g: 40, b: 48 }, id: :loading_track, direction: :row) do
+      node({ w: 0, h: 24, path: :pixel, r: 120, g: 200, b: 130 }, id: :loading_fill, grow: progress)
+      node({ h: 24 }, id: :loading_space, grow: 1.0 - progress)
+    end
   end
 
   def hud(camera)
