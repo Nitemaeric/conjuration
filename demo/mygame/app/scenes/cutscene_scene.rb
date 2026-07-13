@@ -121,7 +121,10 @@ class CutsceneScene < Conjuration::Scene
   def dialogue_box
     speaker = SPEAKERS[state.speaker]
 
-    node({ x: grid.w / 2, y: 30, w: 900, anchor_x: 0.5, path: :pixel, r: 26, g: 22, b: 32 }, id: :dialogue, padding: 24, gap: 10, wrap: true) do
+    # Explicit height: a wrap: container can't auto-derive its height (its width
+    # is parent-driven, so content sizing is width-first — see docs). overflow:
+    # :visible lets a long line spill rather than lazily scrolling the panel.
+    node({ x: grid.w / 2, y: 30, w: 900, h: 190, anchor_x: 0.5, path: :pixel, r: 26, g: 22, b: 32 }, id: :dialogue, padding: 24, gap: 10, wrap: true, overflow: :visible) do
       node({ text: speaker[:name], size_enum: 2, **speaker[:ink] }, id: :speaker_name)
       node({ text: state.line, size_enum: 1, r: 240, g: 236, b: 228 }, id: :line)
       node({ text: hint_text, size_enum: 0, r: 150, g: 146, b: 156, a: advance_pulse }, id: :advance_hint)
