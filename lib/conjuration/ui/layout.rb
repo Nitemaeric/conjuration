@@ -35,7 +35,7 @@ module Conjuration
       def layout_signature
         [
           object.x, object.y, object.w, object.h, object.anchor_x, object.anchor_y, object.text,
-          justify, direction, align, gap, padding, position,
+          justify, direction, align, gap, padding, position, grow,
           inset_top, inset_right, inset_bottom, inset_left,
           visible, children.length
         ]
@@ -88,6 +88,8 @@ module Conjuration
         flow_children = flow_children.reverse if justify == :end
 
         unless id == :root
+          distribute_grow(flow_children)
+
           flow_children.each_with_index do |child, index|
             case direction
             when :row
@@ -116,6 +118,44 @@ module Conjuration
       end
 
       private
+
+      # Expand in-flow children with grow > 0 into leftover main-axis free space
+      # (basis + share of leftover). No shrink when leftover is non-positive.
+      def distribute_grow(flow_children)
+        growers = flow_children.select { |child| child.grow && child.grow > 0 }
+        return if growers.empty?
+
+        row = direction == :row
+        main_size = row ? object.w : object.h
+        axis = row ? "width" : "height"
+        main_key = row ? :w : :h
+
+        unless main_size
+          UI.warn(self, "grow: on #{id.inspect} needs a #{axis}; ignoring")
+          return
+        end
+
+        # Re-rendering with a different factor must not compound: every grower
+        # restarts from its authored size (or 0) before leftover is measured.
+        growers.each do |child|
+          basis = child.authored_main_size(main_key) || 0
+          next if child.object[main_key] == basis
+
+          child.object[main_key] = basis
+          child.invalidate!
+        end
+
+        inner = row ? inner_width : (object.h - padding_top - padding_bottom)
+        used = sum_main_size(flow_children, main_key) + (flow_children.length > 1 ? (flow_children.length - 1) * gap : 0)
+        leftover = inner - used
+        return if leftover <= 0
+
+        sum_factors = growers.inject(0) { |total, child| total + child.grow }
+        growers.each do |child|
+          child.object[main_key] = (child.object[main_key] || 0) + leftover * (child.grow / sum_factors)
+          child.invalidate!
+        end
+      end
 
       # Place an out-of-flow child against this node's padding box using its
       # CSS-style insets. Both insets on an axis stretch the child to span between
