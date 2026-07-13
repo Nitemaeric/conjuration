@@ -10,6 +10,7 @@ require_relative "reactive_scene"
 require_relative "ecs_scene"
 require_relative "parallax_scene"
 require_relative "isometric_scene"
+require_relative "cutscene_scene"
 
 # The single home page. `view` is a pure function of state: before the player
 # presses start it emits only the centred "Press <glyph>" prompt; the start /
@@ -146,7 +147,8 @@ class MenuScene < Conjuration::Scene
       { id: :reactive, label: "Reactive", scene: ReactiveScene },
       { id: :ecs, label: "ECS (draco)", scene: ECSScene },
       { id: :parallax, label: "Parallax", scene: ParallaxScene },
-      { id: :isometric, label: "Isometric", scene: IsometricScene }
+      { id: :isometric, label: "Isometric", scene: IsometricScene },
+      { id: :cutscene, label: "Cutscene", scene: CutsceneScene, transition: -> { FadeTransition.new } }
     ]
   end
 
