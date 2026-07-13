@@ -93,12 +93,15 @@ module Conjuration
       @cancelled
     end
 
-    def finished?
+    # Ran to its natural end (every step consumed), as opposed to cancelled.
+    def completed?
       !@cancelled && @index >= @steps.length
     end
 
+    # No longer playing, for EITHER reason — completed or cancelled. This is the
+    # terminal check the tick site uses; `completed?`/`cancelled?` say which.
     def done?
-      @cancelled || finished?
+      @cancelled || completed?
     end
 
     # Runs its block once on entry, completes the same frame. Chains synchronous
@@ -177,26 +180,14 @@ module Conjuration
 
       def initialize
         @steps = []
-        @entered = nil
       end
 
       def enter(clock, scene)
-        @entered = Array.new(@steps.length, false)
+        @steps.each { |step| step.enter(clock, scene) }
       end
 
       def done?(clock, scene)
-        all_done = true
-        i = 0
-        while i < @steps.length
-          step = @steps[i]
-          unless @entered[i]
-            @entered[i] = true
-            step.enter(clock, scene)
-          end
-          all_done = false unless step.done?(clock, scene)
-          i += 1
-        end
-        all_done
+        @steps.all? { |step| step.done?(clock, scene) }
       end
     end
   end
