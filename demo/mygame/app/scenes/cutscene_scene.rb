@@ -45,6 +45,8 @@ class CutsceneScene < Conjuration::Scene
     state.rival = { x: RIVAL_HOME, bob: 0, bob_up: true, gesture: 0.0 }
     state.speaker = nil
     state.line = nil
+    state.line_at = 0
+    state.reveal_all = false
 
     start_bob(state.hero)
     start_bob(state.rival)
@@ -82,8 +84,40 @@ class CutsceneScene < Conjuration::Scene
     act do
       state.speaker = who
       state.line = line
+      state.line_at = clock
+      state.reveal_all = false
     end
     wait_confirm
+  end
+
+  REVEAL_SPEED = 1.6 # characters per tick
+
+  # How much of the current line is shown: it types in over time (scene clock, so
+  # it freezes with a pause), or is fully shown once skipped/complete.
+  def revealed_count
+    return 0 if state.line.nil?
+    return state.line.length if state.reveal_all
+
+    ((clock - state.line_at) * REVEAL_SPEED).to_i.clamp(0, state.line.length)
+  end
+
+  def displayed_line
+    state.line.to_s[0, revealed_count]
+  end
+
+  def line_fully_revealed?
+    state.line.nil? || revealed_count >= state.line.length
+  end
+
+  # Override the sequence's advance predicate: the first confirm while a line is
+  # still typing SNAPS it to full (and is consumed); a confirm on a complete line
+  # advances the sequence. The classic RPG skip-then-advance.
+  def sequence_confirm?
+    return false unless super
+    return true if line_fully_revealed?
+
+    state.reveal_all = true
+    false
   end
 
   # A self-arming idle bob: each tween runs exactly one BOB_PERIOD, and `every`
@@ -126,8 +160,8 @@ class CutsceneScene < Conjuration::Scene
     # :visible lets a long line spill rather than lazily scrolling the panel.
     node({ x: grid.w / 2, y: 30, w: 900, h: 190, anchor_x: 0.5, path: :pixel, r: 26, g: 22, b: 32 }, id: :dialogue, padding: 24, gap: 10, wrap: true, overflow: :visible) do
       node({ text: speaker[:name], size_enum: 2, **speaker[:ink] }, id: :speaker_name)
-      node({ text: state.line, size_enum: 1, r: 240, g: 236, b: 228 }, id: :line)
-      node({ text: hint_text, size_enum: 0, r: 150, g: 146, b: 156, a: advance_pulse }, id: :advance_hint)
+      node({ text: displayed_line, size_enum: 1, r: 240, g: 236, b: 228 }, id: :line)
+      node({ text: hint_text, size_enum: 0, r: 150, g: 146, b: 156, a: line_fully_revealed? ? advance_pulse : 0 }, id: :advance_hint)
     end
   end
 
@@ -155,7 +189,7 @@ class CutsceneScene < Conjuration::Scene
   private
 
   def draw_body(entity, idle_path, talk_path, who, flip:)
-    talking = state.speaker == who
+    talking = state.speaker == who && !line_fully_revealed?
     pop = entity[:gesture] * 18
     scale = 1.0 + entity[:gesture] * 0.06
 
