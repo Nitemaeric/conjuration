@@ -45,6 +45,7 @@ preload=(
   lib/conjuration/projection.rb
   lib/conjuration/scheduler.rb
   lib/conjuration/animation.rb
+  lib/conjuration/sequence.rb
   lib/conjuration/scene.rb
   lib/conjuration/scene_management.rb
   lib/conjuration/game.rb
@@ -62,6 +63,7 @@ preload=(
   demo/mygame/app/scenes/zoom_scene.rb
   demo/mygame/app/scenes/ecs_scene.rb
   demo/mygame/app/scenes/parallax_scene.rb
+  demo/mygame/app/scenes/cutscene_scene.rb
   demo/mygame/app/scenes/ui_scene.rb
   demo/mygame/app/scenes/multiple_cameras_scene.rb
 )

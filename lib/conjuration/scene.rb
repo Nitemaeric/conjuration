@@ -4,6 +4,7 @@ module Conjuration
     include CameraManagement
     include UIManagement
     include Scheduling
+    include Sequencing
 
     attr_accessor :config, :w, :h
 
@@ -94,7 +95,8 @@ module Conjuration
 
       update if respond_to?(:update)
 
-      tick_schedules # keyed to the (game) clock, which holds during a hit stop
+      tick_sequence # first, so a step's freshly-kicked tween ticks the same frame
+      tick_schedules # keyed to the scene clock, which holds during a hit stop
     end
 
     def perform_render

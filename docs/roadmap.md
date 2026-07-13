@@ -110,6 +110,39 @@ parallax hero). This one demo exercises sequences, tweens, portrait/UI
 composition, and confirm-gated waits together — if it reads like a scene from
 a real game, Track G is done.
 
+**As shipped** (`lib/conjuration/sequence.rb`). A scene-owned `play_sequence do
+… end` builds an ordered queue of steps, ticked one at a time against the scene
+clock (so pause/hit-stop/stack freeze the whole performance and resume
+mid-step). Coroutine-free — mruby fibers are unreliable, so the block runs once
+as a *builder*; it never suspends. Steps:
+
+- `act { … }` — runs once, completes immediately. A run of `act`s resolves in a
+  single tick, so synchronous state changes chain without burning frames.
+- `wait(ticks)` / `wait_until { predicate }` — block on the clock or a
+  predicate (checked from the tick after entry, so entry-frame state can't
+  satisfy it prematurely).
+- `wait_confirm` (alias `wait_input`) — advances on the framework confirm edge
+  (`input_source.just_pressed?(ui_pad, :ui_confirm)`) **or** a mouse/touch
+  click, mirroring the tappable Press-Start prompt (#49) so touch-only players
+  are never stranded. Override `sequence_confirm?` to redefine "advance".
+- `animate(target, attrs, over:, ease:)` — kicks a real G1 `tween` and blocks
+  for `over` ticks, so the sequence waits for the motion.
+- `parallel { … }` — runs its sub-steps concurrently, completing only when all
+  do (simultaneous character moves).
+
+Design calls: **one active sequence per scene** (a cutscene is one linear
+performance; concurrency lives *inside* via `parallel`, and `play_sequence`
+cancels any in flight). **Input-locking is the scene's choice**, not enforced —
+gate the scene's own `input` on `sequence_playing?`. **Zero-cost when unused**:
+no Sequence is allocated until `play_sequence`, the tick site is a bare nil
+check, and a finished sequence is released. **Transient**, like schedules: a
+sequence lives on the scene instance, never in save state
+(`docs/design/scene-lifecycle.md` §17); a mid-play sequence is not serialized.
+Cancel with `stop_sequence` or the handle `play_sequence` returns.
+
+The `CutsceneScene` demo is the living doc: `say`/portrait swap/movement are all
+steps in one sequence, every motion a scene-clock tween.
+
 Particles were considered and left as a **demo convention** — first game that
 wants them hand-rolls a pooled emitter on G1/G2 primitives; extraction to core
 needs recurrence, per the draco rule.
