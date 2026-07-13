@@ -1,4 +1,5 @@
 require "app/views/button_view.rb"
+require "app/views/prompt_view.rb"
 
 # The G3 acceptance demo: a two-character dialogue cutscene, staged entirely by a
 # single `play_sequence`. Turn-taking, portrait swaps, and character movement are
@@ -158,21 +159,13 @@ class CutsceneScene < Conjuration::Scene
     # Explicit height: a wrap: container can't auto-derive its height (its width
     # is parent-driven, so content sizing is width-first — see docs). overflow:
     # :visible lets a long line spill rather than lazily scrolling the panel.
-    node({ x: grid.w / 2, y: 30, w: 900, h: 190, anchor_x: 0.5, path: :pixel, r: 26, g: 22, b: 32 }, id: :dialogue, padding: 24, gap: 10, wrap: true, overflow: :visible) do
+    node({ x: grid.w / 2, y: 30, w: 900, h: 210, anchor_x: 0.5, path: :pixel, r: 26, g: 22, b: 32 }, id: :dialogue, padding: 24, gap: 10, wrap: true, overflow: :visible) do
       node({ text: speaker[:name], size_enum: 2, **speaker[:ink] }, id: :speaker_name)
       node({ text: displayed_line, size_enum: 1, r: 240, g: 236, b: 228 }, id: :line)
-      node({ text: hint_text, size_enum: 0, r: 150, g: 146, b: 156, a: line_fully_revealed? ? advance_pulse : 0 }, id: :advance_hint)
+      # Only once the line finishes typing: the device-following confirm glyph
+      # (Enter on keyboard, A/cross on a pad) + "to continue". Touch users tap.
+      PromptView(id: :advance_hint, action: :ui_confirm, label: "to continue", pad: game.ui_pad, color: { r: 150, g: 146, b: 156 }) if line_fully_revealed?
     end
-  end
-
-  def hint_text
-    "> confirm or tap to continue"
-  end
-
-  # Alpha-pulsed on the scene clock, so it holds still under a pause like every
-  # other animated element here.
-  def advance_pulse
-    (150 + Math.sin(clock * 0.12) * 90).to_i.clamp(60, 255)
   end
 
   def render
