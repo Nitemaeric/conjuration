@@ -617,7 +617,7 @@ end
 
 def test_navigation_groups_bucket_named_groups_only(args, assert)
   c = build_container(direction: :column, justify: :start, align: :start) do
-    node({ x: 0, y: 0, w: 10, h: 10 }, id: :left, group: :left) do
+    node({ x: 0, y: 0, w: 10, h: 20 }, id: :left, group: :left) do
       node({ w: 10, h: 10, action: -> {} }, id: :l1)
       node({ w: 10, h: 10, action: -> {} }, id: :l2)
     end
@@ -773,7 +773,7 @@ end
 
 # --- justify without a resolved main-axis size ---
 
-def test_widthless_justify_center_row_falls_back_to_start(args, assert)
+def test_widthless_justify_center_row_auto_sizes_to_content(args, assert)
   Conjuration::UI.warnings.clear
 
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
@@ -785,13 +785,15 @@ def test_widthless_justify_center_row_falls_back_to_start(args, assert)
     end
   end
 
+  toolbar = ui.find(:toolbar)
   n1, n2 = ui.find(:n1), ui.find(:n2)
-  assert.equal!([n1.object.x, n1.object.anchor_x], [0, 0], "n1 laid out as justify: :start")
-  assert.equal!(n2.object.x, 100, "n2 stacked to the right of n1")
-  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":toolbar") && warning.include?("width") }, true, "the missing width is flagged")
+  assert.equal!(toolbar.object.w, 200, "toolbar auto-sizes to its two 100-wide children")
+  assert.equal!([n1.object.x, n1.object.anchor_x], [0, 0], "no free space: n1 packs at the start")
+  assert.equal!(n2.object.x, 100, "n2 to the right of n1")
+  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":toolbar") && warning.include?("width") }, false, "auto-sized: no missing-width fallback")
 end
 
-def test_heightless_justify_center_column_falls_back_to_start(args, assert)
+def test_heightless_justify_center_column_auto_sizes_to_content(args, assert)
   Conjuration::UI.warnings.clear
 
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
@@ -803,10 +805,12 @@ def test_heightless_justify_center_column_falls_back_to_start(args, assert)
     end
   end
 
+  sidebar = ui.find(:sidebar)
   n1, n2 = ui.find(:n1), ui.find(:n2)
-  assert.equal!([n1.object.y, n1.object.anchor_y], [400, 1], "n1 laid out as justify: :start")
+  assert.equal!(sidebar.object.h, 200, "sidebar auto-sizes to its two 100-tall children")
+  assert.equal!([n1.object.y, n1.object.anchor_y], [400, 1], "no free space: n1 packs at the top")
   assert.equal!(n2.object.y, 300, "n2 stacked below n1")
-  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":sidebar") && warning.include?("height") }, true, "the missing height is flagged")
+  assert.equal!(Conjuration::UI.warnings.any? { |warning| warning.include?(":sidebar") && warning.include?("height") }, false, "auto-sized: no missing-height fallback")
 end
 
 def test_widthless_justify_end_row_anchors_off_the_trailing_edge(args, assert)
@@ -983,9 +987,11 @@ end
 def test_grow_on_unresolved_main_size_warns_and_skips(args, assert)
   Conjuration::UI.warnings.clear
 
+  # wrap: keeps a container out of content-aware auto-sizing (its width is
+  # parent-driven), so its width stays unresolved and grow hits the warn path.
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
     node({ x: 0, y: 0, w: 400, h: 400 }, id: :container, direction: :column) do
-      node({ h: 100 }, id: :toolbar, direction: :row) do
+      node({ h: 100 }, id: :toolbar, direction: :row, wrap: true) do
         node({ w: 100, h: 100, primitive_marker: :solid }, id: :n1, grow: 1)
       end
     end
@@ -1109,8 +1115,10 @@ end
 
 def test_stretch_on_unresolved_container_warns_and_writes_nothing(args, assert)
   Conjuration::UI.warnings.clear
+  # wrap: opts out of content-aware auto-sizing, so the width stays unresolved
+  # and the stretch fallback/warn path is exercised.
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
-    node({ x: 0, y: 100, h: 100 }, id: :nowidth, direction: :row, justify: :stretch) do
+    node({ x: 0, y: 100, h: 100 }, id: :nowidth, direction: :row, justify: :stretch, wrap: true) do
       node({ h: 50, primitive_marker: :solid }, id: :kid)
     end
   end
@@ -1150,4 +1158,301 @@ def test_justify_stretch_reconciles(args, assert)
   root.render_view
   root.calculate_layout
   assert.close!(root.find(:n1).object.w, 400, "switching to :stretch fills the bar")
+end
+
+# --- Content-aware sizing (auto size, max bounds, universal overflow) ----------
+# A container with no declared size on an axis derives it from content: main axis
+# = Σ in-flow children + gaps + padding; cross axis = max in-flow child + padding.
+# max_w/max_h clamp the result. Overflow past resolved bounds lazily scrolls.
+
+# Counts resolve_content_size! per node id so tests can prove which nodes the
+# measure pass actually touched. A fully-sized subtree touches none.
+$measured_ids = []
+class Conjuration::UI::Node
+  alias_method :__audit_orig_resolve_content_size!, :resolve_content_size!
+  def resolve_content_size!
+    $measured_ids << id
+    __audit_orig_resolve_content_size!
+  end
+end
+
+def test_auto_column_sizes_to_children_gaps_and_padding(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 100, y: 700, anchor_x: 0, anchor_y: 1 }, id: :box, direction: :column, gap: 10, padding: 20) do
+      node({ w: 60, h: 50, primitive_marker: :solid }, id: :a)
+      node({ w: 40, h: 30, primitive_marker: :solid }, id: :b)
+    end
+  end
+  box = ui.find(:box)
+
+  assert.equal!(box.object.h, 130, "main axis: 50 + 30 + 10 gap + 20*2 padding")
+  assert.equal!(box.object.w, 100, "cross axis: max child 60 + 20*2 padding")
+end
+
+def test_auto_row_sizes_to_children_gaps_and_padding(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 100, y: 700, anchor_x: 0, anchor_y: 1 }, id: :box, direction: :row, gap: 8, padding: 5) do
+      node({ w: 60, h: 50, primitive_marker: :solid }, id: :a)
+      node({ w: 40, h: 30, primitive_marker: :solid }, id: :b)
+    end
+  end
+  box = ui.find(:box)
+
+  assert.equal!(box.object.w, 118, "main axis: 60 + 40 + 8 gap + 5*2 padding")
+  assert.equal!(box.object.h, 60, "cross axis: max child 50 + 5*2 padding")
+end
+
+def test_auto_sizing_nests_bottom_up(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, anchor_x: 0, anchor_y: 1 }, id: :outer, direction: :column, gap: 0) do
+      node({}, id: :inner, direction: :row, gap: 0) do
+        node({ w: 30, h: 20, primitive_marker: :solid }, id: :a)
+        node({ w: 30, h: 20, primitive_marker: :solid }, id: :b)
+      end
+      node({ w: 10, h: 15, primitive_marker: :solid }, id: :c)
+    end
+  end
+  inner, outer = ui.find(:inner), ui.find(:outer)
+
+  assert.equal!([inner.object.w, inner.object.h], [60, 20], "inner row sizes to its two children first")
+  assert.equal!([outer.object.w, outer.object.h], [60, 35], "outer column then sizes to the resolved inner + c")
+end
+
+def test_max_w_clamps_auto_size(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, anchor_x: 0, anchor_y: 1 }, id: :box, direction: :row, max_w: 100) do
+      node({ w: 150, h: 20, primitive_marker: :solid }, id: :a)
+      node({ w: 150, h: 20, primitive_marker: :solid }, id: :b)
+    end
+  end
+  box = ui.find(:box)
+
+  assert.equal!(box.object.w, 100, "auto width 300 is clamped to max_w 100")
+  assert.equal!(box.object.h, 20, "the uncapped cross axis still sizes to content")
+end
+
+def test_max_h_clamps_an_explicit_size(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, w: 100, h: 500, anchor_x: 0, anchor_y: 1, primitive_marker: :solid }, id: :box, max_h: 300) do
+      node({ w: 20, h: 20, primitive_marker: :solid }, id: :a)
+    end
+  end
+
+  assert.equal!(ui.find(:box).object.h, 300, "a cap clamps a declared size too")
+end
+
+def test_explicit_size_wins_over_auto(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, w: 500, anchor_x: 0, anchor_y: 1 }, id: :box, direction: :column) do
+      node({ w: 60, h: 20, primitive_marker: :solid }, id: :a)
+    end
+  end
+  box = ui.find(:box)
+
+  assert.equal!(box.object.w, 500, "a declared width is kept, not derived from content")
+  assert.equal!(box.object.h, 20, "the undeclared height still auto-sizes")
+end
+
+# The precedence seam: an externally assigned size (align: :stretch here; grow
+# will arrive on a sibling branch) overrides auto-from-content. Auto runs in the
+# measure pass, the external assignment in the later positioning pass, so it wins.
+def test_external_assignment_overrides_auto_from_content(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, w: 400, h: 400, anchor_x: 0, anchor_y: 1 }, id: :parent, direction: :column, align: :stretch) do
+      node({ h: 30 }, id: :child, direction: :row) do
+        node({ w: 20, h: 10, primitive_marker: :solid }, id: :leaf)
+      end
+    end
+  end
+
+  assert.equal!(ui.find(:child).object.w, 400, "stretch (external) overrides the child's auto content width of 20")
+end
+
+def test_absolute_children_excluded_from_auto_size(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, anchor_x: 0, anchor_y: 1 }, id: :box, direction: :column) do
+      node({ w: 40, h: 40, primitive_marker: :solid }, id: :flow)
+      node({ w: 200, h: 200, primitive_marker: :solid }, id: :badge, position: :absolute, top: 0, right: 0)
+    end
+  end
+  box = ui.find(:box)
+
+  assert.equal!([box.object.w, box.object.h], [40, 40], "the absolute badge doesn't count toward either axis")
+end
+
+def test_fully_sized_tree_never_enters_measure_pass(args, assert)
+  $measured_ids = []
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 200, h: 200 }, id: :panel, gap: 5, padding: 10) do
+      node({ w: 50, h: 50, primitive_marker: :solid }, id: :a)
+      node({ w: 50, h: 50, primitive_marker: :solid }, id: :b)
+    end
+  end
+
+  assert.equal!($measured_ids, [], "no node resolves a content size in a fully-sized tree")
+  assert.equal!(ui.needs_measure?, false, "the root reports the whole tree needs no measure")
+
+  $measured_ids = []
+  ui.find(:a).object.h = 80
+  ui.find(:a).invalidate!
+  ui.calculate_layout
+  assert.equal!($measured_ids, [], "a dirtied fully-sized subtree still never measures")
+end
+
+def test_auto_container_enters_measure_pass(args, assert)
+  $measured_ids = []
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0 }, id: :box, direction: :column) do
+      node({ w: 30, h: 20, primitive_marker: :solid }, id: :a)
+    end
+  end
+
+  assert.true!($measured_ids.include?(:box), "the auto container is measured")
+  assert.equal!(ui.find(:box).needs_measure?, true, "and it reports needing measure")
+end
+
+# Dirty tracking: a change inside the auto container re-derives its size; a change
+# confined to a fully-sized sibling subtree does not enter the measure pass.
+def dirty_tracking_ui
+  Conjuration::UI.build({ x: 0, y: 0, w: 800, h: 800 }, id: :root) do
+    node({ x: 0, y: 700, anchor_x: 0, anchor_y: 1 }, id: :auto_box, direction: :column) do
+      node({ w: 40, h: 40, primitive_marker: :solid }, id: :leaf)
+    end
+    node({ x: 400, y: 700, w: 100, h: 100, anchor_x: 0, anchor_y: 1 }, id: :sized_box) do
+      node({ w: 50, h: 50, primitive_marker: :solid }, id: :sized_child)
+    end
+  end
+end
+
+def test_content_change_in_auto_container_rederives_it(args, assert)
+  ui = dirty_tracking_ui
+  auto_box = ui.find(:auto_box)
+  assert.equal!(auto_box.object.h, 40, "initial auto height from the 40px leaf")
+
+  $measured_ids = []
+  ui.find(:leaf).object.h = 90
+  ui.find(:leaf).invalidate!
+  ui.calculate_layout
+
+  assert.true!($measured_ids.include?(:auto_box), "the auto container re-derives on a content change")
+  assert.equal!(auto_box.object.h, 90, "and its height follows the leaf")
+end
+
+def test_sized_subtree_change_does_not_trigger_measurement(args, assert)
+  ui = dirty_tracking_ui
+
+  $measured_ids = []
+  ui.find(:sized_child).object.h = 70
+  ui.find(:sized_child).invalidate!
+  ui.calculate_layout
+
+  assert.equal!($measured_ids.include?(:auto_box), false, "a fixed-subtree change leaves the auto container unmeasured")
+  assert.equal!($measured_ids.include?(:sized_box), false, "and the fixed container itself never measures")
+end
+
+# --- Universal overflow default (lazy scroll / clip / visible) -----------------
+
+class OverflowReconcileHost
+  include Conjuration::UI::Builder
+
+  attr_accessor :item_count, :mode
+
+  def initialize
+    @item_count = 1
+    @mode = nil
+  end
+
+  def view
+    node({ x: 0, y: 300, w: 100, h: 100, anchor_x: 0, anchor_y: 1, primitive_marker: :solid }, id: :box, overflow: @mode, gap: 0) do
+      @item_count.times { |i| node({ w: 80, h: 40, primitive_marker: :solid }, id: "item_#{i}") }
+    end
+  end
+end
+
+def overflow_root(host)
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+  root.render_view
+  root.calculate_layout
+  root
+end
+
+def test_scroll_materializes_lazily_only_once_content_overflows(args, assert)
+  host = OverflowReconcileHost.new
+  root = overflow_root(host)
+  box = root.find(:box)
+
+  assert.equal!(box.scroll?, false, "one 40px item fits the 100px box: not a scroll container")
+  assert.equal!(root.primitives.any? { |p| p[:path] == box.scroll_target_path }, false, "no render target is materialized")
+  assert.equal!(root.primitives.any? { |p| p[:w] == 80 }, true, "the child renders directly in the flat list")
+
+  host.item_count = 3 # 120px of content in the 100px box
+  root.render_view
+  root.calculate_layout
+
+  assert.equal!(box.scroll?, true, "overflow flips it into a scroll container")
+  assert.equal!(root.primitives.any? { |p| p[:path] == box.scroll_target_path }, true, "the render target is now materialized")
+  assert.equal!(root.primitives.any? { |p| p[:w] == 80 }, false, "the children are clipped into the target, not the flat list")
+  assert.true!(box.max_scroll > 0, "it reports scrollable extent")
+end
+
+def test_overflowing_default_container_becomes_focusable(args, assert)
+  host = OverflowReconcileHost.new
+  host.item_count = 3
+  root = overflow_root(host)
+
+  assert.equal!(root.interactive_nodes.map(&:id), [:box], "the lazily-scrolling container is navigable, like an explicit one")
+end
+
+def test_overflow_warns_once(args, assert)
+  host = OverflowReconcileHost.new
+  root = overflow_root(host)
+  Conjuration::UI.warnings.clear
+
+  host.item_count = 3
+  root.render_view
+  root.calculate_layout
+
+  host.item_count = 5 # still overflowing, relayout again
+  root.render_view
+  root.calculate_layout
+
+  overflow_warnings = Conjuration::UI.warnings.select { |w| w.include?("overflows") && w.include?(":box") }
+  assert.equal!(overflow_warnings.length, 1, "the overflow warning fires once per node, not every relayout")
+end
+
+def test_clip_clips_without_a_scrollbar_or_interaction(args, assert)
+  host = OverflowReconcileHost.new
+  host.mode = :clip
+  host.item_count = 3
+  root = overflow_root(host)
+  box = root.find(:box)
+
+  assert.equal!([box.clip?, box.scroll?], [true, false], "clip uses a render target but is not a scroll container")
+  assert.equal!(root.primitives.any? { |p| p[:path] == box.scroll_target_path }, true, "content is clipped into the target")
+  assert.equal!(root.primitives.any? { |p| p[:w] == 4 }, false, "no scrollbar thumb is drawn")
+  assert.equal!(root.interactive_nodes, [], "a clip container is not focusable")
+end
+
+def test_visible_spills_without_scrolling(args, assert)
+  host = OverflowReconcileHost.new
+  host.mode = :visible
+  host.item_count = 3
+  root = overflow_root(host)
+  box = root.find(:box)
+
+  assert.equal!([box.scroll?, box.clip?], [false, false], "explicit :visible never scrolls or clips")
+  assert.equal!(root.primitives.any? { |p| p[:path] == box.scroll_target_path }, false, "no render target")
+  assert.equal!(root.primitives.select { |p| p[:w] == 80 }.length, 3, "all children spill into the flat list")
+end
+
+def test_absolute_child_never_counts_toward_overflow(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 300, w: 100, h: 50, anchor_x: 0, anchor_y: 1, primitive_marker: :solid }, id: :box) do
+      node({ w: 80, h: 200, primitive_marker: :solid }, id: :overhang, position: :absolute, top: 0, left: 0)
+    end
+  end
+  box = ui.find(:box)
+
+  assert.equal!(box.scroll?, false, "a 200px absolute child overhanging a 50px box is not overflow")
 end

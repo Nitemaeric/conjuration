@@ -35,7 +35,7 @@ module Conjuration
       def layout_signature
         [
           object.x, object.y, object.w, object.h, object.anchor_x, object.anchor_y, object.text,
-          justify, direction, align, gap, padding, position, grow,
+          justify, direction, align, gap, padding, position, grow, max_w, max_h,
           inset_top, inset_right, inset_bottom, inset_left,
           visible, children.length
         ]
@@ -68,7 +68,19 @@ module Conjuration
         object.w - padding_left - padding_right
       end
 
+      # Two-pass layout. First a bottom-up measure pass resolves every auto-sized
+      # container (and applies max caps) over the dirty region, so a parent's
+      # size is known before it positions its children. Then the existing
+      # top-down positioning pass runs. Fully-sized trees skip the measure pass
+      # entirely (see needs_measure?), taking the same single-pass path as before.
       def calculate_layout(force: false)
+        return unless @dirty || force
+
+        measure_pass
+        position_pass(force: force)
+      end
+
+      def position_pass(force: false)
         return unless @dirty || force
 
         # Per-pass caches for centered layouts; cleared each call so a
@@ -103,6 +115,8 @@ module Conjuration
           end
 
           @children.each { |child| position_absolute(child) if child.absolute? }
+
+          detect_overflow!
         end
 
         @dirty = false
@@ -111,11 +125,35 @@ module Conjuration
         # We just repositioned our children (everywhere but the root canvas), so
         # they moved and must relay; the root leaves children to their own state.
         cascade = id != :root
-        @children.each { |child| child.calculate_layout(force: cascade) }
+        @children.each { |child| child.position_pass(force: cascade) }
       end
 
       def absolute?
         position == :absolute
+      end
+
+      # Whether this node — or anything in its subtree — needs the measure pass:
+      # an auto-sized container (deriving a size from content) or a node with a
+      # max cap to clamp. Memoized; dropped on structure or declared-size change.
+      # A fully-sized subtree returns false, so the pass never descends into it.
+      def needs_measure?
+        return @needs_measure unless @needs_measure.nil?
+
+        @needs_measure = self_needs_measure? || @children.any?(&:needs_measure?)
+      end
+
+      # Bottom-up: resolve nested auto sizes before this node's, so summing/maxing
+      # children reads their final intrinsic sizes. Dirty- and needs_measure-gated,
+      # so clean or fully-sized subtrees do no work. Public because the recursion
+      # reaches it through Symbol#to_proc (an explicit receiver).
+      def measure_pass
+        return unless @dirty
+        return unless needs_measure?
+
+        @children.each(&:measure_pass)
+        # Only resolve this node's own size when it itself auto-sizes or is capped;
+        # a fixed ancestor merely relays the pass down to a deeper auto descendant.
+        resolve_content_size! if self_needs_measure?
       end
 
       private
@@ -171,6 +209,102 @@ module Conjuration
           child.object[main_key] = (child.object[main_key] || 0) + leftover * (child.grow / sum_factors)
           child.invalidate!
         end
+      end
+
+      def resolve_content_size!
+        measure!
+        @children.each(&:measure!)
+        apply_auto_size!
+        apply_max_clamp!
+      end
+
+      def self_needs_measure?
+        auto_w? || auto_h? || !max_w.nil? || !max_h.nil?
+      end
+
+      # A container derives its size on an axis when the author declared none and
+      # it has children to derive from. Text nodes size from their string
+      # (measure!), and the root is the fixed screen canvas — neither auto-sizes.
+      # A wrap: container is excluded too: its width comes from its parent, and its
+      # children then wrap to that width — a width-first resolution that can't be
+      # derived from content in this single bottom-up pass, so it keeps the
+      # existing parent-driven sizing.
+      def auto_w?
+        return false if id == :root || wrap
+
+        @authored_w.nil? && !object.has_key?(:text) && !@children.empty?
+      end
+
+      def auto_h?
+        return false if id == :root || wrap
+
+        @authored_h.nil? && !object.has_key?(:text) && !@children.empty?
+      end
+
+      # Derive an unset axis from the in-flow children: main axis = Σ sizes + gaps,
+      # cross axis = the largest child, each plus this node's padding on that axis.
+      # Out-of-flow (absolute) children are excluded from both.
+      def apply_auto_size!
+        return if id == :root
+
+        flow = @children.reject(&:absolute?)
+
+        if auto_w?
+          content = direction == :row ? auto_main_size(flow, :w) : auto_cross_size(flow, :w)
+          object.w = content + padding_left + padding_right
+        end
+
+        if auto_h?
+          content = direction == :column ? auto_main_size(flow, :h) : auto_cross_size(flow, :h)
+          object.h = content + padding_top + padding_bottom
+        end
+      end
+
+      def auto_main_size(flow, axis)
+        total = flow.inject(0) { |sum, child| sum + (child.object[axis] || 0) }
+        total += (flow.length - 1) * gap if flow.length > 1
+        total
+      end
+
+      def auto_cross_size(flow, axis)
+        max = 0
+        flow.each do |child|
+          size = child.object[axis] || 0
+          max = size if size > max
+        end
+        max
+      end
+
+      # Clamp the resolved size (from any source) down to its max cap. A cap never
+      # enlarges, so a node already within its cap is untouched.
+      def apply_max_clamp!
+        object.w = max_w if max_w && object.w && object.w > max_w
+        object.h = max_h if max_h && object.h && object.h > max_h
+      end
+
+      # After positioning, flag whether the in-flow content spills past this
+      # container's resolved height. In the default (nil) mode that lazily turns
+      # it into a scroll container (materializing the render target only now) and
+      # warns once; :clip clips to the same target without a scrollbar. Explicit
+      # :scroll and :visible are left to their own fixed behaviour. Out-of-flow
+      # children never count, protecting deliberate overhangs.
+      def detect_overflow!
+        return if overflow == :scroll || overflow == :visible
+        return unless object.h
+
+        span = content_span
+        over = !span.nil? && span > object.h
+        changed = over != @overflowing
+        @overflowing = over
+
+        if over && overflow.nil? && !@overflow_warned
+          @overflow_warned = true
+          UI.warn(self, "content overflows #{id.inspect} (#{span} > #{object.h}); scrolling")
+        end
+
+        # Becoming (or ceasing to be) a scroll container flips interactive-ness,
+        # which is cached on ancestors — drop it so the change is seen.
+        clear_interactive_cache! if changed
       end
 
       # Place an out-of-flow child against this node's padding box using its

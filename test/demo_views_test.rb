@@ -284,6 +284,26 @@ ensure
   DragonInput.reset!
 end
 
+# Regression for the deliberate overhang (the skills badge pinned outside its
+# slot, top: -4 right: -4). Content-aware overflow must never count an
+# out-of-flow child, so the slot stays a plain, non-scrolling container even
+# though its badge extends past its bounds — the same protection the menu
+# banner relies on.
+def test_ui_scene_absolute_badge_overhangs_without_scrolling(args, assert)
+  ui = ui_scene_ui
+
+  notify = ui.find(:notify)
+  slot = ui.find(:skill_1)
+
+  assert.true!(notify.absolute?, "the badge is out of flow")
+  assert.true!(notify.object.top > slot.object.top, "it overhangs the slot's top edge")
+  assert.equal!(slot.scroll?, false, "the overhang doesn't turn the slot into a scroll container")
+ensure
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.active_navigation_group = nil
+  DragonInput.reset!
+end
+
 def test_ui_scene_rerender_keeps_retained_nodes_and_groups(args, assert)
   ui = ui_scene_ui
 

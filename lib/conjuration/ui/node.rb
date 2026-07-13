@@ -23,6 +23,7 @@ module Conjuration
       attr_reader :wrap, :text_break
       attr_reader :shortcut
       attr_reader :grow
+      attr_reader :max_w, :max_h
 
       def authored_main_size(main_key)
         main_key == :w ? @authored_w : @authored_h
@@ -41,7 +42,7 @@ module Conjuration
       # @param grow [Numeric, nil] flex grow factor; nil (default) = no growth
       # justify: :stretch — main-axis analog of align: :stretch; children without
       # an authored main size grow equally (explicit grow: factors still compose).
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, max_w: nil, max_h: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         # Authored-at-build sizes: grow/stretch write w/h back into object each
@@ -50,6 +51,13 @@ module Conjuration
         @authored_h = @object[:h]
         @children = []
         @parent = nil
+
+        # The author's declared size on each axis, captured before layout writes
+        # computed geometry onto the object hash: the basis for grow/stretch and
+        # the declaredness test. nil = no declared size, so it derives from
+        # content (see Layout#apply_auto_size!).
+        @authored_w = @object[:w]
+        @authored_h = @object[:h]
 
         @direction = direction
         @justify = justify
@@ -72,8 +80,9 @@ module Conjuration
         # pane for UI.active_navigation_group. nil inherits the nearest ancestor's.
         @group = group
 
-        # overflow: :scroll clips this node's children to its box and offsets them
-        # by scroll_offset; nil (the default) lays out normally.
+        # overflow governs what happens when content exceeds the box. nil (default)
+        # lays out normally until content overflows, then lazily scrolls; :scroll
+        # always scrolls; :clip clips without a scrollbar; :visible always spills.
         @overflow = overflow
         @scroll_offset = 0
 
@@ -91,6 +100,18 @@ module Conjuration
         @shortcut = shortcut
 
         @grow = grow
+
+        # max_w:/max_h: cap a node's size on each axis, clamping whatever the size
+        # source is (declared, auto-from-content, or externally assigned). nil =
+        # uncapped. See Layout#apply_max_clamp!.
+        @max_w = max_w
+        @max_h = max_h
+
+        # Set true during layout when this container's flow content exceeds its
+        # resolved bounds — the lazy trigger that materializes the scroll/clip
+        # render target (see Layout#detect_overflow! and Scroll). Warned once.
+        @overflowing = false
+        @overflow_warned = false
 
         # Retained-mode layout: a node starts dirty (needs its first layout) and
         # is recomputed only when invalidate! marks it — see calculate_layout.
@@ -143,7 +164,16 @@ module Conjuration
         @interactive_nodes = nil
         @navigation_groups = nil
         @shortcut_nodes = nil
+        @needs_measure = nil
         parent&.clear_structure_cache!
+      end
+
+      # Drop only the memoized needs_measure? flag up the tree — used when a
+      # declared size or max bound flips a node between auto- and fixed-sized
+      # without any structural change.
+      def clear_measure_cache!
+        @needs_measure = nil
+        parent&.clear_measure_cache!
       end
 
       # Like clear_structure_cache! but keeps the @nodes/@descendants memos — only
@@ -164,11 +194,12 @@ module Conjuration
       # instead of recursing, so overflowing children don't leak into the flat
       # list. render_scroll_targets fills those targets before this is emitted.
       def collect_primitives(acc)
-        if scroll?
+        if render_target?
           # The container's background + children are painted into its render
-          # target (see render_scroll_target); the flat list gets the blit + bar.
+          # target (see render_scroll_target); the flat list gets the blit, plus
+          # a scrollbar when it scrolls (a :clip target has none).
           acc << scroll_sprite
-          acc.concat(scrollbar_primitives)
+          acc.concat(scrollbar_primitives) if scroll?
         elsif wrapped? && renderable?
           acc.concat(wrapped_text_primitives)
         else
@@ -243,6 +274,25 @@ module Conjuration
         return if @grow == value
 
         @grow = value
+        invalidate!
+      end
+
+      # max_w/max_h are reconcilable: a change re-clamps this node's size. The
+      # measure cache drops because presence flips whether the node needs the
+      # measure pass at all (a fixed node with a cap must still be visited to clamp).
+      def max_w=(value)
+        return if @max_w == value
+
+        @max_w = value
+        clear_measure_cache!
+        invalidate!
+      end
+
+      def max_h=(value)
+        return if @max_h == value
+
+        @max_h = value
+        clear_measure_cache!
         invalidate!
       end
 

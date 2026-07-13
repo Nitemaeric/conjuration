@@ -80,7 +80,7 @@ class UIScene < Conjuration::Scene
         node({ text: "Text wrapping breaks a long line onto multiple rows so it fits inside the panel." }, id: :sub_section_1)
       end
 
-      node({ h: 20 }, id: :section_2, align: :end) do
+      node({}, id: :section_2, align: :end) do
         node({ text: "Hello, World!" }, id: :hello)
       end
 
