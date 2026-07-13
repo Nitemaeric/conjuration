@@ -88,6 +88,7 @@ module Conjuration
         flow_children = flow_children.reverse if justify == :end
 
         unless id == :root
+          mark_stretch_growers(flow_children) if justify == :stretch
           distribute_grow(flow_children)
 
           flow_children.each_with_index do |child, index|
@@ -118,6 +119,21 @@ module Conjuration
       end
 
       private
+
+      # justify: :stretch marks children without an AUTHORED main size (grow and
+      # stretch themselves write sizes back, so current values can't be trusted)
+      # as grow: 1; text children are intrinsically sized and never stretch.
+      def mark_stretch_growers(flow_children)
+        main_key = direction == :row ? :w : :h
+
+        flow_children.each do |child|
+          next if child.grow
+          next if child.object[:text]
+          next if child.declared_main_size?(main_key)
+
+          child.grow = 1
+        end
+      end
 
       # Expand in-flow children with grow > 0 into leftover main-axis free space
       # (basis + share of leftover). No shrink when leftover is non-positive.
@@ -196,6 +212,7 @@ module Conjuration
       # TypeError, so degrade to :start and record why. :start and :end never
       # touch the size (:end anchors off the trailing edge), so they pass through.
       def effective_justify(size, axis, index)
+        return :start if justify == :stretch && size
         return justify if justify == :start || justify == :end || size
 
         UI.warn(self, "justify: #{justify.inspect} on #{id.inspect} needs a #{axis}; falling back to :start") if index.zero?
@@ -308,7 +325,7 @@ module Conjuration
 
       # Folded explicitly: the mruby build the tests run under has no Enumerable#sum.
       def sum_main_size(children, axis)
-        children.inject(0) { |total, child| total + child.object[axis] }
+        children.inject(0) { |total, child| total + (child.object[axis] || 0) }
       end
 
       def normalized_padding
