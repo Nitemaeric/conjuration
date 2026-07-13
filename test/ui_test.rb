@@ -1055,3 +1055,99 @@ def test_no_grow_tree_layout_unchanged(args, assert)
   assert.equal!([n1.object.x, n1.object.w, n1.object.h], [0, 100, 100], "n1 geometry matches pre-grow baseline")
   assert.equal!([n2.object.x, n2.object.w, n2.object.h], [100, 100, 100], "n2 geometry matches pre-grow baseline")
 end
+
+# --- justify: :stretch ------------------------------------------------------
+
+def test_row_stretch_fills_sizeless_children_equally(args, assert)
+  c = build_container(direction: :row, justify: :stretch, align: :start) do
+    node({ h: 100, primitive_marker: :solid }, id: :n1)
+    node({ h: 100, primitive_marker: :solid }, id: :n2)
+  end
+  assert.close!(c.find(:n1).object.w, 200, "sizeless child stretches to half")
+  assert.close!(c.find(:n2).object.w, 200, "second sizeless child takes the other half")
+  assert.close!(c.find(:n2).object.x, 200, "positioned as :start after stretch")
+end
+
+def test_column_stretch_fills_sizeless_children_equally(args, assert)
+  c = build_container(direction: :column, justify: :stretch, align: :start) do
+    node({ w: 100, primitive_marker: :solid }, id: :n1)
+    node({ w: 100, primitive_marker: :solid }, id: :n2)
+  end
+  assert.close!(c.find(:n1).object.h, 200, "sizeless child stretches to half height")
+  assert.close!(c.find(:n2).object.h, 200, "second child takes the rest")
+end
+
+def test_stretch_leaves_sized_children_and_composes_factors(args, assert)
+  c = build_container(direction: :row, justify: :stretch, align: :start) do
+    node({ w: 100, h: 100, primitive_marker: :solid }, id: :fixed)
+    node({ h: 100, primitive_marker: :solid }, id: :auto)
+    node({ h: 100, primitive_marker: :solid }, id: :heavy, grow: 2)
+  end
+  assert.close!(c.find(:fixed).object.w, 100, "authored size untouched")
+  assert.close!(c.find(:auto).object.w, 100, "stretch share = leftover * 1/3")
+  assert.close!(c.find(:heavy).object.w, 200, "explicit factor composes at 2x")
+end
+
+def test_stretch_respects_gaps_padding_and_grow_zero_optout(args, assert)
+  c = build_container(direction: :row, justify: :stretch, align: :start, padding: 20, gap: 10) do
+    node({ h: 50, primitive_marker: :solid }, id: :fill)
+    node({ w: 80, h: 50, primitive_marker: :solid }, id: :opted_out, grow: 0)
+  end
+  assert.close!(c.find(:fill).object.w, 400 - 40 - 10 - 80, "leftover excludes padding, gap, and the opted-out child")
+  assert.close!(c.find(:opted_out).object.w, 80, "grow: 0 opts out of stretching")
+end
+
+def test_stretch_never_stretches_text(args, assert)
+  c = build_container(direction: :row, justify: :stretch, align: :start) do
+    node({ text: "label" }, id: :label)
+    node({ h: 40, primitive_marker: :solid }, id: :fill)
+  end
+  label_w = c.find(:label).object.w
+  assert.true!(label_w < 200, "text keeps its measured width (got #{label_w})")
+  assert.close!(c.find(:fill).object.w, 400 - label_w, "the solid takes all remaining space")
+end
+
+def test_stretch_on_unresolved_container_warns_and_writes_nothing(args, assert)
+  Conjuration::UI.warnings.clear
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 100, h: 100 }, id: :nowidth, direction: :row, justify: :stretch) do
+      node({ h: 50, primitive_marker: :solid }, id: :kid)
+    end
+  end
+  assert.nil!(ui.find(:kid).object.w, "no size written without a resolved container width")
+  assert.equal!(
+    Conjuration::UI.warnings.any? { |w| w.include?(":nowidth") && w.include?("width") },
+    true,
+    "the unresolved stretch container is flagged"
+  )
+end
+
+class StretchReconcileHost
+  include Conjuration::UI::Builder
+
+  attr_accessor :mode
+
+  def initialize
+    @mode = :start
+  end
+
+  def view
+    node({ x: 0, y: 0, w: 400, h: 100 }, id: :bar, direction: :row, justify: @mode) do
+      node({ h: 100, primitive_marker: :solid }, id: :n1)
+    end
+  end
+end
+
+def test_justify_stretch_reconciles(args, assert)
+  host = StretchReconcileHost.new
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+  root.render_view
+  root.calculate_layout
+  assert.nil!(root.find(:n1).object.w, ":start leaves the sizeless child unsized")
+
+  host.mode = :stretch
+  root.render_view
+  root.calculate_layout
+  assert.close!(root.find(:n1).object.w, 400, "switching to :stretch fills the bar")
+end

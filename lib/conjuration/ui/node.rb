@@ -27,6 +27,10 @@ module Conjuration
       def authored_main_size(main_key)
         main_key == :w ? @authored_w : @authored_h
       end
+
+      def declared_main_size?(main_key)
+        !authored_main_size(main_key).nil?
+      end
       attr_writer :declared
       # The view component this node was mounted for (nil for a plain node) —
       # part of its reconcile identity, so a type swap at the same key remounts.
@@ -35,12 +39,13 @@ module Conjuration
       delegate :first, :last, to: :children
 
       # @param grow [Numeric, nil] flex grow factor; nil (default) = no growth
+      # justify: :stretch — main-axis analog of align: :stretch; children without
+      # an authored main size grow equally (explicit grow: factors still compose).
       def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
-        # Authored-at-build sizes: grow writes w/h back into object each layout,
-        # so re-distribution must start from what the author declared, not the
-        # previously grown value.
+        # Authored-at-build sizes: grow/stretch write w/h back into object each
+        # layout, so basis and declaredness must come from what the author gave.
         @authored_w = @object[:w]
         @authored_h = @object[:h]
         @children = []
