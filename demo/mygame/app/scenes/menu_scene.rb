@@ -31,8 +31,11 @@ class MenuScene < Conjuration::Scene
 
     source = game.input_source
     pad = game.ui_pad
-    return unless source.just_pressed?(pad, :start) || source.just_pressed?(pad, :ui_confirm)
+    start! if source.just_pressed?(pad, :start) || source.just_pressed?(pad, :ui_confirm)
+  end
 
+  # Also the prompt node's action, so touch/mouse-only players can start.
+  def start!
     state[:started] = true
     activate_navigation(:menu)
   end
@@ -88,7 +91,7 @@ class MenuScene < Conjuration::Scene
   # subtree, so there's no per-frame glyph lookup or hash allocation.
   def press_prompt
     memo(:press_prompt, DragonInput.glyph_style(game.ui_pad)) do
-      node({ x: grid.w / 2, y: grid.h / 2, w: 240, h: 80, anchor_x: 0.5, anchor_y: 0.5 }, id: :press_prompt, direction: :row, justify: :center, align: :center, gap: 14) do
+      node({ x: grid.w / 2, y: grid.h / 2, w: 240, h: 80, anchor_x: 0.5, anchor_y: 0.5, action: -> { start! } }, id: :press_prompt, direction: :row, justify: :center, align: :center, gap: 14) do
         node({ text: "Press", size_enum: 2, r: 92, g: 62, b: 30 }, id: :press_label)
         glyph = DragonInput.glyph(game.ui_pad, PROMPT_ACTION)
         if glyph
