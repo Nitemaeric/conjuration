@@ -135,6 +135,16 @@ module Conjuration
           return
         end
 
+        # Re-rendering with a different factor must not compound: every grower
+        # restarts from its authored size (or 0) before leftover is measured.
+        growers.each do |child|
+          basis = child.authored_main_size(main_key) || 0
+          next if child.object[main_key] == basis
+
+          child.object[main_key] = basis
+          child.invalidate!
+        end
+
         inner = row ? inner_width : (object.h - padding_top - padding_bottom)
         used = sum_main_size(flow_children, main_key) + (flow_children.length > 1 ? (flow_children.length - 1) * gap : 0)
         leftover = inner - used
@@ -142,7 +152,7 @@ module Conjuration
 
         sum_factors = growers.inject(0) { |total, child| total + child.grow }
         growers.each do |child|
-          child.object[main_key] += leftover * (child.grow / sum_factors)
+          child.object[main_key] = (child.object[main_key] || 0) + leftover * (child.grow / sum_factors)
           child.invalidate!
         end
       end

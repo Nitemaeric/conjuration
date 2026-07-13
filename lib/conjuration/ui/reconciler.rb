@@ -290,6 +290,8 @@ module Conjuration
           (declared.keys - incoming.keys).each { |key| object.delete(key) }
           incoming.each { |key, value| object[key] = value unless key == :action || declared[key] == value }
           @declared = incoming.dup
+          @authored_w = incoming[:w]
+          @authored_h = incoming[:h]
           invalidate!
         end
 

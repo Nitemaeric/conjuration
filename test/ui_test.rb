@@ -1032,6 +1032,22 @@ def test_grow_reconciles_and_relayouts(args, assert)
   assert.equal!(root.find(:n1).object.w, 400, "re-render with grow:1 fills leftover")
 end
 
+def test_grow_rederives_from_authored_basis_on_factor_change(args, assert)
+  host = GrowReconcileHost.new
+  root = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root)
+  root.view(&host.method(:view))
+
+  host.grow_factor = 1
+  root.render_view
+  root.calculate_layout
+  assert.equal!(root.find(:n1).object.w, 400, "first distribution fills from the 100 basis")
+
+  host.grow_factor = 3
+  root.render_view
+  root.calculate_layout
+  assert.equal!(root.find(:n1).object.w, 400, "changed factor re-derives from the authored basis, not the grown 400")
+end
+
 def test_no_grow_tree_layout_unchanged(args, assert)
   c = build_container(direction: :row, justify: :start, align: :start, &two_solids)
   n1, n2 = c.find(:n1), c.find(:n2)

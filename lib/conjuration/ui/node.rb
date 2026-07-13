@@ -23,6 +23,10 @@ module Conjuration
       attr_reader :wrap, :text_break
       attr_reader :shortcut
       attr_reader :grow
+
+      def authored_main_size(main_key)
+        main_key == :w ? @authored_w : @authored_h
+      end
       attr_writer :declared
       # The view component this node was mounted for (nil for a plain node) —
       # part of its reconcile identity, so a type swap at the same key remounts.
@@ -34,6 +38,11 @@ module Conjuration
       def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
+        # Authored-at-build sizes: grow writes w/h back into object each layout,
+        # so re-distribution must start from what the author declared, not the
+        # previously grown value.
+        @authored_w = @object[:w]
+        @authored_h = @object[:h]
         @children = []
         @parent = nil
 
