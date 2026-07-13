@@ -3,15 +3,31 @@ module Conjuration
     # overflow: :scroll containers — clipping children into a render target,
     # offsetting by scroll_offset, and drawing a scrollbar. Mixed into Node.
     module Scroll
+      # A scroll container: explicit overflow: :scroll, or the default mode once
+      # its content is found to overflow (detect_overflow! sets @overflowing).
+      # Scroll containers clip into a render target, draw a scrollbar, take scroll
+      # input, and are focusable.
       def scroll?
-        overflow == :scroll
+        overflow == :scroll || (overflow.nil? && @overflowing)
       end
 
-      # Render each scroll container's children into its render target, translated
+      # A clip container: overflow: :clip once content overflows. Clips into a
+      # render target like scroll, but with no scrollbar and no scroll interaction.
+      def clip?
+        overflow == :clip && @overflowing
+      end
+
+      # Either mode needs the render target materialized and blitted; a fitting
+      # container needs neither, so nothing is allocated until overflow occurs.
+      def render_target?
+        scroll? || clip?
+      end
+
+      # Render each render-target container's children into its target, translated
       # to target-local space and shifted by scroll_offset. Call once per frame,
       # before emitting primitives.
       def render_scroll_targets
-        nodes.each { |node| node.render_scroll_target if node.scroll? }
+        nodes.each { |node| node.render_scroll_target if node.render_target? }
       end
 
       def render_scroll_target
@@ -49,12 +65,37 @@ module Conjuration
         { **styled_object, x: 0, y: 0, w: object.w, h: object.h, anchor_x: 0, anchor_y: 0 }
       end
 
-      # The total height the content occupies — the children's span plus the
-      # container's top and bottom padding — the basis for how far it scrolls.
-      def content_height
-        return 0 if children.empty?
+      # The vertical extent of the in-flow content — the span from the topmost
+      # child's top to the bottommost child's bottom. This is the overflow test's
+      # metric (compared against the box height): content is deemed to overflow
+      # only when it escapes the drawn bounds, not merely the nominal padding.
+      # Out-of-flow (absolute) children are excluded, so a deliberate overhang
+      # never counts. nil when there is nothing in flow. A single scalar scan (no
+      # intermediate arrays), since detect_overflow! calls it each relayout.
+      def content_span
+        top = nil
+        bottom = nil
 
-        span = children.map { |child| child.object.top }.max - children.map { |child| child.object.bottom }.min
+        children.each do |child|
+          next if child.absolute?
+
+          child_top = child.object.top
+          child_bottom = child.object.bottom
+          next if child_top.nil? || child_bottom.nil?
+
+          top = child_top if top.nil? || child_top > top
+          bottom = child_bottom if bottom.nil? || child_bottom < bottom
+        end
+
+        top && (top - bottom)
+      end
+
+      # The total height the in-flow content occupies including the container's
+      # top and bottom padding — the basis for how far a scroll container scrolls.
+      def content_height
+        span = content_span
+        return 0 if span.nil?
+
         span + padding_top + padding_bottom
       end
 

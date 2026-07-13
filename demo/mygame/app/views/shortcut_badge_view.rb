@@ -52,7 +52,9 @@ class ShortcutBadgeView < Conjuration::UI::View
       if path
         node({ w: size, h: size, path: path }, id: @id, position: :absolute, right: INSET, bottom: INSET)
       else
-        node({ w: size, h: size, path: :solid, r: 40, g: 40, b: 48 }, id: @id, position: :absolute, right: INSET, bottom: INSET, justify: :center, align: :center) do
+        # overflow: :visible — a fixed decorative chip whose small centred label
+        # is meant to sit inside it; it must never turn into a scroll region.
+        node({ w: size, h: size, path: :solid, r: 40, g: 40, b: 48 }, id: @id, position: :absolute, right: INSET, bottom: INSET, justify: :center, align: :center, overflow: :visible) do
           node({ text: button.to_s.upcase, size_enum: -3, r: 235, g: 235, b: 240 }, id: :"#{@id}_label")
         end
       end
