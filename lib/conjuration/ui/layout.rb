@@ -176,6 +176,13 @@ module Conjuration
         @authored_h.nil? && !object.has_key?(:text) && !@children.empty?
       end
 
+      # The resolved per-side padding layout actually applied, as
+      # { left:, right:, top:, bottom: }. Public so the debug inspector's box-model
+      # overlay reads the same insets rather than re-normalizing raw `padding`.
+      def padding_edges
+        normalized_padding
+      end
+
       private
 
       # justify: :stretch marks children without an AUTHORED main size (grow and
