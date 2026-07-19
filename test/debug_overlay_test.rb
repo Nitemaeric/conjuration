@@ -188,8 +188,10 @@ def test_game_panel_emits_one_label_per_line_when_debug_on(args, assert)
   game.send(:render_game_debug_panel)
 
   lines = game.send(:game_debug_panel_lines)
-  assert.equal!(game.outputs.debug.length, lines.length, "one label is emitted per panel line")
-  assert.true!(game.outputs.debug.all? { |p| p[:text] }, "every emitted primitive is a label")
+  assert.equal!(game.outputs.debug.length, lines.length + 1, "a backing rect plus one label per panel line")
+  backing = game.outputs.debug.first
+  assert.true!(backing[:text].nil? && backing[:a] && backing[:a] < 255, "the first primitive is a translucent backing")
+  assert.true!(game.outputs.debug.drop(1).all? { |p| p[:text] }, "every primitive after the backing is a label")
 end
 
 def test_game_panel_emits_nothing_when_debug_off(args, assert)
