@@ -38,6 +38,7 @@ preload=(
   lib/conjuration/ui/scroll.rb
   lib/conjuration/ui/view.rb
   lib/conjuration/ui/node.rb
+  lib/conjuration/ui/inspector.rb
   lib/conjuration/ui_management.rb
   lib/conjuration/camera.rb
   lib/conjuration/camera_management.rb
