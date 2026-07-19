@@ -111,7 +111,10 @@ module Conjuration
       return unless debug?
 
       top = grid.h - 8
-      game_debug_panel_lines.each_with_index do |text, index|
+      lines = game_debug_panel_lines
+      widest = lines.map { |text| gtk.calcstringbox(text)[0] }.max
+      outputs.debug << { x: 4, y: top - lines.length * 18 - 2, w: widest + 8, h: lines.length * 18 + 6, path: :pixel, r: 0, g: 0, b: 0, a: 190 }
+      lines.each_with_index do |text, index|
         outputs.debug << { x: 8, y: top - index * 18, text: text, size_px: 14, r: 255, g: 255, b: 255, anchor_y: 1 }
       end
     end
