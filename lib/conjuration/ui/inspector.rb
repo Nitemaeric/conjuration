@@ -14,6 +14,13 @@ module Conjuration
       OUT_OF_FLOW = { r: 120, g: 120, b: 150 }.freeze
       UNRESOLVED  = { r: 240, g: 45,  b: 45  }.freeze
 
+      # DevTools-style box model for the hover highlight: translucent blue content
+      # area, translucent green padding band, translucent purple gap strips. Low
+      # alpha so the UI underneath stays visible.
+      CONTENT_FILL = { r: 100, g: 160, b: 240, a: 80 }.freeze
+      PADDING_FILL = { r: 130, g: 200, b: 120, a: 80 }.freeze
+      GAP_FILL     = { r: 175, g: 120, b: 220, a: 80 }.freeze
+
       SCREEN_W = 1280
       SCREEN_H = 720
 
@@ -52,6 +59,84 @@ module Conjuration
           overflow: node.overflow,
           overflow_amount: overflow_amount(node)
         }
+      end
+
+      # DevTools-style box model for a node, computed without emission: its
+      # deanchored bounds, the content area inset by resolved padding, the padding
+      # band as 4 non-overlapping strips (top/bottom span the full width, left/right
+      # fill only the middle so alphas never stack), and the gap strips between
+      # consecutive in-flow children. Returns nil when geometry is unresolved.
+      def box_model(node)
+        bounds = draw_bounds(node)
+        return nil unless bounds
+
+        pad = node.padding_edges
+        content = {
+          x: bounds[:x] + pad[:left],
+          y: bounds[:y] + pad[:bottom],
+          w: bounds[:w] - pad[:left] - pad[:right],
+          h: bounds[:h] - pad[:top] - pad[:bottom]
+        }
+
+        {
+          bounds: bounds,
+          content: content,
+          padding: pad,
+          strips: padding_strips(bounds, content, pad),
+          gaps: gap_strips(node, content)
+        }
+      end
+
+      # The padding band as up-to-4 edge strips. Zero-padding sides emit no strip
+      # (not a zero-size one), so a node with no padding yields an empty band and a
+      # full-rect content area.
+      def padding_strips(bounds, content, pad)
+        strips = []
+        strips << { x: bounds[:x], y: bounds[:y] + bounds[:h] - pad[:top], w: bounds[:w], h: pad[:top], edge: :top } if pad[:top] > 0
+        strips << { x: bounds[:x], y: bounds[:y], w: bounds[:w], h: pad[:bottom], edge: :bottom } if pad[:bottom] > 0
+        strips << { x: bounds[:x], y: content[:y], w: pad[:left], h: content[:h], edge: :left } if pad[:left] > 0
+        strips << { x: bounds[:x] + bounds[:w] - pad[:right], y: content[:y], w: pad[:right], h: content[:h], edge: :right } if pad[:right] > 0
+        strips
+      end
+
+      # The gaps between consecutive in-flow children, derived from their laid-out
+      # rects (the space layout actually left between the boxes), not recomputed gap
+      # math. Only for a container with gap > 0 and 2+ in-flow children; out-of-flow
+      # (absolute) children are excluded from the pairing, mirroring the flow. Each
+      # strip spans the content box on the cross axis.
+      def gap_strips(node, content)
+        return [] unless node.gap && node.gap > 0
+
+        flow = node.children.reject(&:absolute?)
+        boxes = flow.map { |child| draw_bounds(child) }.compact
+        return [] if boxes.length < 2
+
+        if node.direction == :row
+          ordered = boxes.sort_by { |box| box[:x] }
+          adjacent_gaps(ordered) do |a, b|
+            edge = a[:x] + a[:w]
+            span = b[:x] - edge
+            span > 0 ? { x: edge, y: content[:y], w: span, h: content[:h] } : nil
+          end
+        else
+          ordered = boxes.sort_by { |box| -(box[:y] + box[:h]) }
+          adjacent_gaps(ordered) do |upper, lower|
+            top = lower[:y] + lower[:h]
+            span = upper[:y] - top
+            span > 0 ? { x: content[:x], y: top, w: content[:w], h: span } : nil
+          end
+        end
+      end
+
+      def adjacent_gaps(boxes)
+        strips = []
+        index = 0
+        while index < boxes.length - 1
+          strip = yield(boxes[index], boxes[index + 1])
+          strips << strip if strip
+          index += 1
+        end
+        strips
       end
 
       # The smallest/deepest node whose resolved box contains the point. Ties in
@@ -208,8 +293,18 @@ module Conjuration
       end
 
       def emit_hover(node, outputs, mouse)
-        highlight = draw_bounds(node)
-        outputs.debug << { **highlight, r: 255, g: 235, b: 120, a: 45, anchor_x: 0, anchor_y: 0, primitive_marker: :solid } if highlight
+        model = box_model(node)
+
+        if model
+          content = model[:content]
+          outputs.debug << { **content, anchor_x: 0, anchor_y: 0, **CONTENT_FILL, primitive_marker: :solid }
+          model[:strips].each do |strip|
+            outputs.debug << { x: strip[:x], y: strip[:y], w: strip[:w], h: strip[:h], anchor_x: 0, anchor_y: 0, **PADDING_FILL, primitive_marker: :solid }
+          end
+          model[:gaps].each do |strip|
+            outputs.debug << { x: strip[:x], y: strip[:y], w: strip[:w], h: strip[:h], anchor_x: 0, anchor_y: 0, **GAP_FILL, primitive_marker: :solid }
+          end
+        end
 
         emit_readout(node, outputs, mouse)
       end
@@ -245,9 +340,20 @@ module Conjuration
         lines << "w=#{fmt(rect[:w])} h=#{fmt(rect[:h])}"
         lines << "w: #{provenance_label(annotation, :w)}"
         lines << "h: #{provenance_label(annotation, :h)}"
+        lines << padding_readout(node)
+        lines << "gap: #{fmt(node.gap)}"
         lines << "overflow: #{annotation[:overflow] || :auto}" if node.children.any?
         lines << "spill: +#{fmt(annotation[:overflow_amount])}px" if annotation[:overflow_amount]
         lines
+      end
+
+      def padding_readout(node)
+        pad = node.padding_edges
+        if pad[:top] == pad[:right] && pad[:right] == pad[:bottom] && pad[:bottom] == pad[:left]
+          "padding: #{fmt(pad[:top])}"
+        else
+          "padding: t#{fmt(pad[:top])} r#{fmt(pad[:right])} b#{fmt(pad[:bottom])} l#{fmt(pad[:left])}"
+        end
       end
 
       def identity_label(ident)

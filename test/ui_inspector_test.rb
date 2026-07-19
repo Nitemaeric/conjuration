@@ -257,3 +257,157 @@ def test_inspector_hover_readout_reports_provenance(args, assert)
     assert.true!(text.include?("w: explicit"), "the readout reports per-axis provenance")
   end
 end
+
+# --- Box model: content + padding band ----------------------------------------
+
+def test_box_model_padded_node_content_and_four_strips(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 200, h: 200 }, id: :box, padding: 20, justify: :start, align: :start) do
+      node({ w: 50, h: 50, primitive_marker: :solid }, id: :child)
+    end
+  end
+
+  model = Inspector.box_model(ui.find(:box))
+
+  assert.equal!(model[:content], { x: 20, y: 20, w: 160, h: 160 }, "content is the rect inset by padding on every side")
+  assert.equal!(model[:strips].length, 4, "a uniformly padded node has all four padding strips")
+
+  top = model[:strips].find { |s| s[:edge] == :top }
+  bottom = model[:strips].find { |s| s[:edge] == :bottom }
+  left = model[:strips].find { |s| s[:edge] == :left }
+  right = model[:strips].find { |s| s[:edge] == :right }
+
+  assert.equal!([top[:x], top[:y], top[:w], top[:h]], [0, 180, 200, 20], "top strip spans the full width")
+  assert.equal!([bottom[:x], bottom[:y], bottom[:w], bottom[:h]], [0, 0, 200, 20], "bottom strip spans the full width")
+  assert.equal!([left[:x], left[:y], left[:w], left[:h]], [0, 20, 20, 160], "left strip fills only the middle band")
+  assert.equal!([right[:x], right[:y], right[:w], right[:h]], [180, 20, 20, 160], "right strip fills only the middle band")
+end
+
+def test_box_model_zero_padding_yields_no_strips_and_full_content(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 100, h: 100 }, id: :box, justify: :start, align: :start) do
+      node({ w: 40, h: 40, primitive_marker: :solid }, id: :child)
+    end
+  end
+
+  model = Inspector.box_model(ui.find(:box))
+
+  assert.equal!(model[:strips].length, 0, "a zero-padding node emits no padding strips")
+  assert.equal!(model[:content], { x: 0, y: 0, w: 100, h: 100 }, "content fills the whole rect")
+end
+
+def test_box_model_respects_per_side_padding(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 200, h: 200 }, id: :box, padding: { left: 10, right: 20, top: 30, bottom: 40 }, justify: :start, align: :start) do
+      node({ w: 40, h: 40, primitive_marker: :solid }, id: :child)
+    end
+  end
+
+  model = Inspector.box_model(ui.find(:box))
+
+  assert.equal!(model[:padding], { left: 10, right: 20, top: 30, bottom: 40 }, "per-side padding is read as layout normalized it")
+  assert.equal!(model[:content], { x: 10, y: 40, w: 170, h: 130 }, "content respects each side's inset")
+  assert.equal!(model[:strips].length, 4, "all four sides are present")
+end
+
+# --- Box model: gap strips ----------------------------------------------------
+
+def test_gap_strips_row_between_children(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 300, h: 100 }, id: :bar, direction: :row, justify: :start, align: :start, gap: 20) do
+      node({ w: 80, h: 60, primitive_marker: :solid }, id: :a)
+      node({ w: 80, h: 60, primitive_marker: :solid }, id: :b)
+    end
+  end
+
+  gaps = Inspector.box_model(ui.find(:bar))[:gaps]
+
+  assert.equal!(gaps.length, 1, "one gap strip between the two children")
+  assert.equal!([gaps[0][:x], gaps[0][:y], gaps[0][:w], gaps[0][:h]], [80, 0, 20, 100],
+                "a vertical strip filling the space between the boxes, spanning the content height")
+end
+
+def test_gap_strips_column_between_children(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 200, w: 100, h: 200 }, id: :col, direction: :column, justify: :start, align: :start, gap: 15) do
+      node({ w: 60, h: 50, primitive_marker: :solid }, id: :a)
+      node({ w: 60, h: 50, primitive_marker: :solid }, id: :b)
+    end
+  end
+
+  gaps = Inspector.box_model(ui.find(:col))[:gaps]
+
+  assert.equal!(gaps.length, 1, "one gap strip between the two stacked children")
+  assert.equal!([gaps[0][:x], gaps[0][:y], gaps[0][:w], gaps[0][:h]], [0, 335, 100, 15],
+                "a horizontal strip filling the vertical space between the boxes, spanning the content width")
+end
+
+def test_no_gap_strips_when_gap_zero(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 300, h: 100 }, id: :bar, direction: :row, justify: :start, align: :start, gap: 0) do
+      node({ w: 80, h: 60, primitive_marker: :solid }, id: :a)
+      node({ w: 80, h: 60, primitive_marker: :solid }, id: :b)
+    end
+  end
+
+  assert.equal!(Inspector.box_model(ui.find(:bar))[:gaps].length, 0, "gap: 0 produces no gap strips")
+end
+
+def test_absolute_children_do_not_form_gap_pairs(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 300, h: 100 }, id: :bar, direction: :row, justify: :start, align: :start, gap: 20) do
+      node({ w: 80, h: 60, primitive_marker: :solid }, id: :a)
+      node({ w: 40, h: 40, primitive_marker: :solid }, id: :floating, position: :absolute, top: 0, left: 0)
+      node({ w: 80, h: 60, primitive_marker: :solid }, id: :c)
+    end
+  end
+
+  gaps = Inspector.box_model(ui.find(:bar))[:gaps]
+
+  # a and c are the only in-flow children: c flows right after a (+gap), so there
+  # is exactly one gap pair and the absolute node is not part of it.
+  assert.equal!(gaps.length, 1, "the absolute child is excluded from gap pairing")
+  assert.equal!([gaps[0][:x], gaps[0][:w]], [80, 20], "the single gap sits between the two in-flow children")
+end
+
+# --- Box model emission + readout ---------------------------------------------
+
+def test_hover_emits_content_padding_and_gap_fills(args, assert)
+  with_debug_game do
+    ui = inspector_root do
+      node({ x: 0, y: 0, w: 300, h: 100 }, id: :bar, direction: :row, justify: :start, align: :start, gap: 20, padding: 10) do
+        node({ w: 80, h: 60, primitive_marker: :solid }, id: :a)
+        node({ w: 80, h: 60, primitive_marker: :solid }, id: :b)
+      end
+    end
+    outputs = OutputsDouble.new
+
+    # A point inside the bar but over the gap, so the deepest node is the bar.
+    Inspector.render(ui, outputs, { x: 95, y: 50 })
+
+    solids = outputs.debug.select { |p| p[:primitive_marker] == :solid }
+    assert.true!(solids.any? { |p| p[:r] == 100 && p[:g] == 160 && p[:b] == 240 }, "a translucent blue content fill is emitted")
+    assert.true!(solids.any? { |p| p[:r] == 130 && p[:g] == 200 && p[:b] == 120 }, "a translucent green padding strip is emitted")
+    assert.true!(solids.any? { |p| p[:r] == 175 && p[:g] == 120 && p[:b] == 220 }, "a translucent purple gap strip is emitted")
+
+    text = outputs.debug.select { |p| p[:text] }.map { |p| p[:text] }.join(" | ")
+    assert.true!(text.include?("padding: 10"), "the readout reports padding")
+    assert.true!(text.include?("gap: 20"), "the readout reports gap")
+  end
+end
+
+def test_hover_readout_reports_per_side_padding(args, assert)
+  with_debug_game do
+    ui = inspector_root do
+      node({ x: 0, y: 0, w: 300, h: 200 }, id: :bar, direction: :row, justify: :start, align: :start, padding: { left: 5, right: 10, top: 15, bottom: 20 }) do
+        node({ w: 80, h: 60, primitive_marker: :solid }, id: :a)
+      end
+    end
+    outputs = OutputsDouble.new
+
+    Inspector.render(ui, outputs, { x: 150, y: 100 })
+
+    text = outputs.debug.select { |p| p[:text] }.map { |p| p[:text] }.join(" | ")
+    assert.true!(text.include?("padding: t15 r10 b20 l5"), "non-uniform padding is shown per side")
+  end
+end
