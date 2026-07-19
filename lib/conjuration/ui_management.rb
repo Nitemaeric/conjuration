@@ -211,7 +211,7 @@ module Conjuration
 
     # Re-derive this ui's tree from state (no-op unless a `view` is registered),
     # relayout once per frame, then emit its primitives, focus indicator, and — in
-    # debug — its interactive/container bounds into `outputs`. Reconcile writes
+    # debug — the UI::Inspector overlay into `outputs`. Reconcile writes
     # only changed props and clean subtrees early-out of layout, so this is
     # near-free when nothing changed. Scene and camera share it, each passing its
     # own outputs (screen HUD vs. viewport target).
@@ -227,19 +227,7 @@ module Conjuration
 
       return unless debug?
 
-      outputs.debug << ui.interactive_nodes.map do |node|
-        {
-          **node.rect,
-          r: 0,
-          g: 255,
-          b: 0
-        }.border!
-      end
-
-      # Invisible layout containers, in magenta — only where they resolve to
-      # real bounds (the root has none).
-      container_bounds = ui.nodes.reject(&:renderable?).map(&:rect).select { |rect| rect[:w] && rect[:h] }
-      outputs.debug << container_bounds.map { |rect| { **rect, r: 255, g: 0, b: 255 }.border! }
+      UI::Inspector.render(ui, outputs, inputs.mouse)
     end
 
     # The built-in focus highlight, so keyboard/pad focus is visible without any

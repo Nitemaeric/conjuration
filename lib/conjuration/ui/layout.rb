@@ -156,6 +156,33 @@ module Conjuration
         resolve_content_size! if self_needs_measure?
       end
 
+      # A container derives its size on an axis when the author declared none and
+      # it has children to derive from. Text nodes size from their string
+      # (measure!), and the root is the fixed screen canvas — neither auto-sizes.
+      # A wrap: container is excluded too: its width comes from its parent, and its
+      # children then wrap to that width — a width-first resolution that can't be
+      # derived from content in this single bottom-up pass, so it keeps the
+      # existing parent-driven sizing. Public so the debug inspector can read each
+      # axis's size provenance without re-deriving the auto-size rule.
+      def auto_w?
+        return false if id == :root || wrap
+
+        @authored_w.nil? && !object.has_key?(:text) && !@children.empty?
+      end
+
+      def auto_h?
+        return false if id == :root || wrap
+
+        @authored_h.nil? && !object.has_key?(:text) && !@children.empty?
+      end
+
+      # The resolved per-side padding layout actually applied, as
+      # { left:, right:, top:, bottom: }. Public so the debug inspector's box-model
+      # overlay reads the same insets rather than re-normalizing raw `padding`.
+      def padding_edges
+        normalized_padding
+      end
+
       private
 
       # justify: :stretch marks children without an AUTHORED main size (grow and
@@ -220,25 +247,6 @@ module Conjuration
 
       def self_needs_measure?
         auto_w? || auto_h? || !max_w.nil? || !max_h.nil?
-      end
-
-      # A container derives its size on an axis when the author declared none and
-      # it has children to derive from. Text nodes size from their string
-      # (measure!), and the root is the fixed screen canvas — neither auto-sizes.
-      # A wrap: container is excluded too: its width comes from its parent, and its
-      # children then wrap to that width — a width-first resolution that can't be
-      # derived from content in this single bottom-up pass, so it keeps the
-      # existing parent-driven sizing.
-      def auto_w?
-        return false if id == :root || wrap
-
-        @authored_w.nil? && !object.has_key?(:text) && !@children.empty?
-      end
-
-      def auto_h?
-        return false if id == :root || wrap
-
-        @authored_h.nil? && !object.has_key?(:text) && !@children.empty?
       end
 
       # Derive an unset axis from the in-flow children: main axis = Σ sizes + gaps,
