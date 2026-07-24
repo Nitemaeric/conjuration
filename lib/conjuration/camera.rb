@@ -1,4 +1,28 @@
 module Conjuration
+  # Renders the world through a configurable rectangular viewport, compositing
+  # it into a render target and blitting onto the screen.
+  #
+  # A camera manages:
+  # - Panning and zooming (current/target positions, automatic easing)
+  # - Following a moving object
+  # - Screen shake (trauma accumulation and decay)
+  # - Culling and coordinate transforms for efficient rendering
+  # - Deferred draw buffering for z-ordered composition
+  #
+  # Cameras are typically added via {CameraManagement#add_camera}.
+  #
+  # @example Creating and configuring a camera
+  #   add_camera(:main, speed: 12, zoom_speed: 0.1)
+  #   camera = cameras[:main]
+  #   camera.follow(player)
+  #   camera.shake(amount: 0.8, direction: { x: 1, y: 0 })
+  #
+  # @example Deferred (z-ordered) drawing with parallax
+  #   # Parallax layers at fixed z bands
+  #   camera.draw(sky_rect, parallax: 0.1, z: -400)
+  #   camera.draw(tree_rect, parallax: 0.75, z: -100)
+  #   # Ground tile with stable emission order
+  #   camera.draw(tile_rect, z: 0)
   class Camera < Node
     include BaseLifecycleMethods
     include UIManagement
