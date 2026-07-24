@@ -1,6 +1,6 @@
 module Conjuration
-  # A scheduler applying easing over a scene's clock — NOT an easing library. It
-  # holds timers (after/every) and tweens keyed to elapsed = clock - started_at,
+  # Applies easing and time over a scene's clock — NOT an easing library.
+  # Holds timers (after/every) and tweens keyed to elapsed = clock - started_at,
   # so a frozen clock (hit stop, pause, stacked scene) freezes every schedule for
   # free and resumes without double-firing.
   #
@@ -10,11 +10,19 @@ module Conjuration
   #
   # Zero-cost when unused: the backing array is nil until the first schedule, and
   # the scene skips #tick entirely while no scheduler exists.
+  #
+  # @note Schedules key to the scene clock, so frozen clocks (hit-stop, pause,
+  #   stacked scene) freeze all schedules for free.
+  # @note Schedules are transient (live on scene instance, not in save state;
+  #   die when scene tears down).
+  # @see Conjuration::Scheduling
   class Scheduler
     # DR's Easing module isn't in the mruby test harness, so we carry the four
     # classic power curves inline and resolve a Symbol against this table lazily.
     # Any callable is accepted as-is, so a game can pass its own curve (or a real
     # DR easing lambda) without this table knowing about it.
+    #
+    # @return [Hash{Symbol => Proc}] symbol names to easing functions
     EASING = {
       identity: ->(t) { t },
       smooth_start: ->(t) { t * t },
@@ -22,18 +30,55 @@ module Conjuration
       smooth_step: ->(t) { t * t * (3.0 - 2.0 * t) }
     }.freeze
 
+    # Schedule a callback to fire once, on the first tick where the elapsed span has passed.
+    #
+    # @param started_at [Numeric] clock value at schedule creation (typically scene.clock)
+    # @param ticks [Numeric] frame count until the callback fires
+    # @param block [Proc] callback invoked when ticks have elapsed
+    # @return [After] handle for cancellation (respond_to?(:cancel))
     def after(started_at, ticks, block)
       add(After.new(started_at, ticks, block))
     end
 
+    # Schedule a callback to fire repeatedly, every N ticks.
+    #
+    # @param started_at [Numeric] clock value at schedule creation (typically scene.clock)
+    # @param ticks [Numeric] frame count between firings (must be >= 1)
+    # @param block [Proc] callback invoked at each interval
+    # @return [Every] handle for cancellation (respond_to?(:cancel))
+    # @note Tick count must be >= 1.
     def every(started_at, ticks, block)
       add(Every.new(started_at, ticks, block))
     end
 
+    # Schedule a tween of one or more attributes toward target values over a time span.
+    #
+    # Reads/writes via bracket-access on Hash or via attr_accessor methods on objects,
+    # so it works with both plain state hashes and model objects with accessors.
+    #
+    # @param started_at [Numeric] clock value at tween creation (typically scene.clock)
+    # @param target [Hash, Object] the object holding attributes to tween
+    # @param attrs [Hash{Symbol => Numeric}] attribute names and target values
+    # @param over [Numeric] total frame count for the tween
+    # @param ease [Symbol, Proc] easing function—symbol key from {EASING} or callable
+    # @return [Tween] handle for cancellation (respond_to?(:cancel))
+    # @note Works with Hash (bracket access) or objects with attr_accessor (method calls).
+    # @note Easing can be a Symbol ({EASING} key) or any callable taking t in [0.0, 1.0].
+    # @example Tween a scale from 1.0 to 1.45 over 12 frames (demo hit_stop_scene)
+    #   tween(crate, :scale, to: 1.45, over: POP_DURATION, ease: :smooth_stop)
+    # @example Tween a screen-flash alpha to 0 over 6 frames
+    #   tween(state, :screen_flash, to: 0, over: SCREEN_FLASH)
     def tween(started_at, target, attrs, over, ease)
       add(Tween.new(started_at, target, attrs, over, resolve_ease(ease)))
     end
 
+    # Advance all active schedules to the given clock value.
+    #
+    # Typically called by Scene#tick_schedules once per frame. Allocates nothing
+    # if no schedules exist (backing array is nil).
+    #
+    # @param clock [Numeric] current scene clock value
+    # @return [void]
     def tick(clock)
       return if @schedules.nil? || @schedules.empty?
 
@@ -49,6 +94,9 @@ module Conjuration
       @schedules.reject!(&:done?)
     end
 
+    # Whether any schedules are currently active.
+    #
+    # @return [Boolean] true if one or more schedules exist
     def active?
       !(@schedules.nil? || @schedules.empty?)
     end
@@ -184,20 +232,59 @@ module Conjuration
 
   # The scene-facing surface. Included into Scene; every method keys to the host's
   # own #clock, and #scheduler is allocated lazily on first use.
+  #
+  # @note All schedules key to the scene's clock, so frozen clocks (hit-stop,
+  #   pause, stacked scene) freeze all schedules for free.
+  # @example Fire a callback after 30 frames (demo hit_stop_scene)
+  #   after(30) { trigger_effect }
+  # @example Fire a callback every 10 frames until cancelled (demo hit_stop_scene)
+  #   handle = every(10) { update_animation }
+  # @example Tween an attribute over 12 frames with easing
+  #   tween(entity, :scale, to: 1.45, over: 12, ease: :smooth_stop)
+  # @see Conjuration::Scheduler
   module Scheduling
+    # Schedule a callback to fire once after N frames on this scene's clock.
+    #
+    # @param ticks [Numeric] frame count until the callback fires
+    # @yield callback invoked after ticks have elapsed
+    # @return [Scheduler::After] handle (respond_to?(:cancel) for cancellation)
     def after(ticks, &block)
       scheduler.after(clock, ticks, block)
     end
 
+    # Schedule a callback to fire repeatedly every N frames on this scene's clock.
+    #
+    # @param ticks [Numeric] frame count between firings (must be >= 1)
+    # @yield callback invoked at each interval
+    # @return [Scheduler::Every] handle (respond_to?(:cancel) for cancellation)
     def every(ticks, &block)
       scheduler.every(clock, ticks, block)
     end
 
+    # Schedule a tween of one or more attributes toward targets over a time span.
+    #
+    # Accepts either positional (target, attr, to:) or keyword (**attrs) form.
+    # Reads/writes via bracket-access on Hash or via accessor methods on objects.
+    #
+    # @param target [Hash, Object] the object holding attributes to tween
+    # @param attr [Symbol, nil] single attribute name (positional form)
+    # @param to [Numeric, nil] single target value (keyword, paired with attr)
+    # @param over [Numeric] total frame count for the tween
+    # @param ease [Symbol, Proc] easing function—symbol from Scheduler::EASING or callable
+    # @param attrs [Hash{Symbol => Numeric}] attribute names and targets (keyword form)
+    # @return [Scheduler::Tween] handle (respond_to?(:cancel) for cancellation)
+    # @example Single attribute
+    #   tween(crate, :scale, to: 1.45, over: 12)
+    # @example Multiple attributes
+    #   tween(entity, scale: 1.0, alpha: 255, over: 20, ease: :smooth_step)
     def tween(target, attr = nil, to: nil, over:, ease: :identity, **attrs)
       attrs = { attr => to } if attr
       scheduler.tween(clock, target, attrs, over, ease)
     end
 
+    # Access the underlying scheduler for this scene.
+    #
+    # @return [Scheduler] the scene's scheduler (lazy-allocated)
     def scheduler
       @scheduler ||= Scheduler.new
     end

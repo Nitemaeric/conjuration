@@ -1,4 +1,13 @@
 module Conjuration
+  # Default digital/analog bindings for UI navigation and confirm. Injected into
+  # every action set that lacks them so menus work without game wiring.
+  #
+  # @return [Hash{Symbol => Hash}] reserved action names to controller/keyboard bindings
+  # @note Single source of default UI bindings. Games may rebind any entry; injection
+  #   is gaps-only, so a game's own binding always wins.
+  # @note +:ui_*+ names are reserved. Unknown actions are never bootstrapped from this table.
+  # @see Conjuration::UI_ANALOG_ACTIONS
+  # @see Conjuration::DragonInputSource
   UI_ACTIONS = {
     # Space is intentionally unbound: games commonly use it (the hit-stop demo
     # swings with it), so confirming on it would double-fire.
@@ -15,8 +24,31 @@ module Conjuration
 
   # The analog members of UI_ACTIONS — injected via set.analog and read via
   # DragonInput.axis rather than the digital path.
+  #
+  # @return [Array<Symbol>] action names that use the analog injection path
+  # @see Conjuration::UI_ACTIONS
   UI_ANALOG_ACTIONS = %i[ui_navigate].freeze
 
+  # Default input source for Conjuration UI and gameplay queries. Wraps
+  # DragonInput so reserved +:ui_*+ actions are injected on demand and unknown
+  # actions read as inactive rather than raising.
+  #
+  # @note Contract: +just_pressed?+ / +pressed?+ take +(pad, action)+. +action+ may
+  #   be a reserved +:ui_*+ name (injected from {UI_ACTIONS}) or a game-defined
+  #   action. Unknown actions return inactive (all false).
+  # @note DragonInput.setup bootstraps a +:ui+ set on the first reserved-name
+  #   query if no config exists yet, so menus work without explicit wiring.
+  # @example Game-defined actions (demo/mygame/app/game.rb)
+  #   DragonInput.setup do |c|
+  #     c.action_set :gameplay do |s|
+  #       s.digital :attack, controller: :b, keyboard: :space
+  #       s.digital :start, controller: :start, keyboard: :enter
+  #       s.analog :pan, controller: :left_analog, keyboard: :wasd
+  #     end
+  #   end
+  # @example Querying a game action (demo hit_stop_scene)
+  #   start_swing if game.input_source.just_pressed?(game.ui_pad, :attack)
+  # @see Conjuration::UI_ACTIONS
   class DragonInputSource
     INACTIVE = { down: false, held: false, up: false, active: false }.freeze
 
@@ -26,10 +58,24 @@ module Conjuration
     FLICK_ENGAGE = 0.5
     FLICK_RELEASE = 0.35
 
+    # True on the frame the action transitions to pressed (down edge).
+    #
+    # @param pad [Symbol] gamepad identifier (e.g. +:one+, or +game.ui_pad+)
+    # @param action [Symbol] reserved +:ui_*+ name or game-defined action
+    # @return [Boolean] true only on the down edge
+    # @note Unknown actions read as not pressed ({INACTIVE}).
+    # @example (demo hit_stop_scene)
+    #   start_swing if game.input_source.just_pressed?(game.ui_pad, :attack)
     def just_pressed?(pad, action)
       digital(pad, action)[:down]
     end
 
+    # True while the action is held or on its down edge.
+    #
+    # @param pad [Symbol] gamepad identifier (e.g. +:one+, or +game.ui_pad+)
+    # @param action [Symbol] reserved +:ui_*+ name or game-defined action
+    # @return [Boolean] true while held or just pressed
+    # @note Unknown actions read as not pressed ({INACTIVE}).
     def pressed?(pad, action)
       state = digital(pad, action)
       state[:held] || state[:down]
@@ -39,6 +85,11 @@ module Conjuration
     # step per neutral->deflected crossing, in the dominant axis; the stick must
     # return to neutral to re-arm (no repeat-while-held in v1). @flick_armed is the
     # only state — nil/true means ready, false means already fired this deflection.
+    #
+    # @param pad [Symbol] gamepad identifier
+    # @return [Hash{Symbol => Integer}, nil] +{x:, y:}+ with one axis ±1, or +nil+
+    # @note Uses flick hysteresis: engage at {FLICK_ENGAGE}, re-arm below
+    #   {FLICK_RELEASE}. Dominant axis only (no diagonals).
     def navigation_flick(pad)
       config = DragonInput.config
       config = bootstrap_config if config.nil?
@@ -72,6 +123,12 @@ module Conjuration
     # Query a UI shortcut's down edge, injecting its digital action (gaps-only, so
     # a game can rebind it) the first time it's seen. `name` is deterministic per
     # node (:ui_shortcut_<id>); `bindings` is { keyboard:, controller: }.
+    #
+    # @param pad [Symbol] gamepad identifier
+    # @param name [Symbol] deterministic shortcut action name (e.g. +:ui_shortcut_back+)
+    # @param bindings [Hash] +{ keyboard:, controller: }+ device bindings
+    # @return [Boolean] true on the down edge of the shortcut
+    # @note Injection is gaps-only: a game binding for +name+ is never overwritten.
     def shortcut_just_pressed?(pad, name, bindings)
       config = DragonInput.config
       config = bootstrap_config if config.nil?
