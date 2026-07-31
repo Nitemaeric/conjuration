@@ -17,6 +17,19 @@
 # tests never touch it, but the hit-stop test instantiates a Game (which assigns
 # `args` in its initializer), so expose that accessor; the debug-panel test also
 # reads outputs, which real AttrGTK sources from args.
+# DragonRuby's engine-level frame counter. It never stops (that is the point —
+# UI key-repeat keeps timing while a scene is paused), so here it is a plain
+# settable counter tests advance by hand.
+module Kernel
+  def self.tick_count
+    @tick_count ||= 0
+  end
+
+  def self.tick_count=(value)
+    @tick_count = value
+  end
+end
+
 module AttrGTK
   attr_accessor :args
 

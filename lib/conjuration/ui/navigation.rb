@@ -73,6 +73,84 @@ module Conjuration
       @active_navigation_group = group
     end
 
+    # Hold-to-repeat for the digital directions, in ticks: a held direction
+    # re-fires after nav_repeat_delay, then every nav_repeat_interval (18/6 =
+    # 300ms/100ms at 60fps). A nil delay disables repeat — the press edge alone
+    # moves focus.
+    @nav_repeat_delay = 18
+    @nav_repeat_interval = 6
+
+    def self.nav_repeat_delay
+      @nav_repeat_delay
+    end
+
+    def self.nav_repeat_delay=(ticks)
+      @nav_repeat_delay = ticks
+    end
+
+    def self.nav_repeat_interval
+      @nav_repeat_interval
+    end
+
+    def self.nav_repeat_interval=(ticks)
+      @nav_repeat_interval = ticks
+    end
+
+    def self.nav_repeat_state
+      @nav_repeat_state ||= {}
+    end
+
+    # Cleared wherever the other focus globals are, so a key held across a scene
+    # change can't carry its timer into the new scene.
+    def self.reset_nav_repeat!
+      @nav_repeat_state = {}
+    end
+
+    # Repeat timing runs off Kernel.tick_count, never a scene clock: menus are
+    # exactly what you navigate while the scene is paused or in hit stop.
+    def self.nav_tick
+      Kernel.tick_count
+    end
+
+    # The navigation step for this tick, from the edge-pressed and held direction
+    # vectors (either may be nil). Resolved once and memoized: the scene and every
+    # camera run the nav pass each frame off the same input, and a second
+    # resolution would advance the repeat timer twice. The input snapshot is part
+    # of the memo key, so a genuinely different query re-resolves.
+    def self.navigation_step(pressed, held, tick)
+      state = nav_repeat_state
+      key = [tick, pressed, held]
+      return state[:step] if state[:key] == key
+
+      state[:key] = key
+      state[:step] = resolve_navigation_step(pressed, held, tick)
+    end
+
+    def self.resolve_navigation_step(pressed, held, tick)
+      state = nav_repeat_state
+
+      # The press edge always steps, and starts the hold.
+      return start_nav_repeat(pressed, tick) if pressed
+      return start_nav_repeat(nil, tick) if held.nil?
+
+      # A direction change with no edge of its own (releasing one axis of a
+      # diagonal) starts a fresh hold rather than inheriting the old timer.
+      return nil if state[:direction] != held && start_nav_repeat(held, tick).nil?
+
+      fire = state[:next_fire]
+      return nil if fire.nil? || tick < fire
+
+      state[:next_fire] = tick + nav_repeat_interval
+      held
+    end
+
+    def self.start_nav_repeat(direction, tick)
+      state = nav_repeat_state
+      state[:direction] = direction
+      state[:next_fire] = direction && nav_repeat_delay && tick + nav_repeat_delay
+      direction
+    end
+
     # Interactive-ness, focus/hover/press queries, navigation groups, and beam
     # spatial navigation. Mixed into Node — the caches (@interactive_nodes,
     # @navigation_index, @shortcut_nodes) and the shortcut attribute live there.

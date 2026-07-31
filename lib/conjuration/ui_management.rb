@@ -168,20 +168,32 @@ module Conjuration
     end
 
     # Left unnormalized (a diagonal fires both axes); spatial_navigate reads only
-    # the signs. The digital arrows drive it directly; when they're neutral, the
+    # the signs. The digital arrows drive it — the press edge steps at once and a
+    # held direction repeats (UI.navigation_step) — and when none is touched, the
     # right stick contributes one flick step (sources that don't implement it —
     # e.g. a raw keyboard-only source — simply don't).
     def navigation_vector
       source = game.input_source
       pad = game.ui_pad
 
-      x = (source.just_pressed?(pad, :ui_right) ? 1 : 0) - (source.just_pressed?(pad, :ui_left) ? 1 : 0)
-      y = (source.just_pressed?(pad, :ui_up) ? 1 : 0) - (source.just_pressed?(pad, :ui_down) ? 1 : 0)
+      pressed = digital_direction(source, pad, :just_pressed?)
+      held = digital_direction(source, pad, :pressed?)
 
-      if x == 0 && y == 0 && source.respond_to?(:navigation_flick)
-        return source.navigation_flick(pad)
-      end
+      step = UI.navigation_step(pressed, held, UI.nav_tick)
+      return step if step
 
+      # A held direction owns the vector even between repeats; the flick only
+      # speaks for a stick that isn't competing with the d-pad.
+      return nil unless held.nil?
+
+      source.respond_to?(:navigation_flick) ? source.navigation_flick(pad) : nil
+    end
+
+    # The direction the digital actions describe under `query` (:just_pressed? for
+    # the edge, :pressed? for the hold), or nil when they're neutral.
+    def digital_direction(source, pad, query)
+      x = (source.send(query, pad, :ui_right) ? 1 : 0) - (source.send(query, pad, :ui_left) ? 1 : 0)
+      y = (source.send(query, pad, :ui_up) ? 1 : 0) - (source.send(query, pad, :ui_down) ? 1 : 0)
       return nil if x == 0 && y == 0
 
       { x: x, y: y }

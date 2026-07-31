@@ -107,3 +107,17 @@ The value scopes the wrap to an axis: `true` wraps both, `:x` only horizontal
 presses, `:y` only vertical. A single row wants `:x` — with `true`, a down
 press at a row's edge has nowhere to go and would "wrap" onto the adjacent
 slot, the only far-end candidate there is.
+
+### Hold-to-repeat
+
+Holding a direction keeps moving focus: the press edge steps immediately, then
+after `UI.nav_repeat_delay` ticks the step repeats every
+`UI.nav_repeat_interval` ticks (18 and 6 by default — 300ms then 100ms at
+60fps). Both are writable; `UI.nav_repeat_delay = nil` switches repeat off and
+leaves the edge-only behaviour.
+
+Releasing resets it, and changing direction starts a fresh hold rather than
+inheriting the old one's cadence. The timing runs off `Kernel.tick_count`, not a
+scene clock, so a menu still repeats while the scene behind it is paused or in
+hit stop. The right stick keeps its one-step-per-flick behaviour; repeat is for
+the held digital directions.
