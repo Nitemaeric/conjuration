@@ -35,6 +35,8 @@ class Game < Conjuration::Game
       self.debug = !debug
       debug? ? $frame_timer.enable : $frame_timer.disable
     end
+
+    cycle_debug_panel_anchor if debug? && inputs.keyboard.key_held?(:meta) && inputs.keyboard.key_up?(:p)
   end
 
   def render

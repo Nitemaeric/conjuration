@@ -194,6 +194,28 @@ def test_game_panel_emits_one_label_per_line_when_debug_on(args, assert)
   assert.true!(game.outputs.debug.drop(1).all? { |p| p[:text] }, "every primitive after the backing is a label")
 end
 
+def test_game_panel_anchors_to_any_corner(args, assert)
+  game = panel_game
+  game.debug = true
+
+  game.send(:render_game_debug_panel)
+  top_left = game.outputs.debug.first
+
+  game.debug_panel_anchor = :bottom_right
+  game.outputs.debug.clear
+  game.send(:render_game_debug_panel)
+  bottom_right = game.outputs.debug.first
+
+  grid = game.grid
+  assert.true!(top_left[:x] < grid.w / 2 && top_left[:y] + top_left[:h] > grid.h / 2, "default backing sits top-left")
+  assert.true!(bottom_right[:x] > grid.w / 2 && bottom_right[:y] < grid.h / 2, "bottom_right moves the backing to the opposite corner")
+  assert.true!(bottom_right[:x] + bottom_right[:w] <= grid.w && bottom_right[:y] >= 0, "the panel stays on screen")
+
+  game.debug_panel_anchor = :top_left
+  3.times { game.cycle_debug_panel_anchor }
+  assert.equal!(game.debug_panel_anchor, :bottom_left, "cycling walks the corner ring")
+end
+
 def test_game_panel_emits_nothing_when_debug_off(args, assert)
   game = panel_game
 

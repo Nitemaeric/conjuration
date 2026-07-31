@@ -103,20 +103,43 @@ module Conjuration
       end
     end
 
-    # Screen-space state panel, anchored top-left so it clears the demo's
-    # top-right FPS readout. Guarded here as well as at the call site: builds
-    # nothing when debug is off. The scene stack and transition/loading phase
-    # (unmerged PR #19) are a per-line addition to #game_debug_panel_lines.
+    DEBUG_PANEL_ANCHORS = [:top_left, :top_right, :bottom_right, :bottom_left].freeze
+
+    # Screen corner for the state panel, so it can be moved off information it
+    # covers. Guarded here as well as at the call site: builds nothing when debug
+    # is off. The scene stack and transition/loading phase (unmerged PR #19) are
+    # a per-line addition to #game_debug_panel_lines.
     def render_game_debug_panel
       return unless debug?
 
-      top = grid.h - 8
       lines = game_debug_panel_lines
       widest = lines.map { |text| gtk.calcstringbox(text)[0] }.max
-      outputs.debug << { x: 4, y: top - lines.length * 18 - 2, w: widest + 8, h: lines.length * 18 + 6, path: :pixel, r: 0, g: 0, b: 0, a: 190 }
+      panel_w = widest + 8
+      panel_h = lines.length * 18 + 6
+
+      anchor = debug_panel_anchor
+      left = anchor == :top_left || anchor == :bottom_left ? 4 : grid.w - 4 - panel_w
+      panel_top = anchor == :top_left || anchor == :top_right ? grid.h - 4 : 4 + panel_h
+
+      outputs.debug << { x: left, y: panel_top - panel_h, w: panel_w, h: panel_h, path: :pixel, r: 0, g: 0, b: 0, a: 190 }
       lines.each_with_index do |text, index|
-        outputs.debug << { x: 8, y: top - index * 18, text: text, size_px: 14, r: 255, g: 255, b: 255, anchor_y: 1 }
+        outputs.debug << { x: left + 4, y: panel_top - 4 - index * 18, text: text, size_px: 14, r: 255, g: 255, b: 255, anchor_y: 1 }
       end
+    end
+
+    def debug_panel_anchor
+      @debug_panel_anchor ||= :top_left
+    end
+
+    def debug_panel_anchor=(anchor)
+      raise ArgumentError, "unknown anchor #{anchor.inspect} (#{DEBUG_PANEL_ANCHORS.join(", ")})" unless DEBUG_PANEL_ANCHORS.include?(anchor)
+
+      @debug_panel_anchor = anchor
+    end
+
+    def cycle_debug_panel_anchor
+      index = DEBUG_PANEL_ANCHORS.index(debug_panel_anchor)
+      self.debug_panel_anchor = DEBUG_PANEL_ANCHORS[(index + 1) % DEBUG_PANEL_ANCHORS.length]
     end
 
     def game_debug_panel_lines
