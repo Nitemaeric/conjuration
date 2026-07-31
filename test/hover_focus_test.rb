@@ -35,10 +35,13 @@ def hover_camera(host)
   camera
 end
 
-# The Geometry shim ignores anchors, so a point just inside the node's raw x/y
-# box hits it.
+# Centre of the node's visual (deanchored) box — hit resolution deanchors
+# explicitly, so points must target where the node is drawn.
 def mouse_over(node, click: false, held: false)
-  { x: node.object.x + 1, y: node.object.y + 1, w: 1, h: 1, wheel: nil, click: click, held: held }
+  obj = node.object
+  x = obj.x - (obj[:anchor_x] || 0) * obj.w + obj.w / 2
+  y = obj.y - (obj[:anchor_y] || 0) * obj.h + obj.h / 2
+  { x: x, y: y, w: 1, h: 1, wheel: nil, click: click, held: held }
 end
 
 def mouse_nowhere
