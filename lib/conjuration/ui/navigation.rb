@@ -73,9 +73,87 @@ module Conjuration
       @active_navigation_group = group
     end
 
+    # Hold-to-repeat for the digital directions, in ticks: a held direction
+    # re-fires after nav_repeat_delay, then every nav_repeat_interval (18/6 =
+    # 300ms/100ms at 60fps). A nil delay disables repeat — the press edge alone
+    # moves focus.
+    @nav_repeat_delay = 18
+    @nav_repeat_interval = 6
+
+    def self.nav_repeat_delay
+      @nav_repeat_delay
+    end
+
+    def self.nav_repeat_delay=(ticks)
+      @nav_repeat_delay = ticks
+    end
+
+    def self.nav_repeat_interval
+      @nav_repeat_interval
+    end
+
+    def self.nav_repeat_interval=(ticks)
+      @nav_repeat_interval = ticks
+    end
+
+    def self.nav_repeat_state
+      @nav_repeat_state ||= {}
+    end
+
+    # Cleared wherever the other focus globals are, so a key held across a scene
+    # change can't carry its timer into the new scene.
+    def self.reset_nav_repeat!
+      @nav_repeat_state = {}
+    end
+
+    # Repeat timing runs off Kernel.tick_count, never a scene clock: menus are
+    # exactly what you navigate while the scene is paused or in hit stop.
+    def self.nav_tick
+      Kernel.tick_count
+    end
+
+    # The navigation step for this tick, from the edge-pressed and held direction
+    # vectors (either may be nil). Resolved once and memoized: the scene and every
+    # camera run the nav pass each frame off the same input, and a second
+    # resolution would advance the repeat timer twice. The input snapshot is part
+    # of the memo key, so a genuinely different query re-resolves.
+    def self.navigation_step(pressed, held, tick)
+      state = nav_repeat_state
+      key = [tick, pressed, held]
+      return state[:step] if state[:key] == key
+
+      state[:key] = key
+      state[:step] = resolve_navigation_step(pressed, held, tick)
+    end
+
+    def self.resolve_navigation_step(pressed, held, tick)
+      state = nav_repeat_state
+
+      # The press edge always steps, and starts the hold.
+      return start_nav_repeat(pressed, tick) if pressed
+      return start_nav_repeat(nil, tick) if held.nil?
+
+      # A direction change with no edge of its own (releasing one axis of a
+      # diagonal) starts a fresh hold rather than inheriting the old timer.
+      return nil if state[:direction] != held && start_nav_repeat(held, tick).nil?
+
+      fire = state[:next_fire]
+      return nil if fire.nil? || tick < fire
+
+      state[:next_fire] = tick + nav_repeat_interval
+      held
+    end
+
+    def self.start_nav_repeat(direction, tick)
+      state = nav_repeat_state
+      state[:direction] = direction
+      state[:next_fire] = direction && nav_repeat_delay && tick + nav_repeat_delay
+      direction
+    end
+
     # Interactive-ness, focus/hover/press queries, navigation groups, and beam
     # spatial navigation. Mixed into Node — the caches (@interactive_nodes,
-    # @navigation_groups, @shortcut_nodes) and the shortcut attribute live there.
+    # @navigation_index, @shortcut_nodes) and the shortcut attribute live there.
     module Navigation
       def interactive_nodes
         @interactive_nodes ||= nodes.select(&:interactive?)
@@ -119,6 +197,15 @@ module Conjuration
         clear_interactive_cache!
       end
 
+      # Reconcilable: the flag is read off the group registry, so a change has to
+      # drop it.
+      def nav_wrap=(value)
+        return if @nav_wrap == value
+
+        @nav_wrap = value
+        clear_interactive_cache!
+      end
+
       # The injected action name backing this node's shortcut — deterministic by
       # id so a game can rebind it, and public so display code can resolve its
       # glyph (e.g. DragonInput.glyph(pad, node.shortcut_action_name)).
@@ -130,7 +217,18 @@ module Conjuration
       # ancestor's `group:`. Ungrouped nodes are omitted: groups are explicit and
       # named, and the game decides which one is active.
       def navigation_groups
-        @navigation_groups ||= accumulate_navigation_groups(nil, {})
+        navigation_index[:groups]
+      end
+
+      # The named group's wrap declaration — `nav_wrap:` on the node that declares
+      # the group: true wraps both axes, :x only horizontal presses, :y only
+      # vertical. nil/false unless declared.
+      def navigation_group_wrap(id)
+        navigation_index[:wraps][id]
+      end
+
+      def navigation_index
+        @navigation_index ||= accumulate_navigation_groups(nil, { groups: {}, wraps: {} })
       end
 
       # The group id a given interactive node belongs to (or nil if ungrouped).
@@ -142,12 +240,14 @@ module Conjuration
       end
 
       # Recursive helper for navigation_groups; threads the nearest enclosing
-      # group down the tree so the innermost group wins.
-      def accumulate_navigation_groups(inherited, groups)
+      # group down the tree so the innermost group wins. Wrapping is a property of
+      # the declaration, so it is recorded against this node's own `group:`.
+      def accumulate_navigation_groups(inherited, index)
         current = group || inherited
-        (groups[current] ||= []) << self if navigable? && current
-        children.each { |child| child.accumulate_navigation_groups(current, groups) }
-        groups
+        index[:wraps][group] = nav_wrap if group && nav_wrap
+        (index[:groups][current] ||= []) << self if navigable? && current
+        children.each { |child| child.accumulate_navigation_groups(current, index) }
+        index
       end
 
       # The interactive node `direction` leads to from `from`, among `candidates`
@@ -158,7 +258,10 @@ module Conjuration
       # categorically outranks every non-beam candidate, however near: this is what
       # makes an aligned neighbour win over a closer diagonal one. Only when the
       # beam is empty do we fall back to the nearest node in a 45-degree cone.
-      def spatial_navigate(from, direction, candidates: navigable_nodes)
+      #
+      # `wrap` (the active group's nav_wrap) turns the dead end at an edge into a
+      # jump to the far side instead of a stay-put.
+      def spatial_navigate(from, direction, candidates: navigable_nodes, wrap: false)
         return candidates.first if from.nil?
 
         source = from.rect
@@ -224,7 +327,75 @@ module Conjuration
           end
         end
 
-        beam_best || fallback_best
+        found = beam_best || fallback_best
+        return found if found || !wrap_applies?(wrap, direction)
+
+        wrap_navigate(from, direction, candidates)
+      end
+
+      # A row that wraps horizontally must still dead-end vertically — otherwise
+      # a down press at a row's edge "wraps" onto the adjacent slot, the only
+      # far-end candidate there is. :x/:y scope the wrap to one axis.
+      def wrap_applies?(wrap, direction)
+        return false unless wrap
+        return true if wrap == true
+        return direction.x != 0 if wrap == :x
+        return direction.y != 0 if wrap == :y
+
+        false
+      end
+
+      # The far-end candidate a press at the edge wraps onto: down at the bottom
+      # lands on the topmost node, right at the right edge on the leftmost. Beam
+      # alignment wins outright over distance, so a grid wraps within its own
+      # column (or row), and only an unaligned wrap falls back to the candidate
+      # nearest the source's axis.
+      def wrap_navigate(from, direction, candidates)
+        source = from.rect
+        origin = source.center
+        horizontal = direction.x != 0
+        main_sign = horizontal ? direction.x : direction.y
+        beam_lo, beam_hi = horizontal ? [source.bottom, source.top] : [source.left, source.right]
+
+        aligned_best = nil
+        aligned_reach = nil
+        aligned_offset = nil
+        any_best = nil
+        any_reach = nil
+        any_offset = nil
+
+        candidates.each do |node|
+          next if node.equal?(from)
+
+          rect = node.rect
+          centre = rect.center
+          if horizontal
+            cand_lo, cand_hi = rect.bottom, rect.top
+            reach = centre.x * main_sign
+            cross_offset = (centre.y - origin.y).abs
+          else
+            cand_lo, cand_hi = rect.left, rect.right
+            reach = centre.y * main_sign
+            cross_offset = (centre.x - origin.x).abs
+          end
+
+          # Smallest reach = furthest back against the pressed direction.
+          if cand_hi > beam_lo && cand_lo < beam_hi
+            if aligned_reach.nil? || reach < aligned_reach || (reach == aligned_reach && cross_offset < aligned_offset)
+              aligned_best = node
+              aligned_reach = reach
+              aligned_offset = cross_offset
+            end
+          end
+
+          if any_reach.nil? || reach < any_reach || (reach == any_reach && cross_offset < any_offset)
+            any_best = node
+            any_reach = reach
+            any_offset = cross_offset
+          end
+        end
+
+        aligned_best || any_best
       end
 
       def interactive?

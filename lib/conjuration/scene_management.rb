@@ -229,6 +229,7 @@ module Conjuration
       UI.hovered_node = nil
       UI.pressed_node = nil
       UI.active_navigation_group = nil
+      UI.reset_nav_repeat!
     end
 
     def snapshot_focus_into(scene)

@@ -18,6 +18,7 @@ module Conjuration
       attr_reader :visible
       attr_reader :inset_top, :inset_right, :inset_bottom, :inset_left
       attr_accessor :group
+      attr_reader :nav_wrap
       attr_reader :overflow
       attr_accessor :scroll_offset
       attr_reader :wrap, :text_break
@@ -42,7 +43,7 @@ module Conjuration
       # @param grow [Numeric, nil] flex grow factor; nil (default) = no growth
       # justify: :stretch — main-axis analog of align: :stretch; children without
       # an authored main size grow equally (explicit grow: factors still compose).
-      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, max_w: nil, max_h: nil, **object, &block)
+      def initialize(object_hash = nil, id: nil, direction: :column, justify: :start, align: :start, gap: 0, padding: 0, visible: true, position: :static, top: nil, right: nil, bottom: nil, left: nil, group: nil, nav_wrap: false, overflow: nil, wrap: nil, text_break: :word, shortcut: nil, grow: nil, max_w: nil, max_h: nil, **object, &block)
         @id = id&.to_sym
         @object = object_hash || object
         # Authored-at-build sizes: grow/stretch write w/h back into object each
@@ -79,6 +80,11 @@ module Conjuration
         # A named navigation group: this node's interactive descendants form one
         # pane for UI.active_navigation_group. nil inherits the nearest ancestor's.
         @group = group
+
+        # nav_wrap: navigation wraps around this group's edges — pressing down at
+        # the bottom lands on the topmost member. Opt-in, read off the node that
+        # declares the group.
+        @nav_wrap = nav_wrap
 
         # overflow governs what happens when content exceeds the box. nil (default)
         # lays out normally until content overflows, then lazily scrolls; :scroll
@@ -202,7 +208,7 @@ module Conjuration
         @descendants = nil
         @interactive_nodes = nil
         @navigable_nodes = nil
-        @navigation_groups = nil
+        @navigation_index = nil
         @shortcut_nodes = nil
         @needs_measure = nil
         parent&.clear_structure_cache!
@@ -221,7 +227,7 @@ module Conjuration
       def clear_interactive_cache!
         @interactive_nodes = nil
         @navigable_nodes = nil
-        @navigation_groups = nil
+        @navigation_index = nil
         @shortcut_nodes = nil
         parent&.clear_interactive_cache!
       end

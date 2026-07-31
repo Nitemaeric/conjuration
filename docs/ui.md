@@ -89,3 +89,35 @@ navigation targets and the pane itself drops out of the candidate list.
 Navigating onto an item scrolls its pane to bring the item into view along with
 the next one in the direction of travel, so you can always see what you are
 about to move onto, and the right stick then scrolls the pane holding focus.
+
+### Navigation groups
+
+`group:` names a pane of interactive nodes; the game activates one at a time via
+`UI.active_navigation_group` (see `activate_navigation`). Arrows move focus
+spatially within the active group, and a press with nothing ahead of it stays
+put.
+
+`nav_wrap:`, declared alongside `group:`, makes that group loop instead:
+pressing down at the bottom lands on the topmost member, up at the top on the
+bottommost, and the same on the horizontal axis. A wrap prefers a member aligned
+with the source, so a grid wraps within its own column or row rather than
+jumping across. Off unless declared — nothing changes for a group without it.
+
+The value scopes the wrap to an axis: `true` wraps both, `:x` only horizontal
+presses, `:y` only vertical. A single row wants `:x` — with `true`, a down
+press at a row's edge has nowhere to go and would "wrap" onto the adjacent
+slot, the only far-end candidate there is.
+
+### Hold-to-repeat
+
+Holding a direction keeps moving focus: the press edge steps immediately, then
+after `UI.nav_repeat_delay` ticks the step repeats every
+`UI.nav_repeat_interval` ticks (18 and 6 by default — 300ms then 100ms at
+60fps). Both are writable; `UI.nav_repeat_delay = nil` switches repeat off and
+leaves the edge-only behaviour.
+
+Releasing resets it, and changing direction starts a fresh hold rather than
+inheriting the old one's cadence. The timing runs off `Kernel.tick_count`, not a
+scene clock, so a menu still repeats while the scene behind it is paused or in
+hit stop. The right stick keeps its one-step-per-flick behaviour; repeat is for
+the held digital directions.

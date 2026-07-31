@@ -126,7 +126,8 @@ class UIScene < Conjuration::Scene
         justify: :center,
         padding: 15,
         gap: 20,
-        group: :skills
+        group: :skills,
+        nav_wrap: :x
       ) do
         8.times do |i|
           node({
@@ -160,7 +161,7 @@ class UIScene < Conjuration::Scene
   # arrows walk them one at a time and the pane scrolls to keep the row after the
   # focused one in view; the wheel and the right stick scroll it too.
   def scroll_panel
-    node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, anchor_x: 1, anchor_y: 0.5, path: :pixel, r: 30, g: 34, b: 44 }, id: :scroll_list, overflow: :scroll, padding: 12, gap: 8, group: :list) do
+    node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, anchor_x: 1, anchor_y: 0.5, path: :pixel, r: 30, g: 34, b: 44 }, id: :scroll_list, overflow: :scroll, padding: 12, gap: 8, group: :list, nav_wrap: :y) do
       16.times do |i|
         node({
           text: "Scrollable item #{i + 1}",

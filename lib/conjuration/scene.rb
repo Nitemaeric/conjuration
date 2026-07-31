@@ -76,6 +76,7 @@ module Conjuration
       UI.hovered_node = nil
       UI.pressed_node = nil
       UI.active_navigation_group = nil # every scene starts inert; opt in via setup
+      UI.reset_nav_repeat! # a key held across the change can't carry its timer in
       UI.focus_cursor[:w] = 0 # re-snap the highlight in the new scene
       setup if respond_to?(:setup)
 
