@@ -294,7 +294,7 @@ def test_ui_scene_skills_row_wraps_around(args, assert)
   scene = ui_scene_scene
   ui = scene.ui
   assert.equal!(ui.navigation_group_wrap(:skills), :x, "the skills bar wraps horizontally only")
-  assert.nil!(ui.navigation_group_wrap(:list), "the other panes are unaffected")
+  assert.equal!(ui.navigation_group_wrap(:list), :y, "the list wraps vertically only")
 
   Conjuration::UI.active_navigation_group = :skills
   Conjuration::UI.focused_node = ui.find(:skill_8)
@@ -355,6 +355,20 @@ def test_ui_scene_list_rows_walk_one_by_one_with_lookahead(args, assert)
 
   assert.equal!(visited, (2..11).map { |i| :"item_#{i}" }, "arrows step one row at a time, never onto the pane")
   assert.true!(pane.scroll_offset > 0, "walking past the visible rows scrolled the pane")
+
+  5.times do
+    $game.input_source = FakeInputSource.new(pressed: [:ui_down])
+    scene.send(:perform_input)
+  end
+  assert.equal!(Conjuration::UI.focused_node.id, :item_16, "down from item_11 reaches the last row")
+
+  $game.input_source = FakeInputSource.new(pressed: [:ui_down])
+  scene.send(:perform_input)
+  wrapped = Conjuration::UI.focused_node
+  assert.equal!(wrapped.id, :item_1, "down at the last row wraps to the first (nav_wrap: :y)")
+  assert.true!(wrapped.object.top + pane.scroll_offset <= pane.object.top &&
+               wrapped.object.bottom + pane.scroll_offset >= pane.object.bottom,
+               "the wrap scrolls the pane back so the first row is in view")
 ensure
   Conjuration::UI.focused_node = nil
   Conjuration::UI.active_navigation_group = nil
