@@ -117,14 +117,53 @@ module Conjuration
       panel_w = widest + 8
       panel_h = lines.length * 18 + 6
 
-      anchor = debug_panel_anchor
-      left = anchor == :top_left || anchor == :bottom_left ? 4 : grid.w - 4 - panel_w
-      panel_top = anchor == :top_left || anchor == :top_right ? grid.h - 4 : 4 + panel_h
+      update_debug_panel_drag
+      left, panel_top = debug_panel_origin(panel_w, panel_h)
 
+      @debug_panel_rect = { x: left, y: panel_top - panel_h, w: panel_w, h: panel_h }
       outputs.debug << { x: left, y: panel_top - panel_h, w: panel_w, h: panel_h, path: :pixel, r: 0, g: 0, b: 0, a: 190 }
       lines.each_with_index do |text, index|
         outputs.debug << { x: left + 4, y: panel_top - 4 - index * 18, text: text, size_px: 14, r: 255, g: 255, b: 255, anchor_y: 1 }
       end
+    end
+
+    def debug_panel_origin(panel_w, panel_h)
+      position = @debug_panel_position
+      if position
+        [position[:x].clamp(0, grid.w - panel_w), position[:y].clamp(panel_h, grid.h)]
+      else
+        anchor = debug_panel_anchor
+        left = anchor == :top_left || anchor == :bottom_left ? 4 : grid.w - 4 - panel_w
+        top = anchor == :top_left || anchor == :top_right ? grid.h - 4 : 4 + panel_h
+        [left, top]
+      end
+    end
+
+    # Grab anywhere on the panel and drag; releasing drops it, cycling the
+    # anchor snaps it back to a corner. The grab test uses last frame's rect —
+    # one frame of lag, invisible at 60fps. Runs in render so dragging still
+    # works during a hit stop, when input/update are skipped.
+    def update_debug_panel_drag
+      source = inputs
+      mouse = source && source.mouse
+      return unless mouse
+
+      drag = @debug_panel_drag
+      if drag
+        if mouse.held
+          @debug_panel_position = { x: mouse.x - drag[:dx], y: mouse.y - drag[:dy] }
+        else
+          @debug_panel_drag = nil
+        end
+        return
+      end
+
+      rect = @debug_panel_rect
+      return unless rect && mouse.click
+      return unless mouse.x >= rect[:x] && mouse.x <= rect[:x] + rect[:w] &&
+                    mouse.y >= rect[:y] && mouse.y <= rect[:y] + rect[:h]
+
+      @debug_panel_drag = { dx: mouse.x - rect[:x], dy: mouse.y - (rect[:y] + rect[:h]) }
     end
 
     def debug_panel_anchor
@@ -135,6 +174,8 @@ module Conjuration
       raise ArgumentError, "unknown anchor #{anchor.inspect} (#{DEBUG_PANEL_ANCHORS.join(", ")})" unless DEBUG_PANEL_ANCHORS.include?(anchor)
 
       @debug_panel_anchor = anchor
+      @debug_panel_position = nil
+      @debug_panel_drag = nil
     end
 
     def cycle_debug_panel_anchor

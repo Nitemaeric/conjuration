@@ -216,6 +216,60 @@ def test_game_panel_anchors_to_any_corner(args, assert)
   assert.equal!(game.debug_panel_anchor, :bottom_left, "cycling walks the corner ring")
 end
 
+def panel_mouse(x, y, click: false, held: false)
+  { last_active: :mouse, mouse: { x: x, y: y, click: click, held: held, wheel: nil } }
+end
+
+def render_panel(game)
+  game.outputs.debug.clear
+  game.send(:render_game_debug_panel)
+  game.outputs.debug.first
+end
+
+def test_game_panel_drags_with_the_mouse(args, assert)
+  $game = GameDouble.new
+  game = panel_game
+  game.debug = true
+
+  $game.inputs = panel_mouse(-10, -10)
+  before = render_panel(game)
+  grab = { x: before[:x] + 5, y: before[:y] + 5 }
+
+  $game.inputs = panel_mouse(grab[:x], grab[:y], click: true, held: true)
+  render_panel(game)
+
+  $game.inputs = panel_mouse(grab[:x] + 200, grab[:y] - 100, held: true)
+  dragged = render_panel(game)
+  assert.equal!(dragged[:x], before[:x] + 200, "the panel follows the mouse horizontally")
+  assert.equal!(dragged[:y], before[:y] - 100, "the panel follows the mouse vertically")
+
+  $game.inputs = panel_mouse(grab[:x] + 200, grab[:y] - 100)
+  $game.inputs = panel_mouse(grab[:x] + 500, grab[:y])
+  released = render_panel(game)
+  assert.equal!(released[:x], dragged[:x], "releasing drops the panel where it was")
+
+  game.debug_panel_anchor = :top_left
+  snapped = render_panel(game)
+  assert.equal!(snapped[:x], before[:x], "cycling the anchor snaps out of the dragged position")
+end
+
+def test_game_panel_drag_stays_on_screen(args, assert)
+  $game = GameDouble.new
+  game = panel_game
+  game.debug = true
+
+  $game.inputs = panel_mouse(-10, -10)
+  before = render_panel(game)
+
+  $game.inputs = panel_mouse(before[:x] + 5, before[:y] + 5, click: true, held: true)
+  render_panel(game)
+
+  $game.inputs = panel_mouse(-500, 5000, held: true)
+  clamped = render_panel(game)
+  assert.equal!(clamped[:x], 0, "the panel clamps to the left edge")
+  assert.equal!(clamped[:y] + clamped[:h], game.grid.h, "the panel clamps below the top edge")
+end
+
 def test_game_panel_emits_nothing_when_debug_off(args, assert)
   game = panel_game
 
