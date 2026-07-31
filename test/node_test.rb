@@ -92,3 +92,24 @@ def test_ui_node_without_action_is_not_interactive(args, assert)
   node = Conjuration::UI::Node.new({ x: 0, y: 0, w: 10, h: 10 })
   assert.true!(!node.interactive?, "no action -> not interactive")
 end
+
+def anchored_node_class
+  Class.new(Conjuration::Node) do
+    attr_accessor :x, :y, :w, :h, :anchor_x, :anchor_y
+  end
+end
+
+def test_rect_omits_nil_anchor_keys(args, assert)
+  rect = anchored_node_class.new(x: 10, y: 20, w: 100, h: 40).rect
+  assert.equal!(rect.key?(:anchor_x), false, "a nil anchor_x emits no key")
+  assert.equal!(rect.key?(:anchor_y), false, "a nil anchor_y emits no key")
+  assert.equal!(rect.left, 10, "the rect is still usable")
+end
+
+def test_rect_keeps_real_anchor_keys(args, assert)
+  rect = anchored_node_class.new(x: 10, y: 20, w: 100, h: 40, anchor_x: 0.5, anchor_y: 1).rect
+  assert.equal!(rect[:anchor_x], 0.5, "a real anchor_x is emitted")
+  assert.equal!(rect[:anchor_y], 1, "a real anchor_y is emitted")
+  assert.equal!(rect.left, -40, "the anchored formula applies")
+  assert.equal!(rect.top, 20, "anchor_y 1 pins the top edge to y")
+end

@@ -1456,3 +1456,34 @@ def test_absolute_child_never_counts_toward_overflow(args, assert)
 
   assert.equal!(box.scroll?, false, "a 200px absolute child overhanging a 50px box is not overflow")
 end
+
+def test_spatial_navigate_skips_a_candidate_with_an_incomplete_rect(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start, gap: 10) do
+    node({ w: 50, h: 50, action: -> {} }, id: :a)
+    node({ w: 50, h: 50, action: -> {} }, id: :b)
+    node({ w: 50, h: 50, action: -> {} }, id: :c)
+  end
+  c.find(:b).object.merge!(w: nil)
+
+  assert.equal!(c.spatial_navigate(c.find(:a), { x: 1, y: 0 }).id, :c, "an unmeasured candidate is skipped, not crashed on")
+end
+
+def test_spatial_navigate_returns_nil_when_the_source_rect_is_incomplete(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start, gap: 10) do
+    node({ w: 50, h: 50, action: -> {} }, id: :a)
+    node({ w: 50, h: 50, action: -> {} }, id: :b)
+  end
+  c.find(:a).object.merge!(w: nil, h: nil)
+
+  assert.equal!(c.spatial_navigate(c.find(:a), { x: 1, y: 0 }), nil, "no centre to navigate from")
+end
+
+def test_spatial_navigate_survives_nil_anchor_keys_on_every_rect(args, assert)
+  c = build_container(direction: :row, justify: :start, align: :start, gap: 10) do
+    node({ w: 50, h: 50, action: -> {} }, id: :a)
+    node({ w: 50, h: 50, action: -> {} }, id: :b)
+  end
+  [:a, :b].each { |id| c.find(id).object.merge!(anchor_x: nil, anchor_y: nil) }
+
+  assert.equal!(c.spatial_navigate(c.find(:a), { x: 1, y: 0 }).id, :b, "nil anchors navigate as anchor 0")
+end

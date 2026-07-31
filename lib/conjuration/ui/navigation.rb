@@ -163,6 +163,10 @@ module Conjuration
 
         source = from.rect
         origin = source.center
+        # A rect still mid-layout (w/h unresolved) yields nil centre components,
+        # and every edge below is nil with it — there is nothing to navigate from.
+        return nil if origin.x.nil? || origin.y.nil?
+
         horizontal = direction.x != 0
 
         main_sign = horizontal ? direction.x : direction.y
@@ -185,6 +189,8 @@ module Conjuration
 
           rect = node.rect
           centre = rect.center
+          next if centre.x.nil? || centre.y.nil?
+
           dx = centre.x - origin.x
           dy = centre.y - origin.y
 
