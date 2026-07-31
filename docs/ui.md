@@ -82,3 +82,10 @@ decides what happens. It defaults to scrolling, materialized only on demand.
 
 Out-of-flow children never count toward overflow, so a deliberate overhang (a
 badge pinned outside its parent's corner) never triggers scrolling.
+
+A scroll container is focusable so an empty one (a pane of prose) can be
+stick-scrolled — but once it holds interactive nodes, those become the
+navigation targets and the pane itself drops out of the candidate list.
+Navigating onto an item scrolls its pane to bring the item into view along with
+the next one in the direction of travel, so you can always see what you are
+about to move onto, and the right stick then scrolls the pane holding focus.

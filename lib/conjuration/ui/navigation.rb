@@ -81,6 +81,27 @@ module Conjuration
         @interactive_nodes ||= nodes.select(&:interactive?)
       end
 
+      # The nodes keyboard/pad navigation may land on. Narrower than
+      # interactive_nodes, which hit-testing and hover still need in full.
+      def navigable_nodes
+        @navigable_nodes ||= nodes.select(&:navigable?)
+      end
+
+      # A scroll container is interactive so an empty pane can be focused and
+      # stick-scrolled, but once it holds interactive items those items represent
+      # it — otherwise focus lands on the pane itself partway down a list. A pane
+      # with its own action is a real target and stays navigable.
+      def navigable?
+        return false unless interactive?
+        return true if has_key?(:action)
+
+        !(scroll? && interactive_descendant?)
+      end
+
+      def interactive_descendant?
+        children.any? { |child| child.interactive? || child.interactive_descendant? }
+      end
+
       # The interactive nodes carrying a shortcut, memoized on the root and rebuilt
       # only when the structure/interactive caches are — so the input loop iterates
       # a cached list each frame rather than rewalking the tree. Empty (and free)
@@ -124,7 +145,7 @@ module Conjuration
       # group down the tree so the innermost group wins.
       def accumulate_navigation_groups(inherited, groups)
         current = group || inherited
-        (groups[current] ||= []) << self if interactive? && current
+        (groups[current] ||= []) << self if navigable? && current
         children.each { |child| child.accumulate_navigation_groups(current, groups) }
         groups
       end
@@ -137,7 +158,7 @@ module Conjuration
       # categorically outranks every non-beam candidate, however near: this is what
       # makes an aligned neighbour win over a closer diagonal one. Only when the
       # beam is empty do we fall back to the nearest node in a 45-degree cone.
-      def spatial_navigate(from, direction, candidates: interactive_nodes)
+      def spatial_navigate(from, direction, candidates: navigable_nodes)
         return candidates.first if from.nil?
 
         source = from.rect

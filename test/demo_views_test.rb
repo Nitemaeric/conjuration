@@ -248,7 +248,7 @@ end
 
 # --- migrated reactive scenes: ui_scene (scroll + multi-group) + multiple_cameras ---
 
-def ui_scene_ui
+def ui_scene_scene
   DragonInput.setup do |c|
     c.action_set(:gameplay) { |s| s.digital(:attack, controller: :b, keyboard: :space) }
   end
@@ -258,7 +258,11 @@ def ui_scene_ui
   scene.ui.view { scene.view }
   scene.ui.render_view
   scene.ui.calculate_layout
-  scene.ui
+  scene
+end
+
+def ui_scene_ui
+  ui_scene_scene.ui
 end
 
 def test_ui_scene_reactive_layout_groups_and_scroll(args, assert)
@@ -275,12 +279,56 @@ def test_ui_scene_reactive_layout_groups_and_scroll(args, assert)
   scroll = ui.find(:scroll_list)
   assert.true!(scroll.scroll?, "the list pane is a scroll container")
   assert.true!(scroll.max_scroll > 0, "16 items overflow the 240px box")
-  assert.true!(groups[:list].any? { |member| member.equal?(scroll) }, "the scroll container is its pane's navigable member")
+  assert.equal!(groups[:list].length, 16, "the rows are the pane's navigable members")
+  assert.true!(groups[:list].none? { |member| member.equal?(scroll) }, "the pane holding them is not itself a nav target")
 
   assert.true!(!ui.find(:back_badge).nil?, "the Back shortcut badge mounts as a component")
 ensure
   Conjuration::UI.focused_node = nil
   Conjuration::UI.active_navigation_group = nil
+  DragonInput.reset!
+end
+
+# The scroll pane's acceptance case, driven through the scene's own input pass:
+# arrows walk the rows one at a time, and the pane keeps both the focused row and
+# the one after it inside its box.
+def test_ui_scene_list_rows_walk_one_by_one_with_lookahead(args, assert)
+  scene = ui_scene_scene
+  ui = scene.ui
+  pane = ui.find(:scroll_list)
+  Conjuration::UI.active_navigation_group = :list
+  $game.inputs = {
+    last_active: :controller,
+    mouse: mouse_nowhere,
+    keyboard: { key_down: { tab: nil } },
+    controller_one: { key_down: { r1: nil }, right_analog_y_perc: 0 }
+  }
+  $game.input_source = FakeInputSource.new
+
+  scene.send(:perform_input)
+  assert.equal!(Conjuration::UI.focused_node.id, :item_1, "focus seeds on the first row, never on the pane")
+
+  visited = []
+  10.times do |step|
+    $game.input_source = FakeInputSource.new(pressed: [:ui_down])
+    scene.send(:perform_input)
+
+    row = Conjuration::UI.focused_node
+    visited << row.id
+    next_row = ui.find(:"item_#{step + 3}")
+
+    assert.true!(row.object.bottom + pane.scroll_offset >= pane.object.bottom, "#{row.id} is fully in view (bottom)")
+    assert.true!(row.object.top + pane.scroll_offset <= pane.object.top, "#{row.id} is fully in view (top)")
+    assert.true!(next_row.object.bottom + pane.scroll_offset >= pane.object.bottom, "the row after #{row.id} is revealed too")
+  end
+
+  assert.equal!(visited, (2..11).map { |i| :"item_#{i}" }, "arrows step one row at a time, never onto the pane")
+  assert.true!(pane.scroll_offset > 0, "walking past the visible rows scrolled the pane")
+ensure
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.active_navigation_group = nil
+  $game.inputs = nil
+  $game.input_source = nil
   DragonInput.reset!
 end
 

@@ -156,12 +156,18 @@ class UIScene < Conjuration::Scene
     end
   end
 
-  # A fixed-height panel whose contents overflow and scroll with the wheel (or
-  # the right stick once navigated to).
+  # A fixed-height panel whose contents overflow. Every row is interactive, so
+  # arrows walk them one at a time and the pane scrolls to keep the row after the
+  # focused one in view; the wheel and the right stick scroll it too.
   def scroll_panel
     node({ x: 20.from_right, y: grid.h / 2 - 40, w: 230, h: 240, anchor_x: 1, anchor_y: 0.5, path: :pixel, r: 30, g: 34, b: 44 }, id: :scroll_list, overflow: :scroll, padding: 12, gap: 8, group: :list) do
       16.times do |i|
-        node({ text: "Scrollable item #{i + 1}", r: 230, g: 230, b: 240 }, id: "item_#{i + 1}")
+        node({
+          text: "Scrollable item #{i + 1}",
+          r: 230, g: 230, b: 240,
+          action: -> { puts "item #{i + 1}" },
+          hover: { r: 255, g: 214, b: 120 }
+        }, id: "item_#{i + 1}")
       end
     end
   end
