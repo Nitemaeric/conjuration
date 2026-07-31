@@ -139,23 +139,36 @@ module Conjuration
         strips
       end
 
-      # The smallest/deepest node whose resolved box contains the point. Ties in
-      # depth break toward the smaller area, so a child inside a same-depth sibling
-      # stack still resolves to the tightest enclosing node.
+      # The node the user actually sees under the point, resolved by PAINT ORDER —
+      # not by depth or area, which pick a deep tiny background tile over the
+      # foreground panel drawn on top of it. collect_primitives emits a node then
+      # its children in order, so a later sibling paints over an earlier one:
+      # descend back-to-front and take the first hit, falling back to the node
+      # itself when no child hits.
       def node_at_point(root, x, y)
-        best = nil
-        best_depth = -1
+        hit_at(root, x, y)
+      end
 
-        walk(root, 0) do |node, depth|
-          next unless contains?(node, x, y)
+      def hit_at(node, x, y)
+        inside = contains?(node, x, y)
 
-          if depth > best_depth || (depth == best_depth && area(node) < area(best))
-            best = node
-            best_depth = depth
-          end
+        # A render-target container clips its subtree — outside its box its
+        # overflowing children aren't visible, so don't descend. Inside it, its
+        # children are drawn shifted by scroll_offset (Scroll#render_scroll_target),
+        # so screen = layout + offset: test them in content space.
+        return nil if node.render_target? && !inside
+
+        child_y = node.render_target? ? y - node.scroll_offset : y
+
+        index = node.children.length - 1
+        while index >= 0
+          hit = hit_at(node.children[index], x, child_y)
+          return hit if hit
+
+          index -= 1
         end
 
-        best
+        inside ? node : nil
       end
 
       def kind(node)
@@ -404,18 +417,6 @@ module Conjuration
 
         x >= bounds[:x] && x <= bounds[:x] + bounds[:w] &&
           y >= bounds[:y] && y <= bounds[:y] + bounds[:h]
-      end
-
-      def area(node)
-        bounds = draw_bounds(node)
-        return nil unless bounds
-
-        bounds[:w] * bounds[:h]
-      end
-
-      def walk(node, depth, &block)
-        block.call(node, depth)
-        node.children.each { |child| walk(child, depth + 1, &block) }
       end
 
       def clamp(value, low, high)

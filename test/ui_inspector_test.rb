@@ -152,9 +152,9 @@ def test_kind_classification(args, assert)
   assert.equal!(Inspector.annotate(ui.find(:floating))[:kind], :out_of_flow, "an absolute child is out of flow")
 end
 
-# --- Deepest-node-at-point hit resolution -------------------------------------
+# --- Node-at-point hit resolution (paint order) -------------------------------
 
-def test_node_at_point_resolves_deepest(args, assert)
+def test_node_at_point_resolves_the_child_painted_over_its_parent(args, assert)
   ui = inspector_root do
     node({ x: 0, y: 0, w: 400, h: 400 }, id: :outer, direction: :column, justify: :start, align: :start) do
       node({ w: 200, h: 200, primitive_marker: :solid }, id: :inner)
@@ -162,8 +162,8 @@ def test_node_at_point_resolves_deepest(args, assert)
   end
 
   # inner spans x[0,200] y[200,400]; outer fills the 400x400 canvas.
-  assert.equal!(Inspector.node_at_point(ui, 100, 300).id, :inner, "a point inside the inner box resolves to it")
-  assert.equal!(Inspector.node_at_point(ui, 300, 100).id, :outer, "a point outside the inner box resolves to its container")
+  assert.equal!(Inspector.node_at_point(ui, 100, 300).id, :inner, "the child painted last wins over its parent")
+  assert.equal!(Inspector.node_at_point(ui, 300, 100).id, :outer, "a point no child covers falls back to the container")
 end
 
 def test_node_at_point_nil_outside_the_tree(args, assert)
@@ -175,6 +175,73 @@ def test_node_at_point_nil_outside_the_tree(args, assert)
 
   # The point lies outside both :box and the root canvas origin corner it sits on.
   assert.nil!(Inspector.node_at_point(ui, 1000, 1000), "a point outside every box resolves to nothing")
+end
+
+# The reported bug: a full-screen :background of small tiles is deeper and far
+# smaller than the foreground panel drawn over it, so depth/area tiebreaks
+# resolved a 40x40 tile instead of the panel under the cursor. Paint order is the
+# only correct signal — the later sibling subtree wins.
+def test_later_sibling_subtree_wins_over_an_earlier_deeper_smaller_one(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 400, h: 400 }, id: :screen, justify: :start, align: :start) do
+      node({ x: 0, y: 0, w: 400, h: 400 }, id: :background, position: :absolute, top: 0, left: 0, justify: :start, align: :start) do
+        node({ x: 0, y: 360, w: 400, h: 40 }, id: :tile_row, position: :absolute, top: 0, left: 0, direction: :row, justify: :start, align: :start) do
+          node({ w: 40, h: 40, primitive_marker: :solid }, id: :tile_a)
+          node({ w: 40, h: 40, primitive_marker: :solid }, id: :tile_b)
+        end
+      end
+
+      node({ x: 0, y: 0, w: 400, h: 400, primitive_marker: :solid }, id: :panel, position: :absolute, top: 0, left: 0)
+    end
+  end
+
+  # The point sits over :tile_b (deep, 40x40) AND over :panel, which is painted
+  # after the whole :background subtree.
+  hit = Inspector.node_at_point(ui, 60, 380)
+
+  assert.equal!(hit.id, :panel, "the later-painted foreground panel wins over the deeper, smaller background tile")
+end
+
+def test_render_target_container_clips_hit_testing_to_its_box(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 300, w: 100, h: 100 }, id: :pane, overflow: :scroll, justify: :start, align: :start) do
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :first)
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :second)
+    end
+  end
+
+  pane = ui.find(:pane)
+  second = ui.find(:second)
+  assert.equal!(pane.scroll?, true, "the pane is a render-target scroll container")
+
+  # The point is inside :second's laid-out box (y[240,320]) but outside the pane's
+  # (y[300,400]) — so without clipping it would wrongly resolve the child that is
+  # in fact clipped away. It falls through to the root instead, which draws no readout.
+  assert.true!(second.object.bottom <= 250 && 250 <= second.object.top, "the point lies inside the clipped child's laid-out box")
+  assert.false!(Inspector.contains?(pane, 40, 250), "but outside the pane's own box")
+
+  hit = Inspector.node_at_point(ui, 40, 250)
+  assert.equal!(hit.id, :root, "a point outside the pane never resolves its overflowing children")
+end
+
+def test_scrolled_pane_resolves_the_child_at_its_drawn_position(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 300, w: 100, h: 100 }, id: :pane, overflow: :scroll, justify: :start, align: :start) do
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :first)
+      node({ w: 80, h: 80, primitive_marker: :solid }, id: :second)
+    end
+  end
+
+  pane = ui.find(:pane)
+
+  # Unscrolled, the pane's top band shows :first (laid out at y[320,400]).
+  assert.equal!(Inspector.node_at_point(ui, 40, 380).id, :first, "the top band shows the first child before scrolling")
+
+  # Scrolling by 80 draws :second where :first was: emission shifts children by
+  # +scroll_offset, so the same screen point now lands on :second.
+  pane.scroll_offset = 80
+
+  assert.equal!(Inspector.node_at_point(ui, 40, 380).id, :second, "after scrolling, the same point resolves the child now drawn there")
 end
 
 def test_identity_falls_back_to_nearest_identified_ancestor(args, assert)
