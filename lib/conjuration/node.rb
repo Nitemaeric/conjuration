@@ -40,8 +40,8 @@ module Conjuration
 
     def rect
       { x: x, y: y, w: w, h: h }.tap do |rect|
-        rect[:anchor_x] = anchor_x if respond_to?(:anchor_x)
-        rect[:anchor_y] = anchor_y if respond_to?(:anchor_y)
+        rect[:anchor_x] = anchor_x if respond_to?(:anchor_x) && !anchor_x.nil?
+        rect[:anchor_y] = anchor_y if respond_to?(:anchor_y) && !anchor_y.nil?
       end
     end
   end
