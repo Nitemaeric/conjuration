@@ -140,7 +140,46 @@ module Conjuration
       end
 
       def find_interactive_intersect(rect)
-        Geometry.find_intersect_rect(rect, interactive_nodes)
+        deepest_hit(rect.x, rect.y) { |node| node.interactive? }
+      end
+
+      def find_scroll_intersect(rect)
+        deepest_hit(rect.x, rect.y) { |node| node.scroll? }
+      end
+
+      # Deepest matching node under a screen point, resolved the way rendering
+      # actually paints: later siblings draw on top (last hit wins), a
+      # render-target container clips its subtree (a point outside its box can't
+      # hit children whose layout rects overflow it), and a scrolled pane's
+      # children are tested in content space — their layout rects are unshifted,
+      # the scroll_offset shift happens at emission (Scroll#render_scroll_target).
+      def deepest_hit(x, y, &predicate)
+        return nil if render_target? && !point_hit?(x, y)
+
+        child_y = render_target? ? y - scroll_offset : y
+        hit = nil
+        children.each do |child|
+          found = child.deepest_hit(x, child_y, &predicate)
+          hit = found if found
+        end
+        return hit if hit
+
+        self if predicate.call(self) && point_hit?(x, y)
+      end
+
+      # Anchor-aware point test against the node's visual box (laid-out children
+      # carry anchor_y: 1, so raw y is their top edge). Explicit deanchoring keeps
+      # this identical under DR's native Geometry and the harness shim, which
+      # ignores anchors.
+      def point_hit?(px, py)
+        r = rect
+        return false if r[:x].nil? || r[:y].nil?
+
+        w = r[:w] || 0
+        h = r[:h] || 0
+        x = r[:x] - (r[:anchor_x] || 0) * w
+        y = r[:y] - (r[:anchor_y] || 0) * h
+        px > x && px < x + w && py > y && py < y + h
       end
 
       def descendants

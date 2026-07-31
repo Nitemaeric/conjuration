@@ -85,11 +85,11 @@ module Conjuration
       end
     end
 
-    # Mouse wheel scrolls the overflow: :scroll container under the cursor.
+    # Mouse wheel scrolls the innermost scroll container under the cursor.
     def scroll_under_mouse
       return unless inputs.mouse.wheel
 
-      container = ui.nodes.find { |node| node.scroll? && node.intersect_rect?(inputs.mouse) }
+      container = ui.find_scroll_intersect(inputs.mouse)
       return unless container
 
       container.scroll_offset = (container.scroll_offset - inputs.mouse.wheel.y * 20).clamp(0, container.max_scroll)
@@ -135,8 +135,10 @@ module Conjuration
         end
       end
 
-      hovered = UI.hovered_node
-      trigger_node(hovered) if inputs.mouse.click && hovered && hovered.intersect_rect?(inputs.mouse)
+      # Trigger on this frame's hit, not a raw-rect recheck — a scrolled child's
+      # layout rect doesn't match its drawn position, so the recheck would reject
+      # exactly the clicks deepest_hit just resolved through content space.
+      trigger_node(hovered) if inputs.mouse.click && hovered
     end
 
     # The cursor is left as-is here — a mouse affordance, irrelevant when
@@ -188,9 +190,12 @@ module Conjuration
     end
 
     # A mouse press acts on the hovered node; a held confirm on the focused one.
+    # The hit re-resolve (not a raw rect check) guards against a stale hover
+    # global from an earlier mouse frame while staying correct for scrolled
+    # children, whose layout rects don't match their drawn position.
     def pressed_target
       hovered = UI.hovered_node
-      return hovered if hovered && inputs.mouse.held && hovered.intersect_rect?(inputs.mouse)
+      return hovered if hovered && inputs.mouse.held && ui.find_interactive_intersect(inputs.mouse).equal?(hovered)
 
       focused = UI.focused_node
       return focused if focused && game.input_source.pressed?(game.ui_pad, :ui_confirm)
