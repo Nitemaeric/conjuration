@@ -104,6 +104,101 @@ module Conjuration
         [content_height - object.h, 0].max
       end
 
+      # The nearest enclosing scroll container, if any — what the right stick
+      # scrolls while one of its items holds focus.
+      def enclosing_scroll_pane
+        ancestor = parent
+        ancestor = ancestor.parent until ancestor.nil? || ancestor.scroll?
+        ancestor
+      end
+
+      # A node's layout rect is its UNSHIFTED position: panes shift their content
+      # at emission only (render_scroll_target). This is what to add to reach the
+      # position it is actually drawn at.
+      def ancestor_scroll_offset
+        offset = 0
+        ancestor = parent
+        while ancestor
+          offset += ancestor.scroll_offset if ancestor.render_target?
+          ancestor = ancestor.parent
+        end
+        offset
+      end
+
+      # Scroll every enclosing pane so this node's box sits inside it, and — given
+      # a direction of travel — so the neighbour that way is revealed too, so the
+      # player can see what they are about to navigate onto. Innermost pane first:
+      # each adjustment moves this node within the panes above it, which is what
+      # the accumulated `inner` offset carries.
+      def scroll_into_view(direction = nil)
+        inner = 0
+        ancestor = parent
+        while ancestor
+          if ancestor.render_target?
+            ancestor.reveal_child(self, inner, direction) if ancestor.scroll?
+            inner += ancestor.scroll_offset
+          end
+          ancestor = ancestor.parent
+        end
+      end
+
+      # Pick the offset that brings `node` fully inside this pane, then extend it
+      # toward revealing the lookahead neighbour as far as the node itself allows.
+      def reveal_child(node, inner, direction)
+        box_top = object.top
+        box_bottom = object.bottom
+        node_top = node.object.top
+        node_bottom = node.object.bottom
+        return if box_top.nil? || box_bottom.nil? || node_top.nil? || node_bottom.nil?
+
+        # Screen y = layout y + scroll_offset, so a larger offset raises content.
+        low = box_bottom - node_bottom - inner
+        high = box_top - node_top - inner
+
+        offset = scroll_offset
+        offset = low if offset < low
+        offset = high if offset > high # a node taller than the box aligns to its top
+
+        neighbour = lookahead_neighbour(node, direction)
+        if neighbour
+          if direction.y < 0
+            want = box_bottom - neighbour.object.bottom - inner
+            want = high if want > high
+            offset = want if want > offset
+          else
+            want = box_top - neighbour.object.top - inner
+            want = low if want < low
+            offset = want if want < offset
+          end
+        end
+
+        self.scroll_offset = offset.clamp(0, max_scroll)
+      end
+
+      # The in-flow sibling the travel direction leads to. Vertical only — that is
+      # the axis a pane scrolls on.
+      def lookahead_neighbour(node, direction)
+        return nil if direction.nil? || direction.y == 0
+
+        best = nil
+        node.parent.children.each do |sibling|
+          next if sibling.equal?(node) || sibling.absolute? || !sibling.visible_in_tree?
+
+          top = sibling.object.top
+          bottom = sibling.object.bottom
+          next if top.nil? || bottom.nil?
+
+          if direction.y < 0
+            next unless top <= node.object.bottom
+            best = sibling if best.nil? || top > best.object.top
+          else
+            next unless bottom >= node.object.top
+            best = sibling if best.nil? || bottom < best.object.bottom
+          end
+        end
+        best
+      end
+
       # A thin thumb on the right edge, sized and placed by the scroll position.
       def scrollbar_primitives
         return [] if max_scroll <= 0

@@ -95,16 +95,26 @@ module Conjuration
       container.scroll_offset = (container.scroll_offset - inputs.mouse.wheel.y * 20).clamp(0, container.max_scroll)
     end
 
-    # The right thumbstick scrolls the focused scroll container (when this ui owns
-    # it), so a navigated-to scroll pane scrolls by default.
+    # The right thumbstick scrolls the pane focus is in (when this ui owns it), so
+    # a navigated-to list scrolls by default.
     def scroll_focused
-      focused = UI.focused_node
-      return unless focused&.scroll? && ui.interactive_nodes.include?(focused)
+      pane = focused_scroll_pane
+      return unless pane
 
       delta = inputs.controller_one.right_analog_y_perc
       return if delta.abs < 0.15
 
-      focused.scroll_offset = (focused.scroll_offset - delta * 14).clamp(0, focused.max_scroll)
+      pane.scroll_offset = (pane.scroll_offset - delta * 14).clamp(0, pane.max_scroll)
+    end
+
+    # The focused node when it is itself a pane (an empty pane is focusable),
+    # otherwise the pane enclosing it — a pane holding items is never focused.
+    def focused_scroll_pane
+      focused = UI.focused_node
+      return nil unless focused && ui.interactive_nodes.include?(focused)
+      return focused if focused.scroll?
+
+      focused.enclosing_scroll_pane
     end
 
     def perform_update
@@ -150,7 +160,10 @@ module Conjuration
       # Spatial nav stays within the active pane.
       candidates = ui.navigation_groups[UI.active_navigation_group] || []
       target = ui.spatial_navigate(UI.focused_node, direction, candidates: candidates)
-      UI.focused_node = target if target
+      return unless target
+
+      UI.focused_node = target
+      target.scroll_into_view(direction)
     end
 
     # Left unnormalized (a diagonal fires both axes); spatial_navigate reads only
@@ -183,6 +196,7 @@ module Conjuration
       return if members.any? { |member| member.equal?(UI.focused_node) }
 
       UI.focused_node = members.first
+      members.first.scroll_into_view
     end
 
     def confirm_pressed?
@@ -264,7 +278,9 @@ module Conjuration
 
       rect = focused.rect
       x = rect.x - (rect.anchor_x || 0) * rect.w
-      y = rect.y - (rect.anchor_y || 0) * rect.h
+      # Layout rects are unshifted; enclosing panes shift their content at
+      # emission, so the indicator has to follow them by hand.
+      y = rect.y - (rect.anchor_y || 0) * rect.h + focused.ancestor_scroll_offset
 
       cursor = UI.focus_cursor
       if cursor[:w] == 0 # uninitialised / reset on scene change: snap, don't slide

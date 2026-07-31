@@ -201,6 +201,7 @@ module Conjuration
         @nodes = nil
         @descendants = nil
         @interactive_nodes = nil
+        @navigable_nodes = nil
         @navigation_groups = nil
         @shortcut_nodes = nil
         @needs_measure = nil
@@ -219,6 +220,7 @@ module Conjuration
       # the interactive-ness caches go stale on a visible/disabled/shortcut flip.
       def clear_interactive_cache!
         @interactive_nodes = nil
+        @navigable_nodes = nil
         @navigation_groups = nil
         @shortcut_nodes = nil
         parent&.clear_interactive_cache!
