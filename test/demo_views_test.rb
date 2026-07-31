@@ -289,12 +289,12 @@ ensure
   DragonInput.reset!
 end
 
-# The skills bar opts into wrap-around (nav_wrap: true), so the row is a loop.
+# The skills bar opts into horizontal wrap-around (nav_wrap: :x), so the row is a loop.
 def test_ui_scene_skills_row_wraps_around(args, assert)
   scene = ui_scene_scene
   ui = scene.ui
-  assert.equal!(ui.navigation_group_wrap?(:skills), true, "the skills bar declares wrapping")
-  assert.equal!(ui.navigation_group_wrap?(:list), false, "the other panes are unaffected")
+  assert.equal!(ui.navigation_group_wrap(:skills), :x, "the skills bar wraps horizontally only")
+  assert.nil!(ui.navigation_group_wrap(:list), "the other panes are unaffected")
 
   Conjuration::UI.active_navigation_group = :skills
   Conjuration::UI.focused_node = ui.find(:skill_8)

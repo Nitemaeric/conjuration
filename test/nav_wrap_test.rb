@@ -40,7 +40,7 @@ def wrap_grid_ui
 end
 
 def navigate_in_group(ui, from, direction, group: :menu)
-  ui.spatial_navigate(ui.find(from), direction, candidates: ui.navigation_groups[group], wrap: ui.navigation_group_wrap?(group))
+  ui.spatial_navigate(ui.find(from), direction, candidates: ui.navigation_groups[group], wrap: ui.navigation_group_wrap(group))
 end
 
 def test_down_at_the_bottom_wraps_to_the_top(args, assert)
@@ -100,7 +100,7 @@ end
 def test_no_wrap_without_the_flag(args, assert)
   ui = wrap_column_ui(nav_wrap: false)
 
-  assert.equal!(ui.navigation_group_wrap?(:menu), false, "the group does not wrap")
+  assert.nil!(ui.navigation_group_wrap(:menu), "the group does not wrap")
   assert.nil!(navigate_in_group(ui, :c, { x: 0, y: -1 }), "down at the bottom stays put, as before")
   assert.nil!(navigate_in_group(ui, :a, { x: 0, y: 1 }), "and up at the top")
 end
@@ -138,13 +138,13 @@ def test_nav_wrap_reconciles_frame_to_frame(args, assert)
   ui.render_view
   ui.calculate_layout
 
-  assert.equal!(ui.navigation_group_wrap?(:menu), true, "a declared nav_wrap reaches the group registry")
+  assert.equal!(ui.navigation_group_wrap(:menu), true, "a declared nav_wrap reaches the group registry")
 
   host.wrapping = false
   ui.render_view
   ui.calculate_layout
 
-  assert.equal!(ui.navigation_group_wrap?(:menu), false, "turning it off re-derives the registry")
+  assert.nil!(ui.navigation_group_wrap(:menu), "turning it off re-derives the registry")
   assert.nil!(navigate_in_group(ui, :b, { x: 0, y: -1 }), "and navigation stops wrapping")
 end
 
@@ -199,4 +199,37 @@ def test_wrapping_up_onto_the_last_row_scrolls_the_pane_down(args, assert)
   assert.equal!(pane.scroll_offset, 90, "the pane scrolls to the end to reveal it")
 ensure
   reset_input_globals
+end
+
+def axis_row_ui(wrap)
+  Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 300, h: 60 }, id: :row, group: :menu, nav_wrap: wrap, direction: :row, gap: 10) do
+      node({ w: 60, h: 40, action: -> {} }, id: :a)
+      node({ w: 60, h: 40, action: -> {} }, id: :b)
+      node({ w: 60, h: 40, action: -> {} }, id: :c)
+    end
+  end
+end
+
+def test_axis_scoped_wrap_only_fires_on_its_axis(args, assert)
+  ui = axis_row_ui(:x)
+
+  wrapped = navigate_in_group(ui, :c, { x: 1, y: 0 })
+  assert.equal!(wrapped.id, :a, "nav_wrap: :x wraps a horizontal press")
+  assert.nil!(navigate_in_group(ui, :b, { x: 0, y: -1 }), "a down press dead-ends instead of toggling onto a neighbour")
+  assert.nil!(navigate_in_group(ui, :b, { x: 0, y: 1 }), "an up press dead-ends too")
+end
+
+def test_true_still_wraps_both_axes(args, assert)
+  ui = axis_row_ui(true)
+
+  assert.equal!(navigate_in_group(ui, :c, { x: 1, y: 0 }).id, :a, "true wraps horizontally")
+  assert.true!(!navigate_in_group(ui, :b, { x: 0, y: -1 }).nil?, "true wraps vertical presses as before")
+end
+
+def test_y_scoped_wrap_ignores_horizontal_presses(args, assert)
+  ui = wrap_column_ui(nav_wrap: :y)
+
+  assert.equal!(navigate_in_group(ui, :c, { x: 0, y: -1 }).id, :a, "nav_wrap: :y wraps a vertical press")
+  assert.nil!(navigate_in_group(ui, :a, { x: 1, y: 0 }), "a horizontal press dead-ends")
 end

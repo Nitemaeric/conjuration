@@ -97,8 +97,13 @@ about to move onto, and the right stick then scrolls the pane holding focus.
 spatially within the active group, and a press with nothing ahead of it stays
 put.
 
-`nav_wrap: true`, declared alongside `group:`, makes that group loop instead:
+`nav_wrap:`, declared alongside `group:`, makes that group loop instead:
 pressing down at the bottom lands on the topmost member, up at the top on the
 bottommost, and the same on the horizontal axis. A wrap prefers a member aligned
 with the source, so a grid wraps within its own column or row rather than
 jumping across. Off unless declared — nothing changes for a group without it.
+
+The value scopes the wrap to an axis: `true` wraps both, `:x` only horizontal
+presses, `:y` only vertical. A single row wants `:x` — with `true`, a down
+press at a row's edge has nowhere to go and would "wrap" onto the adjacent
+slot, the only far-end candidate there is.

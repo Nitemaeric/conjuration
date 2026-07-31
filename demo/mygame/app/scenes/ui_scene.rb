@@ -127,7 +127,7 @@ class UIScene < Conjuration::Scene
         padding: 15,
         gap: 20,
         group: :skills,
-        nav_wrap: true
+        nav_wrap: :x
       ) do
         8.times do |i|
           node({

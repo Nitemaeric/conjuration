@@ -142,10 +142,11 @@ module Conjuration
         navigation_index[:groups]
       end
 
-      # Whether the named group wraps at its edges — `nav_wrap: true` on the node
-      # that declares the group. Off unless declared.
-      def navigation_group_wrap?(id)
-        !!navigation_index[:wraps][id]
+      # The named group's wrap declaration — `nav_wrap:` on the node that declares
+      # the group: true wraps both axes, :x only horizontal presses, :y only
+      # vertical. nil/false unless declared.
+      def navigation_group_wrap(id)
+        navigation_index[:wraps][id]
       end
 
       def navigation_index
@@ -165,7 +166,7 @@ module Conjuration
       # the declaration, so it is recorded against this node's own `group:`.
       def accumulate_navigation_groups(inherited, index)
         current = group || inherited
-        index[:wraps][group] = true if group && nav_wrap
+        index[:wraps][group] = nav_wrap if group && nav_wrap
         (index[:groups][current] ||= []) << self if navigable? && current
         children.each { |child| child.accumulate_navigation_groups(current, index) }
         index
@@ -249,9 +250,21 @@ module Conjuration
         end
 
         found = beam_best || fallback_best
-        return found if found || !wrap
+        return found if found || !wrap_applies?(wrap, direction)
 
         wrap_navigate(from, direction, candidates)
+      end
+
+      # A row that wraps horizontally must still dead-end vertically — otherwise
+      # a down press at a row's edge "wraps" onto the adjacent slot, the only
+      # far-end candidate there is. :x/:y scope the wrap to one axis.
+      def wrap_applies?(wrap, direction)
+        return false unless wrap
+        return true if wrap == true
+        return direction.x != 0 if wrap == :x
+        return direction.y != 0 if wrap == :y
+
+        false
       end
 
       # The far-end candidate a press at the edge wraps onto: down at the bottom
