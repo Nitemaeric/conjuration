@@ -89,3 +89,16 @@ navigation targets and the pane itself drops out of the candidate list.
 Navigating onto an item scrolls its pane to bring the item into view along with
 the next one in the direction of travel, so you can always see what you are
 about to move onto, and the right stick then scrolls the pane holding focus.
+
+### Navigation groups
+
+`group:` names a pane of interactive nodes; the game activates one at a time via
+`UI.active_navigation_group` (see `activate_navigation`). Arrows move focus
+spatially within the active group, and a press with nothing ahead of it stays
+put.
+
+`nav_wrap: true`, declared alongside `group:`, makes that group loop instead:
+pressing down at the bottom lands on the topmost member, up at the top on the
+bottommost, and the same on the horizontal axis. A wrap prefers a member aligned
+with the source, so a grid wraps within its own column or row rather than
+jumping across. Off unless declared — nothing changes for a group without it.

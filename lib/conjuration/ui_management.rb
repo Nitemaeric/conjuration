@@ -158,8 +158,9 @@ module Conjuration
       return if direction.nil?
 
       # Spatial nav stays within the active pane.
-      candidates = ui.navigation_groups[UI.active_navigation_group] || []
-      target = ui.spatial_navigate(UI.focused_node, direction, candidates: candidates)
+      group = UI.active_navigation_group
+      candidates = ui.navigation_groups[group] || []
+      target = ui.spatial_navigate(UI.focused_node, direction, candidates: candidates, wrap: ui.navigation_group_wrap?(group))
       return unless target
 
       UI.focused_node = target

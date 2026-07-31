@@ -75,7 +75,7 @@ module Conjuration
 
     # Interactive-ness, focus/hover/press queries, navigation groups, and beam
     # spatial navigation. Mixed into Node — the caches (@interactive_nodes,
-    # @navigation_groups, @shortcut_nodes) and the shortcut attribute live there.
+    # @navigation_index, @shortcut_nodes) and the shortcut attribute live there.
     module Navigation
       def interactive_nodes
         @interactive_nodes ||= nodes.select(&:interactive?)
@@ -119,6 +119,15 @@ module Conjuration
         clear_interactive_cache!
       end
 
+      # Reconcilable: the flag is read off the group registry, so a change has to
+      # drop it.
+      def nav_wrap=(value)
+        return if @nav_wrap == value
+
+        @nav_wrap = value
+        clear_interactive_cache!
+      end
+
       # The injected action name backing this node's shortcut — deterministic by
       # id so a game can rebind it, and public so display code can resolve its
       # glyph (e.g. DragonInput.glyph(pad, node.shortcut_action_name)).
@@ -130,7 +139,17 @@ module Conjuration
       # ancestor's `group:`. Ungrouped nodes are omitted: groups are explicit and
       # named, and the game decides which one is active.
       def navigation_groups
-        @navigation_groups ||= accumulate_navigation_groups(nil, {})
+        navigation_index[:groups]
+      end
+
+      # Whether the named group wraps at its edges — `nav_wrap: true` on the node
+      # that declares the group. Off unless declared.
+      def navigation_group_wrap?(id)
+        !!navigation_index[:wraps][id]
+      end
+
+      def navigation_index
+        @navigation_index ||= accumulate_navigation_groups(nil, { groups: {}, wraps: {} })
       end
 
       # The group id a given interactive node belongs to (or nil if ungrouped).
@@ -142,12 +161,14 @@ module Conjuration
       end
 
       # Recursive helper for navigation_groups; threads the nearest enclosing
-      # group down the tree so the innermost group wins.
-      def accumulate_navigation_groups(inherited, groups)
+      # group down the tree so the innermost group wins. Wrapping is a property of
+      # the declaration, so it is recorded against this node's own `group:`.
+      def accumulate_navigation_groups(inherited, index)
         current = group || inherited
-        (groups[current] ||= []) << self if navigable? && current
-        children.each { |child| child.accumulate_navigation_groups(current, groups) }
-        groups
+        index[:wraps][group] = true if group && nav_wrap
+        (index[:groups][current] ||= []) << self if navigable? && current
+        children.each { |child| child.accumulate_navigation_groups(current, index) }
+        index
       end
 
       # The interactive node `direction` leads to from `from`, among `candidates`
@@ -158,7 +179,10 @@ module Conjuration
       # categorically outranks every non-beam candidate, however near: this is what
       # makes an aligned neighbour win over a closer diagonal one. Only when the
       # beam is empty do we fall back to the nearest node in a 45-degree cone.
-      def spatial_navigate(from, direction, candidates: navigable_nodes)
+      #
+      # `wrap` (the active group's nav_wrap) turns the dead end at an edge into a
+      # jump to the far side instead of a stay-put.
+      def spatial_navigate(from, direction, candidates: navigable_nodes, wrap: false)
         return candidates.first if from.nil?
 
         source = from.rect
@@ -224,7 +248,63 @@ module Conjuration
           end
         end
 
-        beam_best || fallback_best
+        found = beam_best || fallback_best
+        return found if found || !wrap
+
+        wrap_navigate(from, direction, candidates)
+      end
+
+      # The far-end candidate a press at the edge wraps onto: down at the bottom
+      # lands on the topmost node, right at the right edge on the leftmost. Beam
+      # alignment wins outright over distance, so a grid wraps within its own
+      # column (or row), and only an unaligned wrap falls back to the candidate
+      # nearest the source's axis.
+      def wrap_navigate(from, direction, candidates)
+        source = from.rect
+        origin = source.center
+        horizontal = direction.x != 0
+        main_sign = horizontal ? direction.x : direction.y
+        beam_lo, beam_hi = horizontal ? [source.bottom, source.top] : [source.left, source.right]
+
+        aligned_best = nil
+        aligned_reach = nil
+        aligned_offset = nil
+        any_best = nil
+        any_reach = nil
+        any_offset = nil
+
+        candidates.each do |node|
+          next if node.equal?(from)
+
+          rect = node.rect
+          centre = rect.center
+          if horizontal
+            cand_lo, cand_hi = rect.bottom, rect.top
+            reach = centre.x * main_sign
+            cross_offset = (centre.y - origin.y).abs
+          else
+            cand_lo, cand_hi = rect.left, rect.right
+            reach = centre.y * main_sign
+            cross_offset = (centre.x - origin.x).abs
+          end
+
+          # Smallest reach = furthest back against the pressed direction.
+          if cand_hi > beam_lo && cand_lo < beam_hi
+            if aligned_reach.nil? || reach < aligned_reach || (reach == aligned_reach && cross_offset < aligned_offset)
+              aligned_best = node
+              aligned_reach = reach
+              aligned_offset = cross_offset
+            end
+          end
+
+          if any_reach.nil? || reach < any_reach || (reach == any_reach && cross_offset < any_offset)
+            any_best = node
+            any_reach = reach
+            any_offset = cross_offset
+          end
+        end
+
+        aligned_best || any_best
       end
 
       def interactive?

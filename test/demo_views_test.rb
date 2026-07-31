@@ -289,6 +289,37 @@ ensure
   DragonInput.reset!
 end
 
+# The skills bar opts into wrap-around (nav_wrap: true), so the row is a loop.
+def test_ui_scene_skills_row_wraps_around(args, assert)
+  scene = ui_scene_scene
+  ui = scene.ui
+  assert.equal!(ui.navigation_group_wrap?(:skills), true, "the skills bar declares wrapping")
+  assert.equal!(ui.navigation_group_wrap?(:list), false, "the other panes are unaffected")
+
+  Conjuration::UI.active_navigation_group = :skills
+  Conjuration::UI.focused_node = ui.find(:skill_8)
+  $game.inputs = {
+    last_active: :controller,
+    mouse: mouse_nowhere,
+    keyboard: { key_down: { tab: nil } },
+    controller_one: { key_down: { r1: nil }, right_analog_y_perc: 0 }
+  }
+
+  $game.input_source = FakeInputSource.new(pressed: [:ui_right])
+  scene.send(:perform_input)
+  assert.equal!(Conjuration::UI.focused_node.id, :skill_1, "right off the end of the row lands on the first slot")
+
+  $game.input_source = FakeInputSource.new(pressed: [:ui_left])
+  scene.send(:perform_input)
+  assert.equal!(Conjuration::UI.focused_node.id, :skill_8, "and left off the front lands on the last")
+ensure
+  Conjuration::UI.focused_node = nil
+  Conjuration::UI.active_navigation_group = nil
+  $game.inputs = nil
+  $game.input_source = nil
+  DragonInput.reset!
+end
+
 # The scroll pane's acceptance case, driven through the scene's own input pass:
 # arrows walk the rows one at a time, and the pane keeps both the focused row and
 # the one after it inside its box.
