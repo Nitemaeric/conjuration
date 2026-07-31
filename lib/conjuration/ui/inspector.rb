@@ -24,15 +24,44 @@ module Conjuration
       SCREEN_W = 1280
       SCREEN_H = 720
 
-      # Entry point (gated on game.debug? at the call site, mirrored by the caller
-      # doing zero work when debug is off). Emits the bounds layer for every
-      # mounted node, then the hover readout for the deepest node under the mouse.
+      # The UI.debug_decorator callable: a node's outline, id label and overflow
+      # badge, appended to the primitive stream right after the node itself. In
+      # the stream (rather than outputs.debug) so a foreground panel covers the
+      # background's outlines exactly as it covers the background — and so a
+      # scroll pane's children decorate inside its render target, clipping with
+      # the content.
+      def decorator
+        @decorator ||= ->(node, acc) { decorate(node, acc) }
+      end
+
+      def decorate(node, acc)
+        return if node.id == :root
+
+        annotation = annotate(node)
+        # Unresolved geometry is flagged loudly in outputs.debug instead — an
+        # error marker must never be buried under later-painted siblings.
+        return if annotation[:unresolved]
+
+        box = draw_bounds(node)
+        return unless box
+
+        color = color_for(annotation[:kind])
+        acc << { **box, **color, primitive_marker: :border }
+        acc << id_label(node, box, color) if node.id
+        acc << overflow_badge(annotation, box) if annotation[:overflow_amount]
+      end
+
+      # Entry point (gated on game.debug? at the call site). Only what must sit
+      # ABOVE the whole frame goes here: the red unresolved-geometry flags and the
+      # hover readout. The bounds layer rides the primitive stream via #decorator.
       def render(root, outputs, mouse = nil)
         # Guarded here as well as at the call site (render_ui) so the overlay
         # builds nothing when debug is off — the whole walk is a no-op then.
         return unless root.debug?
 
-        root.nodes.each { |node| emit_node(node, outputs) }
+        root.nodes.each do |node|
+          emit_unresolved(node, outputs) if node.id != :root && unresolved?(node)
+        end
 
         return unless mouse
 
@@ -240,24 +269,6 @@ module Conjuration
 
       # --- emission -------------------------------------------------------------
 
-      def emit_node(node, outputs)
-        return if node.id == :root
-
-        annotation = annotate(node)
-
-        if annotation[:unresolved]
-          emit_unresolved(node, outputs)
-          return
-        end
-
-        color = color_for(annotation[:kind])
-        box = draw_bounds(node)
-
-        outputs.debug << { **box, **color, primitive_marker: :border }
-        emit_id_label(node, box, color, outputs) if node.id
-        emit_overflow_badge(annotation, box, outputs) if annotation[:overflow_amount]
-      end
-
       def color_for(kind)
         case kind
         when :out_of_flow then OUT_OF_FLOW
@@ -267,15 +278,15 @@ module Conjuration
         end
       end
 
-      def emit_id_label(node, box, color, outputs)
-        outputs.debug << {
+      def id_label(node, box, color)
+        {
           x: box[:x], y: box[:y] + box[:h], text: node.id.inspect,
           size_px: 12, anchor_x: 0, anchor_y: 1, **color
         }
       end
 
-      def emit_overflow_badge(annotation, box, outputs)
-        outputs.debug << {
+      def overflow_badge(annotation, box)
+        {
           x: box[:x] + box[:w], y: box[:y] + box[:h],
           text: "+#{fmt(annotation[:overflow_amount])}px",
           size_px: 12, anchor_x: 1, anchor_y: 1, **SCROLL

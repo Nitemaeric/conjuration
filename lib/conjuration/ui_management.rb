@@ -250,9 +250,17 @@ module Conjuration
     def render_ui(outputs)
       ui.render_view
       ui.calculate_layout
-      ui.render_scroll_targets
 
-      outputs.primitives << ui.primitives
+      # Scoped to THIS ui's collection: scene and camera uis each render, so the
+      # hook is always reset afterwards — a later non-debug render can never emit
+      # decorated primitives.
+      UI.debug_decorator = debug? ? UI::Inspector.decorator : nil
+      begin
+        ui.render_scroll_targets
+        outputs.primitives << ui.primitives
+      ensure
+        UI.debug_decorator = nil
+      end
 
       indicator = focus_indicator
       outputs.primitives << indicator if indicator

@@ -1,12 +1,19 @@
 # UI tree inspector (roadmap H2): read-only debug overlay over the mounted node
 # tree. These tests exercise the computed annotations — size provenance per axis,
-# nil-geometry detection, overflow spill, and deepest-node-at-point hit
-# resolution — plus the debug gate, without inspecting pixels.
+# nil-geometry detection, overflow spill, and paint-order hit resolution — plus
+# the debug gate and the primitive-stream decorator, without inspecting pixels.
 
 Inspector = Conjuration::UI::Inspector
 
 def inspector_root(&block)
   Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root, &block)
+end
+
+def with_decorator
+  Conjuration::UI.debug_decorator = Inspector.decorator
+  yield
+ensure
+  Conjuration::UI.debug_decorator = nil
 end
 
 # --- Size provenance per axis -------------------------------------------------
@@ -273,21 +280,27 @@ def test_inspector_emits_nothing_when_debug_off(args, assert)
   assert.equal!(outputs.debug.length, 0, "the overlay builds nothing when debug? is false")
 end
 
-def test_inspector_emits_bounds_when_debug_on(args, assert)
+# The bounds layer no longer goes to outputs.debug (which renders above the whole
+# frame, striping background outlines across foreground panels) — it rides the
+# UI's own primitive stream via the decorator hook. See the decorator section below.
+def test_inspector_emits_bounds_into_the_primitive_stream(args, assert)
   with_debug_game do
     ui = inspector_root do
       node({ x: 0, y: 0, w: 400, h: 400 }, id: :box) do
         node({ w: 100, h: 50, primitive_marker: :solid }, id: :leaf)
       end
     end
-    outputs = OutputsDouble.new
 
-    Inspector.render(ui, outputs, nil)
+    stream = with_decorator { ui.primitives }
 
-    borders = outputs.debug.select { |p| p[:primitive_marker] == :border }
-    labels = outputs.debug.select { |p| p[:text] }
-    assert.true!(borders.length >= 2, "a bounds border is emitted for the box and the leaf")
+    borders = stream.select { |p| p[:primitive_marker] == :border }
+    labels = stream.select { |p| p[:text] }
+    assert.true!(borders.length >= 2, "a bounds border rides the stream for the box and the leaf")
     assert.true!(labels.any? { |p| p[:text] == ":box" }, "the container id is labelled")
+
+    outputs = OutputsDouble.new
+    Inspector.render(ui, outputs, nil)
+    assert.equal!(outputs.debug.length, 0, "nothing but flags/readout goes to outputs.debug")
   end
 end
 
@@ -476,5 +489,78 @@ def test_hover_readout_reports_per_side_padding(args, assert)
 
     text = outputs.debug.select { |p| p[:text] }.map { |p| p[:text] }.join(" | ")
     assert.true!(text.include?("padding: t15 r10 b20 l5"), "non-uniform padding is shown per side")
+  end
+end
+
+# --- Primitive-stream decorator -----------------------------------------------
+#
+# Bounds outlines ride the UI's own primitive stream in paint order, so a
+# foreground panel covers the background's outlines exactly as it covers the
+# background itself. outputs.debug renders above the whole frame and is reserved
+# for the hover readout and unresolved-geometry flags.
+
+def test_decorator_emits_outline_after_the_node_and_before_its_children(args, assert)
+  with_debug_game do
+    ui = inspector_root do
+      node({ x: 0, y: 0, w: 400, h: 400, primitive_marker: :solid }, id: :box, justify: :start, align: :start) do
+        node({ w: 100, h: 50, primitive_marker: :solid }, id: :leaf)
+      end
+    end
+
+    stream = with_decorator { ui.primitives }
+
+    box_own = stream.index { |p| p[:primitive_marker] == :solid && p[:w] == 400 }
+    box_outline = stream.index { |p| p[:primitive_marker] == :border && p[:w] == 400 }
+    leaf_own = stream.index { |p| p[:primitive_marker] == :solid && p[:w] == 100 }
+    leaf_outline = stream.index { |p| p[:primitive_marker] == :border && p[:w] == 100 }
+
+    assert.true!(box_own < box_outline, "the box's outline follows the box's own primitive")
+    assert.true!(box_outline < leaf_own, "and precedes its children's primitives")
+    assert.true!(leaf_own < leaf_outline, "each child is likewise followed by its own outline")
+  end
+end
+
+def test_stream_is_unchanged_when_the_decorator_is_nil(args, assert)
+  ui = inspector_root do
+    node({ x: 0, y: 0, w: 400, h: 400, primitive_marker: :solid }, id: :box, justify: :start, align: :start) do
+      node({ w: 100, h: 50, primitive_marker: :solid }, id: :leaf)
+      node({ text: "hi" }, id: :label)
+    end
+  end
+
+  plain = ui.primitives
+  decorated = with_decorator { ui.primitives }
+  again = ui.primitives
+
+  assert.equal!(Conjuration::UI.debug_decorator, nil, "the hook is reset after use")
+  assert.equal!(again.length, plain.length, "an undecorated stream is unchanged after a decorated one")
+  assert.equal!(again, plain, "and byte-identical, primitive for primitive")
+  assert.true!(decorated.length > plain.length, "the decorated stream carries the extra debug primitives")
+end
+
+def test_scroll_pane_children_decorate_inside_the_render_target(args, assert)
+  with_debug_game do
+    ui = inspector_root do
+      node({ x: 0, y: 300, w: 100, h: 100 }, id: :pane, overflow: :scroll, justify: :start, align: :start) do
+        node({ w: 80, h: 80, primitive_marker: :solid }, id: :first)
+        node({ w: 80, h: 80, primitive_marker: :solid }, id: :second)
+      end
+    end
+
+    assert.equal!(ui.find(:pane).scroll?, true, "the pane is a render-target scroll container")
+
+    stream = with_decorator do
+      ui.render_scroll_targets
+      ui.primitives
+    end
+
+    target = $game.outputs[ui.find(:pane).scroll_target_path]
+    target_labels = target.primitives.select { |p| p[:text] }.map { |p| p[:text] }
+    stream_labels = stream.select { |p| p[:text] }.map { |p| p[:text] }
+
+    assert.true!(target_labels.include?(":first"), "a clipped child's label lands inside the render target")
+    assert.true!(target_labels.include?(":second"), "including the child scrolled out of view")
+    assert.false!(stream_labels.include?(":second"), "and never leaks into the flat screen stream")
+    assert.true!(stream_labels.include?(":pane"), "the pane's own outline still rides the screen stream")
   end
 end

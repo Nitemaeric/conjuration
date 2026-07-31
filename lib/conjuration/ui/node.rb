@@ -6,6 +6,20 @@ module Conjuration
       root
     end
 
+    # An optional callable (node, acc) invoked during collect_primitives, right
+    # after a node's own primitives and before its children's — so whatever it
+    # appends is painted over by later siblings exactly as the node itself is.
+    # nil (the default) costs one nil check per node and leaves the stream
+    # byte-identical. The debug inspector sets it for the duration of a render;
+    # core knows nothing about what decorates.
+    def self.debug_decorator
+      @debug_decorator
+    end
+
+    def self.debug_decorator=(callable)
+      @debug_decorator = callable
+    end
+
     class Node < Conjuration::Node
       include Reconciler
       include Layout
@@ -247,14 +261,22 @@ module Conjuration
           # a scrollbar when it scrolls (a :clip target has none).
           acc << scroll_sprite
           acc.concat(scrollbar_primitives) if scroll?
+          decorate_primitives(acc)
         elsif wrapped? && renderable?
           acc.concat(wrapped_text_primitives)
+          decorate_primitives(acc)
         else
           acc << styled_object if renderable?
+          decorate_primitives(acc)
           children.each { |child| child.collect_primitives(acc) }
         end
 
         acc
+      end
+
+      def decorate_primitives(acc)
+        decorator = UI.debug_decorator
+        decorator.call(self, acc) if decorator
       end
 
       def method_missing(method_name, *args, &block)
