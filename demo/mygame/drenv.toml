@@ -1,9 +1,10 @@
 [dependencies.conjuration]
 path = "../.."
 
-[dependencies.frame-timer]
-github = "owenbutler/dr-frame-timer"
-entrypoint = "frame-timer.rb"
-
 [dependencies.draco]
 github = "guitsaru/draco"
+
+[dependencies.frame-timer]
+github = "Nitemaeric/dr-frame-timer"
+ref = "90e439e68e2e08a59fd58339d0a0990bdb26f083"
+entrypoint = "frame-timer.rb"

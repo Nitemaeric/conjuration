@@ -7,8 +7,8 @@ require 'vendor/dragon_input/dragon_input.rb'
 # conjuration (path:../..)
 require 'vendor/conjuration/conjuration.rb'
 
-# frame-timer (github:owenbutler/dr-frame-timer)
-require 'vendor/frame-timer/frame-timer.rb'
-
 # draco (github:guitsaru/draco)
 require 'vendor/draco/draco.rb'
+
+# frame-timer (github:Nitemaeric/dr-frame-timer)
+require 'vendor/frame-timer/frame-timer.rb'

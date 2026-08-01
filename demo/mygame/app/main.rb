@@ -2,8 +2,7 @@ require "app/drenv_bundle.rb"
 
 require_relative "game"
 
-# Disabled by default: its graph buffers render as corrupted textures on
-# current DR builds (upstream issue). Meta+D toggles it with debug mode.
+# Meta+D toggles it with debug mode.
 $frame_timer = FrameTimer.new(start_disabled: true)
 
 def boot args

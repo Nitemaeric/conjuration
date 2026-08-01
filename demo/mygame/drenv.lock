@@ -2,7 +2,7 @@
 # Run `drenv bundle` to update it.
 
 lockfile_version = 1
-manifest_digest = "sha256-7ca02929203c9432e71c91f2af5598b0cfde56d1108c0dd1e038c6cd782a919e"
+manifest_digest = "sha256-5563b44c86447444ffc3df3c051c1439b4ff70d992a265616b862273be5cc14d"
 
 [[dependencies]]
 name = "dragon_input"
@@ -18,16 +18,16 @@ source = "path:../.."
 require = ["vendor/conjuration/conjuration.rb"]
 
 [[dependencies]]
-name = "frame-timer"
-source = "github:owenbutler/dr-frame-timer"
-ref = "ed45693cc7cf99ce4b67e25960d3ed383f2c2f04"
-require = ["vendor/frame-timer/frame-timer.rb"]
-integrity = "sha256-ec8b12bddd965edb0bbc803eec4125ef0d4eb54afe217cfb4f108af0f03b06af"
-entrypoint = "frame-timer.rb"
-
-[[dependencies]]
 name = "draco"
 source = "github:guitsaru/draco"
 ref = "ef4f18ea726648953021b612b21ee2e93c988162"
 require = ["vendor/draco/draco.rb"]
 integrity = "sha256-f9b911de51582308e2655a917bedcb50dd917342fc3405f982e2ee099e308633"
+
+[[dependencies]]
+name = "frame-timer"
+source = "github:Nitemaeric/dr-frame-timer"
+ref = "90e439e68e2e08a59fd58339d0a0990bdb26f083"
+require = ["vendor/frame-timer/frame-timer.rb"]
+integrity = "sha256-de6fdc5fdcbfda26f80ad75f99551c37fd3cd915e5cf5578f2872620bfcb56dc"
+entrypoint = "frame-timer.rb"
