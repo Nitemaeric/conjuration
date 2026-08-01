@@ -68,16 +68,18 @@ class LowrezScene < Conjuration::Scene
     "#{state.player[:x].to_i},#{state.player[:y].to_i}"
   end
 
-  # Sized to hug the label: "Back" renders ~15x7 visual px in tiny.ttf at 10, so
-  # 21x11 gives ~3px horizontal / ~2px vertical padding around the glyphs. Hover
-  # and focus are plain fill swaps; a focus ring would swallow the button.
+  # Sized to hug the label's INK ("Back" inks ~15x7 at tiny.ttf 10): 21x9 gives
+  # 3px horizontal / 1px vertical around the glyphs. The label is absolute at
+  # integer offsets — flow centering can land on a half pixel, which rasterizes
+  # as mush at 64x64 — and top: -1 lifts the em box so its ~2px bearing puts the
+  # ink 1px under the button top. Hover and focus are plain fill swaps.
   def back_button
     tint = highlighted? ? { r: 236, g: 232, b: 220 } : { r: 150, g: 148, b: 160 }
 
-    node({ x: 2, y: 2, w: 21, h: 11, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
-         id: :back, group: :hud, justify: :start, align: :start, padding: { left: 3 }, overflow: :visible,
+    node({ x: 2, y: 2, w: 21, h: 9, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
+         id: :back, group: :hud, overflow: :visible,
          shortcut: { keyboard: :escape, controller: :b }) do
-      node({ text: "Back", size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
+      node({ text: "Back", size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label, position: :absolute, left: 3, top: -1)
     end
   end
 
