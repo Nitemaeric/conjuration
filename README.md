@@ -17,8 +17,11 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
     - [x] Update (Handle game logic)
     - [x] Render (Draw things to a scene / camera (HUD, UI))
 - [x] Scene Management
-  - [ ] Scene transitions
-- [ ] Camera Management
+  - [x] Scene transitions (duck-typed, snapshot-based)
+  - [x] Scene stack (state-preserving overlays)
+  - [x] Cooperative loading (`load_tick` + a loading view)
+  - [x] Per-scene clocks (pause / hit-stop correctness)
+- [x] Camera Management
   - [x] Look at
   - [x] Zooming
   - [x] Panning
@@ -34,17 +37,25 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
   - [x] Parallax scrolling layers
   - [x] Deferred z-ordering (y-sort / depth)
   - [x] Grid projections (isometric & top-down)
+- [x] Time & motion
+  - [x] Timers and tweens on scene clocks
+  - [x] Frame animation with frame events
+  - [x] Sequences (the cutscene primitive)
 - [x] UI & HUD Management
-  - [ ] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
-  - [ ] Interactive node management
+  - [x] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
+  - [x] Reactive views with reconciliation
+  - [x] Interactive node management (hover/focus/press, spatial navigation, shortcuts)
+  - [x] Scrolling panes
 - [x] Input Management — via [dragon_input](https://github.com/Nitemaeric/dragon_input), bundled as a dependency
   - [x] Action-based bindings (keyboard, mouse, controller; pure-Ruby backend, optional native Steam Input)
   - [x] Default key mapping (reserved `:ui_*` actions injected automatically — see [Menu input](#menu-input--works-out-of-the-box))
   - [x] User remapping (in-game rebind UI, or the Steam overlay when available)
   - [x] Device-following input glyphs (prompts swap art with the last-used device)
-- [ ] Debugging tools
-  - [ ] Debug layers
-  - [ ] Scene / Camera debug overlay
+- [x] Debugging tools
+  - [x] Game state panel (scene, clocks, focus)
+  - [x] Camera overlay (view rect, focal points, follow, world bounds)
+  - [x] UI tree inspector (bounds, box model, size provenance)
+  - [x] Draw-order dump + analyzer
 
 ## Installation
 
@@ -70,8 +81,19 @@ View the following files to get started:
 
 - [main.rb](demo/mygame/app/main.rb)
 - [game.rb](demo/mygame/app/game.rb)
-- [scenes/title_scene.rb](demo/mygame/app/scenes/title_scene.rb)
 - [scenes/menu_scene.rb](demo/mygame/app/scenes/menu_scene.rb)
+- [scenes/basic_camera_scene.rb](demo/mygame/app/scenes/basic_camera_scene.rb)
+
+## Documentation
+
+- [Scenes](docs/scenes.md) — lifecycle, clocks, the stack, transitions, loading.
+- [Cameras](docs/cameras.md) — spaces, z-ordering, parallax, shake, camera-feel recipes.
+- [UI & HUD](docs/ui.md) — reactive views, layout, overflow, navigation, the inspector.
+- [Time & motion](docs/time.md) — timers, tweens, animation clips, sequences.
+- [Input](docs/input.md) — actions, the reserved `:ui_*` set, glyphs.
+- [TileLayer](docs/tile_layer.md) — chunked caching of static world content.
+- [ECS integration](docs/ecs.md) — draco conventions.
+- [Roadmap](docs/roadmap.md) and [scene-lifecycle design](docs/design/scene-lifecycle.md).
 
 ## Conventions
 
