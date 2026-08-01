@@ -50,20 +50,23 @@ two-column menu (#27), navigation-conflict fixes (#25), justify hardening
 
 ## Sequencing at a glance
 
-| PR | Item | Track | Size | Depends on |
-|----|------|-------|------|------------|
-| 1 | Tweens + timers on scene clocks | G | S | — |
-| 2 | Frame animation + frame events | G | M | — |
-| 3 | Sequences (cutscene primitive) | G | M | PR 1 |
-| 4 | `ui.rb` modularisation + shared render path | E | M | best while UI is quiet |
-| 5 | Camera + scene/stack debug overlays | H | S | — |
-| 6 | UI tree inspector | H | S | PR 4 (navigates the split files) |
-| 7 | Draw-order inspector | H | S | — |
-| 8 | Docs refresh (ui/cameras/scenes + recipes) | F | M | after PRs 1–3 settle the new APIs |
+| PR | Item | Track | Size | Depends on | Status |
+|----|------|-------|------|------------|--------|
+| 1 | Tweens + timers on scene clocks | G | S | — | Shipped |
+| 2 | Frame animation + frame events | G | M | — | Shipped |
+| 3 | Sequences (cutscene primitive) | G | M | PR 1 | Shipped |
+| 4 | `ui.rb` modularisation + shared render path | E | M | best while UI is quiet | Shipped |
+| 5 | Camera + scene/stack debug overlays | H | S | — | Shipped |
+| 6 | UI tree inspector | H | S | PR 4 (navigates the split files) | Shipped |
+| 7 | Draw-order inspector | H | S | — | Shipped |
+| 8 | Docs refresh (ui/cameras/scenes + recipes) | F | M | after PRs 1–3 settle the new APIs | Shipped |
 
-PRs 1, 2, 4, 5, 7 are independent starting points. Every PR ships with tests
-under `script/test.sh` and a demo touchpoint; the standing quality bar from
-round one applies unchanged (hot-path discipline, strict comment policy).
+PRs 1, 2, 4, 5, 7 were the independent starting points. Every PR shipped with
+tests under `script/test.sh` and a demo touchpoint; the standing quality bar from
+round one applied unchanged (hot-path discipline, strict comment policy).
+
+**Round two is complete.** What remains below the tracks is the deferred list —
+decisions, not backlog.
 
 ---
 
@@ -84,6 +87,13 @@ transition machinery (#19) wants this internally; UI micro-animation and
 camera moves consume it next. Demo: replace at least one hand-rolled counter
 (hit-stop flash timing is the natural candidate).
 
+**As shipped** (`lib/conjuration/scheduler.rb`). `after`/`every`/`tween` on the
+scene's own clock, with four eases carried inline (`:identity`,
+`:smooth_start`, `:smooth_stop`, `:smooth_step`) and any callable accepted as a
+custom curve. Timer boundaries are absolute, so a frozen clock never produces a
+catch-up burst; a tween's last frame writes the exact endpoint. Transient and
+lazily allocated, like sequences. Documented in `docs/time.md`.
+
 ### G2. Frame animation + events (PR 2)
 
 Named clips over frame lists: loop / once / ping-pong, per-frame durations,
@@ -91,6 +101,13 @@ and **frame events** (`on_frame(3) { footstep }` — the feature that separates
 an animation system from a modulo). Owned per entity, ticked by the scene.
 Demo: the parallax hero's hand-rolled `clock.idiv(5) % 8` walk cycle migrates;
 the iso knight gains a walk (its art permitting) or a bob.
+
+**As shipped** (`lib/conjuration/animation.rb`). Named clips with `:loop`,
+`:once`, and `:ping_pong` modes, per-frame durations, and `on(clip, frame:)`
+events that fire for every boundary crossed since the last poll (so a slow frame
+plays each in sequence). The frame is *derived* from `clock - started_at` rather
+than incremented, so a freeze holds it and resumes mid-clip. Players are plain
+objects owned by game code — no registry. Documented in `docs/time.md`.
 
 ### G3. Sequences (PR 3)
 
@@ -159,17 +176,39 @@ Per camera: view rect, focal current/target, follow state, world bounds.
 Per game: scene stack with per-scene clocks, transition/loading phase, hook
 trace. The "why is the camera doing that / what state is the stack in" panels.
 
+**As shipped.** `Camera#render_debug_overlay` draws the cull frame, focal
+current/target crosshairs (linked when they differ), the follow marker, world
+bounds, and a per-camera readout into the camera's own viewport;
+`Game#render_game_debug_panel` draws the scene/clock/hit-stop/camera/UI-focus
+panel, draggable and corner-cyclable. Both guard on `debug?` at the call site
+*and* internally, so nothing is built when it's off.
+
 ### H2. UI tree inspector (PR 6)
 
 The existing debug rects grown up: node bounds/ids, navigation groups,
 focus/hover/pressed state highlighting. The hover/focus work would have been
 half the effort with this.
 
+**As shipped** (`lib/conjuration/ui/inspector.rb`). Bounds, ids, and overflow
+badges are interleaved into the *primitive stream* via `UI.debug_decorator`
+rather than collected into `outputs.debug`, so a foreground panel occludes them
+exactly as it occludes the nodes themselves and a scroll pane's decorations clip
+with its content. Hover gives a DevTools box model (content / padding strips /
+gap strips) plus a readout with per-axis size provenance
+(explicit/grow/auto/assigned, max-clamped); unresolved geometry is flagged in
+`outputs.debug` so an error marker can't be buried. Hit resolution reuses core's
+`deepest_hit`, so the readout can't disagree with where clicks land.
+
 ### H3. Draw-order inspector (PR 7)
 
 The iso dump promoted to core: freeze + dump a camera's deferred draw buffer
 (z bands, emission order, culling verdicts) to a file, with the analyzer
 shipped as a framework tool rather than a demo script.
+
+**As shipped.** `Camera#dump_draw_order` serialises the buffer in post-sort
+flush order through `each_ordered_draw` — the same code path the real flush uses,
+so a dump can't drift from what DragonRuby composites. The `dbg:` tag convention
+rides free on any primitive; `tools/analyze_draw_order.rb` reads the dump back.
 
 ## Track E — consolidation (carried from v1)
 
@@ -182,6 +221,11 @@ fold in the `NODE_KEYWORDS` four-places dedup and extract the ~25 duplicated
 lines of Scene/Camera UI rendering into `UIManagement#render_ui`. Suite passes
 unchanged; no public constant moves.
 
+**As shipped.** `lib/conjuration/ui/` holds reconciler, navigation, layout, text,
+scroll, view, node, and inspector; `lib/conjuration/ui.rb` is the require list.
+`NODE_KEYWORDS` has one home, and `UIManagement#render_ui` is the single
+scene/camera render path.
+
 ## Track F — docs refresh (PR 8)
 
 - Rewrite `docs/ui.md` around the reactive path — now the *only* path in the
@@ -192,6 +236,14 @@ unchanged; no public constant moves.
 - New `docs/scenes.md`: lifecycle, stack, transitions, loading, clocks,
   the intra-scene pause pattern, save-state contract.
 - README checklist truth-up.
+
+**As shipped.** `docs/ui.md` rewritten (reactive path, layout and sizing,
+overflow, navigation, the inspector, imperative escape hatch); new
+`docs/scenes.md`, `docs/cameras.md`, and `docs/input.md`; and a fourth page the
+plan didn't anticipate — `docs/time.md`, since Track G landed three APIs
+(scheduler, animation, sequences) that share one rationale and belonged
+together rather than scattered across the other pages. README checklist and docs
+index trued up.
 
 ---
 
