@@ -203,9 +203,10 @@ end
 
 Deadzones and lookahead are deliberately **not** framework features. They are
 each a handful of honest lines on `look_at` + `speed`, with no hidden correctness
-trap — which is the admission test a feature has to fail to stay out of core.
-(Parallax passes that test in the other direction: the DIY version mis-culls.)
-Here they are.
+trap in the arithmetic — which is the admission test a feature has to fail to
+stay out of core. (Parallax passes that test in the other direction: the DIY
+version mis-culls.) Here they are; the two sharp edges are in wiring the camera
+up around them, and are spelled out after the code.
 
 **Lookahead** — bias the target ahead of the direction of travel, and let `speed`
 do the smoothing:
@@ -248,6 +249,39 @@ end
 Both replace `follow` rather than composing with it — a positional `look_at`
 ends a follow, so drive one or the other. Compose them by computing the
 lookahead-biased point first and feeding *that* into the deadzone test.
+
+Two things the deadzone needs from the rest of the camera, both of which look
+like the recipe misbehaving when they're missing:
+
+- **Seed the focal point.** The box accumulates from `target.x`/`target.y`, and a
+  fresh camera starts at the centre of its viewport — so an unseeded camera
+  crawls in from there on the first frames. Write both points in `setup`, as in
+  [Moving the camera](#moving-the-camera):
+  `camera.current.x = camera.target.x = state.hero[:x]`.
+- **Leave the axis room to move.** The focal point is clamped to
+  `[h / 2, virtual_h - h / 2]`, so a world exactly one screen tall pins `y` and
+  the vertical half-extent does nothing at all. The box also has to be centred
+  somewhere the *clamped* point can rest: aim at the subject plus a constant
+  rise, rather than at the subject itself, or the resting relation isn't
+  expressible and the axis reads as dead.
+
+**Platformer variant** — track the surface underfoot rather than the subject on
+the vertical axis. Airborne frames then never scroll the view, however high the
+jump goes, and the camera settles only once the subject has landed somewhere new:
+
+```ruby
+CAMERA_RISE = 240   # seats a standing hero in the lower third of the frame
+
+dy = hero[:support_y] + CAMERA_RISE - y
+y += dy - DEADZONE_HALF_H if dy >  DEADZONE_HALF_H
+y += dy + DEADZONE_HALF_H if dy < -DEADZONE_HALF_H
+```
+
+`support_y` is the top of whatever the subject last landed on. Note the deadzone
+is symmetric and therefore sticky in the usual way: having pushed up for a high
+ledge, the camera holds that height while the subject is back on ground inside
+the box. Snap it if you'd rather it fell back — `demo/mygame/app/scenes/parallax_scene.rb`
+runs the version above as written.
 
 For regional cameras (a fixed view per room, Zelda-style), snap the target to the
 room's centre on the frame the subject crosses a boundary and leave the camera

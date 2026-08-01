@@ -149,7 +149,7 @@ The camera culls and transforms each layer against its own *derived* view — th
 - Zoom applies **un-scaled**: only the translation parallaxes, so every layer stays at the same zoom and they never warp apart as you zoom.
 - `parallax:` composes with `z:` — layer your backgrounds with `z:` and scroll them with `parallax:` independently.
 
-See [parallax_scene.rb](demo/mygame/app/scenes/parallax_scene.rb) for a side-scroller with sky, hills, clouds, and tree layers over a 1:1 ground plane.
+See [parallax_scene.rb](demo/mygame/app/scenes/parallax_scene.rb) for a side-scrolling platformer — sky, hills, clouds, and tree layers over a 1:1 ground plane, with jumping, one-way platforms, and the [deadzone camera recipe](docs/cameras.md#camera-feel-a-recipe-not-an-api) driving all of it.
 ### Projections — grid ↔ world mapping (`Conjuration::Projection`)
 
 Isometric is **not a camera feature**. The camera works in continuous world space and is projection-blind; so is `TileLayer`. What makes a view isometric is only (a) how grid cells map to world positions and (b) draw order — and draw order is already handled by `camera.draw(sprite, z:)` above. So `Projection` is pure, stateless maths — no engine changes:
