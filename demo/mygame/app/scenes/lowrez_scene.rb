@@ -72,7 +72,7 @@ class LowrezScene < Conjuration::Scene
     tint = highlighted? ? { r: 236, g: 232, b: 220 } : { r: 150, g: 148, b: 160 }
 
     node({ x: 2, y: 2, w: 30, h: 12, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
-         id: :back, group: :hud, justify: :center, align: :center,
+         id: :back, group: :hud, justify: :center, align: :center, overflow: :visible,
          shortcut: { keyboard: :escape, controller: :b }) do
       node({ text: "Back", size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
     end
