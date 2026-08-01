@@ -168,36 +168,11 @@ module Conjuration
         strips
       end
 
-      # The node the user actually sees under the point, resolved by PAINT ORDER —
-      # not by depth or area, which pick a deep tiny background tile over the
-      # foreground panel drawn on top of it. collect_primitives emits a node then
-      # its children in order, so a later sibling paints over an earlier one:
-      # descend back-to-front and take the first hit, falling back to the node
-      # itself when no child hits.
+      # The node the user actually sees under the point — core's paint-order walk
+      # with an any-node predicate, so the readout always agrees with where
+      # clicks and wheel events resolve.
       def node_at_point(root, x, y)
-        hit_at(root, x, y)
-      end
-
-      def hit_at(node, x, y)
-        inside = contains?(node, x, y)
-
-        # A render-target container clips its subtree — outside its box its
-        # overflowing children aren't visible, so don't descend. Inside it, its
-        # children are drawn shifted by scroll_offset (Scroll#render_scroll_target),
-        # so screen = layout + offset: test them in content space.
-        return nil if node.render_target? && !inside
-
-        child_y = node.render_target? ? y - node.scroll_offset : y
-
-        index = node.children.length - 1
-        while index >= 0
-          hit = hit_at(node.children[index], x, child_y)
-          return hit if hit
-
-          index -= 1
-        end
-
-        inside ? node : nil
+        root.deepest_hit(x, y) { true }
       end
 
       def kind(node)
@@ -420,14 +395,6 @@ module Conjuration
         ax = obj.anchor_x || 0
         ay = obj.anchor_y || 0
         { x: obj.x - ax * obj.w, y: obj.y - ay * obj.h, w: obj.w, h: obj.h }
-      end
-
-      def contains?(node, x, y)
-        bounds = draw_bounds(node)
-        return false unless bounds
-
-        x >= bounds[:x] && x <= bounds[:x] + bounds[:w] &&
-          y >= bounds[:y] && y <= bounds[:y] + bounds[:h]
       end
 
       def clamp(value, low, high)
