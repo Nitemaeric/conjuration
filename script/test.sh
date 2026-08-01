@@ -30,6 +30,7 @@ preload=(
   lib/conjuration/base_lifecycle_methods.rb
   lib/conjuration/node.rb
   lib/conjuration/vector.rb
+  lib/conjuration/canvas.rb
   lib/conjuration/input_source.rb
   lib/conjuration/ui/reconciler.rb
   lib/conjuration/ui/navigation.rb
@@ -67,6 +68,7 @@ preload=(
   demo/mygame/app/scenes/cutscene_scene.rb
   demo/mygame/app/scenes/ui_scene.rb
   demo/mygame/app/scenes/multiple_cameras_scene.rb
+  demo/mygame/app/scenes/lowrez_scene.rb
 )
 
 for test_file in test/*_test.rb; do

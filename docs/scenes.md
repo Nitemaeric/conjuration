@@ -325,5 +325,6 @@ A game that wants silence on a scene change writes `audio.clear` in its own
 
 - [ui.md](ui.md) — `view`, navigation groups, the UI roots a scene owns.
 - [cameras.md](cameras.md) — `draw_world`, viewports, world bounds.
+- [canvas.md](canvas.md) — declaring a scene's virtual resolution.
 - [time.md](time.md) — schedulers, animations, and sequences on the scene clock.
 - [design/scene-lifecycle.md](design/scene-lifecycle.md) — the decision record.

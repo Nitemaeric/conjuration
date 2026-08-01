@@ -87,12 +87,13 @@ module Conjuration
 
     # Mouse wheel scrolls the innermost scroll container under the cursor.
     def scroll_under_mouse
-      return unless inputs.mouse.wheel
+      pointer = game.mouse
+      return unless pointer.wheel
 
-      container = ui.find_scroll_intersect(inputs.mouse)
+      container = ui.find_scroll_intersect(pointer)
       return unless container
 
-      container.scroll_offset = (container.scroll_offset - inputs.mouse.wheel.y * 20).clamp(0, container.max_scroll)
+      container.scroll_offset = (container.scroll_offset - pointer.wheel.y * 20).clamp(0, container.max_scroll)
     end
 
     # The right thumbstick scrolls the pane focus is in (when this ui owns it), so
@@ -126,7 +127,8 @@ module Conjuration
     end
 
     def update_hover_from_mouse
-      hovered = ui.find_interactive_intersect(inputs.mouse)
+      pointer = game.mouse
+      hovered = ui.find_interactive_intersect(pointer)
 
       # Scene + cameras share UI.hovered_node and each runs this; the scene's
       # input supers into the cameras', so it runs last. Only manage hover for
@@ -148,7 +150,7 @@ module Conjuration
       # Trigger on this frame's hit, not a raw-rect recheck — a scrolled child's
       # layout rect doesn't match its drawn position, so the recheck would reject
       # exactly the clicks deepest_hit just resolved through content space.
-      trigger_node(hovered) if inputs.mouse.click && hovered
+      trigger_node(hovered) if pointer.click && hovered
     end
 
     # The cursor is left as-is here — a mouse affordance, irrelevant when
@@ -222,7 +224,10 @@ module Conjuration
     # children, whose layout rects don't match their drawn position.
     def pressed_target
       hovered = UI.hovered_node
-      return hovered if hovered && inputs.mouse.held && ui.find_interactive_intersect(inputs.mouse).equal?(hovered)
+      if hovered
+        pointer = game.mouse
+        return hovered if pointer.held && ui.find_interactive_intersect(pointer).equal?(hovered)
+      end
 
       focused = UI.focused_node
       return focused if focused && game.input_source.pressed?(game.ui_pad, :ui_confirm)
@@ -267,7 +272,9 @@ module Conjuration
 
       return unless debug?
 
-      UI::Inspector.render(ui, outputs, inputs.mouse)
+      # Nodes are hit-tested in scene space, but the readout is window-space
+      # chrome — the inspector needs both pointers.
+      UI::Inspector.render(ui, outputs, game.mouse, inputs.mouse)
     end
 
     # The built-in focus highlight, so keyboard/pad focus is visible without any

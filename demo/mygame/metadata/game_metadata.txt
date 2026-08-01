@@ -124,3 +124,5 @@ orientation=landscape,portrait
 #       If you don't want to worry about rendering game artifacts outside of the pixel perfect area,
 #       keep hd_letterbox=true.
 # hd_max_scale=400
+scale_quality=3
+highdpi=true

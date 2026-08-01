@@ -7,6 +7,7 @@
 # reach them with .send.
 class StackHost
   include Conjuration::SceneManagement
+  include Conjuration::CanvasHost
 
   def audio
     @audio ||= AudioSpy.new

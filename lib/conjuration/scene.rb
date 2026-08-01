@@ -6,6 +6,25 @@ module Conjuration
     include Scheduling
     include Sequencing
 
+    class << self
+      # Class-level DSL: `canvas w: 64, h: 64` declares this scene's virtual
+      # resolution, overriding any game-level default. Called with no arguments
+      # it reads (inheriting a parent scene class's declaration). Class-level, so
+      # it survives the (class, name, state) reconstruction contract — a scene
+      # rebuilt from its class always comes back at the same resolution.
+      def canvas(w: nil, h: nil, integer_scale: true)
+        return inherited_canvas if w.nil? && h.nil?
+
+        @canvas = Canvas.new(w: w, h: h, integer_scale: integer_scale)
+      end
+
+      def inherited_canvas
+        return @canvas if @canvas
+
+        superclass.respond_to?(:canvas) ? superclass.canvas : nil
+      end
+    end
+
     attr_accessor :config, :w, :h
 
     # Logical world bounds. Cameras clamp panning to these; leave them nil for
@@ -32,9 +51,32 @@ module Conjuration
 
       super(
         config: config,
-        w: grid.w,
-        h: grid.h
+        w: view_w,
+        h: view_h
       )
+    end
+
+    # This scene's own declaration, or nil.
+    def canvas
+      self.class.canvas
+    end
+
+    # The resolution chain: scene override > game default > nil (native window).
+    def active_canvas
+      canvas || game.canvas
+    end
+
+    # Scene-space dimensions: the canvas when one resolves, the window otherwise.
+    # Resolved from THIS scene rather than through game.view_w — a scene sizes
+    # itself in its constructor, before it is ever the game's current scene.
+    def view_w
+      resolved = active_canvas
+      resolved ? resolved.w : grid.w
+    end
+
+    def view_h
+      resolved = active_canvas
+      resolved ? resolved.h : grid.h
     end
 
     # Per-instance token so stacked scenes that both add a `:main` camera get
