@@ -304,6 +304,8 @@ module Conjuration
       { **to_viewport({ x: 0, y: 0, w: scene.virtual_w, h: scene.virtual_h }), r: 255, g: 140, b: 0, primitive_marker: :border }
     end
 
+    # Bottom-left of the viewport, on a translucent backing — the top-left corner
+    # belongs to the game debug panel, which draws later and would bury these.
     def debug_readout_labels
       zoom = (current.zoom * 100).round / 100.0
       lines = [
@@ -312,9 +314,10 @@ module Conjuration
         following ? "follow on" : "follow off"
       ]
 
-      labels = []
+      widest = lines.map { |text| gtk.calcstringbox(text)[0] }.max
+      labels = [{ x: from_left(2), y: from_bottom(2), w: widest + 8, h: lines.length * 16 + 6, path: :pixel, r: 0, g: 0, b: 0, a: 190 }]
       lines.each_with_index do |text, index|
-        labels << { x: from_left(6), y: from_top(6) - index * 16, text: text, size_px: 14, r: 255, g: 255, b: 0, anchor_y: 1 }
+        labels << { x: from_left(6), y: from_bottom(6) + (lines.length - 1 - index) * 16, text: text, size_px: 14, r: 255, g: 255, b: 0, anchor_y: 0 }
       end
       labels
     end
