@@ -173,9 +173,24 @@ class ParallaxScene < Conjuration::Scene
     @was_in_door = in_door
   end
 
+  # A deadzone is invisible by nature — its signature is the camera NOT moving —
+  # so debug mode draws the box: the hero roams inside it freely, and the camera
+  # pushes only when he presses an edge.
+  def render_deadzone_overlay
+    return unless debug?
+
+    camera = cameras[:main]
+    box = {
+      x: camera.target.x - DEADZONE_HALF_W, y: camera.target.y - DEADZONE_HALF_H,
+      w: DEADZONE_HALF_W * 2, h: DEADZONE_HALF_H * 2
+    }
+    outputs.debug << { **camera.to_viewport(box), r: 90, g: 220, b: 255, primitive_marker: :border }
+  end
+
   def update
     step_physics
     track_camera
+    render_deadzone_overlay
 
     hero = state.hero
     @hero_anim.play(hero[:grounded] && hero[:moving] ? :walk : :idle)
