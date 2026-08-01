@@ -5,14 +5,14 @@
 # a cross-resolution transition.
 #
 # DragonRuby ships tiny.ttf at the engine root for exactly this — a pixel font
-# legible at canvas scale (native size 5px; DR's samples use 10 on a 128x128 canvas — scale with the canvas).
+# whose native size is 10px, crisp only at multiples of 10 (see DR's lowrez_labels sample — scale with the canvas).
 class LowrezScene < Conjuration::Scene
   canvas w: 64, h: 64
 
   WORLD = 128
   TILE = 16
   PLAYER = 4
-  HUD_TEXT = 5
+  HUD_TEXT = 10
 
   FLOOR = [{ r: 38, g: 42, b: 58 }, { r: 30, g: 34, b: 48 }].freeze
 
@@ -66,12 +66,12 @@ class LowrezScene < Conjuration::Scene
     "#{state.player[:x].to_i},#{state.player[:y].to_i}"
   end
 
-  # 24x9 canvas pixels — a comfortable target once the blit scales it 11x. Hover
+  # 30x12 canvas pixels — a comfortable target once the blit scales it 11x. Hover
   # and focus are plain fill swaps; a 4px focus ring would swallow the button.
   def back_button
     tint = highlighted? ? { r: 236, g: 232, b: 220 } : { r: 150, g: 148, b: 160 }
 
-    node({ x: 2, y: 2, w: 24, h: 9, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
+    node({ x: 2, y: 2, w: 30, h: 12, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
          id: :back, group: :hud, justify: :center, align: :center,
          shortcut: { keyboard: :escape, controller: :b }) do
       node({ text: "Back", size_px: HUD_TEXT, font: "tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
