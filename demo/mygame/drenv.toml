@@ -6,5 +6,5 @@ github = "guitsaru/draco"
 
 [dependencies.frame-timer]
 github = "Nitemaeric/dr-frame-timer"
-ref = "90e439e68e2e08a59fd58339d0a0990bdb26f083"
+branch = "fix/graph-initial-contents"
 entrypoint = "frame-timer.rb"

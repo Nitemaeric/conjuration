@@ -2,7 +2,7 @@
 # Run `drenv bundle` to update it.
 
 lockfile_version = 1
-manifest_digest = "sha256-5563b44c86447444ffc3df3c051c1439b4ff70d992a265616b862273be5cc14d"
+manifest_digest = "sha256-5517c7ee69d4ac14c39409cdcd97bc1cbdbecc956787f9b86d299a9a58a31a83"
 
 [[dependencies]]
 name = "dragon_input"
@@ -30,4 +30,5 @@ source = "github:Nitemaeric/dr-frame-timer"
 ref = "90e439e68e2e08a59fd58339d0a0990bdb26f083"
 require = ["vendor/frame-timer/frame-timer.rb"]
 integrity = "sha256-de6fdc5fdcbfda26f80ad75f99551c37fd3cd915e5cf5578f2872620bfcb56dc"
+branch = "fix/graph-initial-contents"
 entrypoint = "frame-timer.rb"
