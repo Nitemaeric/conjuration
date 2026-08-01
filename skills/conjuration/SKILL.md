@@ -221,6 +221,21 @@ Then: `ruby -c` every file you touched, and grep the framework's `lib/` for any
 API name you are not certain of. See [references/testing.md](references/testing.md)
 for the full driver, the doubles, and the `extensions/hash` caveat.
 
+## With the dragonruby-* skills
+
+The generic DragonRuby skills (Nitemaeric/dragonruby-skills) cover the engine;
+this one covers the framework. In a Conjuration project they mostly compose —
+use `dragonruby` for engine idioms, `dragonruby-3d`, `-audio`, `-pathfinding`,
+`-platformer` for their domains, `-yard` for editor setup. Two supersessions:
+
+- Do NOT follow `dragonruby-ui`'s widget, menu, scroll-view, or input-remapping
+  patterns here. Conjuration's reactive views, layout, navigation, and
+  dragon_input replace all of them; hand-rolled widgets fight the reconciler
+  and the focus model.
+- Do NOT follow `dragonruby-rendering`'s camera-system or lowrez patterns.
+  Conjuration cameras own world/screen conversion, z-ordering, and culling;
+  hand-rolled cameras bypass the deferred draw path.
+
 ## References
 
 Open the one you need; each is signatures and semantics, not tutorial.
