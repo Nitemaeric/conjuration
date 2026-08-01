@@ -57,7 +57,7 @@ class LowrezScene < Conjuration::Scene
   def view
     # y positions the 10px em box, whose glyphs carry ~2px top bearing — box top
     # flush with the canvas top reads as the intended 2px visual inset.
-    node({ x: 2, y: 64, anchor_y: 1, text: position_label, size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 226, g: 226, b: 236 }, id: :hud_label)
+    node({ x: 2, y: 65, anchor_y: 1, text: position_label, size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 226, g: 226, b: 236 }, id: :hud_label)
 
     back_button
   end
@@ -75,7 +75,7 @@ class LowrezScene < Conjuration::Scene
     tint = highlighted? ? { r: 236, g: 232, b: 220 } : { r: 150, g: 148, b: 160 }
 
     node({ x: 2, y: 2, w: 21, h: 11, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
-         id: :back, group: :hud, justify: :center, align: :center, overflow: :visible,
+         id: :back, group: :hud, justify: :start, align: :start, padding: { left: 3 }, overflow: :visible,
          shortcut: { keyboard: :escape, controller: :b }) do
       node({ text: "Back", size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
     end
