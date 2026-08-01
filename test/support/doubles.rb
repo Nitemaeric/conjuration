@@ -77,6 +77,12 @@ class EventsDouble
 end
 
 class GameDouble
+  # The real resolution seam (canvas=/active_canvas/view_w/view_h/mouse); with no
+  # current_scene assigned it resolves to the game-level canvas, or the window.
+  include Conjuration::CanvasHost
+
+  attr_accessor :current_scene
+
   def grid; @grid ||= GridDouble.new; end
   def gtk; @gtk ||= GtkDouble.new; end
   def outputs; @outputs ||= OutputsDouble.new; end

@@ -12,8 +12,8 @@ class SequenceHost
 
   def initialize
     @clock = 0
-    @game = FakeConfirmGame.new
     @inputs = FakeMouseInputs.new
+    @game = FakeConfirmGame.new(@inputs)
   end
 
   # game/inputs feed the default sequence_confirm? (input seam + mouse click).
@@ -34,6 +34,15 @@ end
 
 class FakeConfirmGame
   attr_accessor :confirm
+
+  def initialize(inputs)
+    @inputs = inputs
+  end
+
+  # Game#mouse: the scene-space pointer. No canvas here, so it is the raw one.
+  def mouse
+    @inputs.mouse
+  end
 
   def input_source
     self

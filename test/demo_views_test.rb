@@ -443,3 +443,34 @@ ensure
   Conjuration::UI.focused_node = nil
   DragonInput.reset!
 end
+
+# The 64x64 demo: HUD laid out in canvas pixels, world drawn through a camera
+# that defaults to the canvas viewport, and a Back button hit from window space.
+def test_lowrez_scene_runs_at_canvas_resolution(args, assert)
+  scene = LowrezScene.new(:smoke)
+  $game.current_scene = scene
+  scene.setup
+  scene.ui.view { scene.view }
+  scene.ui.render_view
+  scene.ui.calculate_layout
+  Conjuration::UI.warnings.clear
+
+  assert.equal!([scene.w, scene.h], [64, 64], "the scene sizes itself in canvas pixels")
+  camera = scene.cameras[:main]
+  assert.equal!([camera.w, camera.h], [64, 64], "the camera fills the canvas")
+  assert_no_justify_fallbacks!(assert, "lowrez")
+
+  back = scene.ui.find(:back)
+  assert.true!(back.interactive?, "the Back button is navigable")
+  assert.true!(back.object.x + back.object.w <= 64, "and fits inside the canvas")
+
+  scene.draw_world(camera)
+  assert.true!(camera.outputs.primitives.length > 1, "the tiled floor and player draw through the camera")
+
+  # A window point over the button (canvas 10,6 at 11x zoom, offset 288/8).
+  $game.inputs = { last_active: :mouse, mouse: { x: 288 + 10 * 11, y: 8 + 6 * 11, w: 1, h: 1, wheel: nil, click: false, held: false } }
+  assert.true!(scene.ui.find_interactive_intersect($game.mouse).equal?(back), "a window-space mouse hits it in canvas coords")
+ensure
+  reset_canvas_globals
+  Conjuration::UI.active_navigation_group = nil
+end

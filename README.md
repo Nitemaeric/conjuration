@@ -31,6 +31,7 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
   - [x] Camera shake
   - [x] Impact frames (Hit stops)
 - [x] Rendering
+  - [x] Virtual resolution (fixed canvas, letterboxed — 64x64 LOWREZJAM and up)
   - [x] Virtual scenes (worlds beyond the GPU texture limit)
   - [x] Viewport culling
   - [x] Chunked tile caching
@@ -88,6 +89,7 @@ View the following files to get started:
 
 - [Scenes](docs/scenes.md) — lifecycle, clocks, the stack, transitions, loading.
 - [Cameras](docs/cameras.md) — spaces, z-ordering, parallax, shake, camera-feel recipes.
+- [Canvas](docs/canvas.md) — virtual resolution, letterboxing, the canvas-space mouse.
 - [UI & HUD](docs/ui.md) — reactive views, layout, overflow, navigation, the inspector.
 - [Time & motion](docs/time.md) — timers, tweens, animation clips, sequences.
 - [Input](docs/input.md) — actions, the reserved `:ui_*` set, glyphs.

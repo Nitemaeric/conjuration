@@ -34,7 +34,9 @@ module Conjuration
       cameras.each do |name, camera|
         camera.perform_update
 
-        @focused_camera = camera if inputs.mouse.inside_rect?(camera.rect)
+        # Viewports are scene-space rects, so the pointer test uses the
+        # scene-space (canvas) mouse.
+        @focused_camera = camera if game.mouse.inside_rect?(camera.rect)
       end
     end
 
