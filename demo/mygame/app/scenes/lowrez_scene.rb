@@ -5,14 +5,14 @@
 # a cross-resolution transition.
 #
 # DragonRuby ships tiny.ttf at the engine root for exactly this — a pixel font
-# legible at canvas scale (DR's own lowrez samples pair it with size_px 10).
+# legible at canvas scale (native size 5px; DR's samples use 10 on a 128x128 canvas — scale with the canvas).
 class LowrezScene < Conjuration::Scene
   canvas w: 64, h: 64
 
   WORLD = 128
   TILE = 16
   PLAYER = 4
-  HUD_TEXT = 10
+  HUD_TEXT = 5
 
   FLOOR = [{ r: 38, g: 42, b: 58 }, { r: 30, g: 34, b: 48 }].freeze
 
