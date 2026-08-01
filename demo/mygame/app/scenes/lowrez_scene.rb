@@ -14,7 +14,7 @@ class LowrezScene < Conjuration::Scene
   PLAYER = 4
   HUD_TEXT = 10
 
-  FLOOR = [{ r: 38, g: 42, b: 58 }, { r: 30, g: 34, b: 48 }].freeze
+  FLOOR_COLORS = [{ r: 38, g: 42, b: 58 }, { r: 30, g: 34, b: 48 }].freeze
 
   def setup
     self.virtual_w = WORLD
@@ -44,7 +44,7 @@ class LowrezScene < Conjuration::Scene
           w: TILE,
           h: TILE,
           path: :pixel,
-          **FLOOR[(column + row) % 2]
+          **FLOOR_COLORS[(column + row) % 2]
         })
       end
     end
