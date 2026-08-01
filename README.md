@@ -95,6 +95,9 @@ View the following files to get started:
 - [ECS integration](docs/ecs.md) — draco conventions.
 - [Roadmap](docs/roadmap.md) and [scene-lifecycle design](docs/design/scene-lifecycle.md).
 
+For coding agents, [skills/conjuration](skills/conjuration/SKILL.md) is the same
+material as an operating brief — install it with `npx skills add Nitemaeric/conjuration`.
+
 ## Conventions
 
 ### Game clock — key timings to `game.clock`, not `Kernel.tick_count`
