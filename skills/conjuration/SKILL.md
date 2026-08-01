@@ -236,6 +236,43 @@ use `dragonruby` for engine idioms, `dragonruby-3d`, `-audio`, `-pathfinding`,
   Conjuration cameras own world/screen conversion, z-ordering, and culling;
   hand-rolled cameras bypass the deferred draw path.
 
+## Low resolution (canvas)
+
+Fixed low resolution comes from the framework's canvas, never a hand-rolled
+render target — UI, navigation, cameras, transitions, and the mouse all follow
+it automatically:
+
+```ruby
+class Game < Conjuration::Game
+  def setup
+    self.canvas = { w: 64, h: 64 }   # whole-game default
+  end
+end
+
+class BattleScene < Conjuration::Scene
+  canvas w: 64, h: 64                # per-scene override; scene wins over game
+end
+```
+
+Scene-space geometry is authored in canvas pixels; the frame letterboxes into
+the window (`integer_scale: true` by default). A canvas is fixed for a scene's
+lifetime — declare it, never mutate it. Debug tooling stays window-space.
+
+Low-resolution landmines (each cost a real debugging session):
+
+- A missing `font:` path falls back to the default font SILENTLY — it looks
+  like "the pixel font is blurry", not like an error. Copy DragonRuby's
+  bundled tiny.ttf into `mygame/fonts/` and reference `font: "fonts/tiny.ttf"`
+  by game path; never rely on engine-root resolution.
+- tiny.ttf's native size is 10px and it is crisp only at multiples of 10.
+- Fractional positions rasterize as antialiased mush at low resolution. Flow
+  centering can land text on a half pixel — pin canvas-scene text at integer
+  offsets (`position: :absolute, left:/top:`) instead.
+- Set `scale_quality=3` and `highdpi=true` in `metadata/game_metadata.txt` or
+  the upscale (or macOS itself) blurs everything regardless.
+
+See [references/canvas.md](references/canvas.md) for the API detail.
+
 ## References
 
 Open the one you need; each is signatures and semantics, not tutorial.
@@ -246,3 +283,4 @@ Open the one you need; each is signatures and semantics, not tutorial.
 - [references/input.md](references/input.md) — actions, the reserved `:ui_*` set, the input-source contract, glyphs.
 - [references/cameras.md](references/cameras.md) — spaces and conversions, `look_at`/`follow`, `z:`, `parallax:`, shake.
 - [references/testing.md](references/testing.md) — the headless harness: preload order, doubles, driving a scene.
+- [references/canvas.md](references/canvas.md) — virtual resolution: declaration, scaling, mouse mapping, text at low res.
