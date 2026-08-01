@@ -24,7 +24,7 @@ module Conjuration
     # Half-extent (px) of a debug focal crosshair, held constant across zoom.
     DEBUG_MARKER_RADIUS = 6
 
-    def initialize(scene, name:, x: 0, y: 0, w: grid.w, h: grid.h, current: { x: grid.w / 2, y: grid.h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
+    def initialize(scene, name:, x: 0, y: 0, w: view_w, h: view_h, current: { x: view_w / 2, y: view_h / 2, zoom: 1 }, speed: SNAP, zoom_speed: 0.1)
       super(scene: scene, name: name, x: x, y: y, w: w, h: h, speed: speed, zoom_speed: zoom_speed)
 
       # Namespace by scene instance: two stacked scenes that both add a `:main`

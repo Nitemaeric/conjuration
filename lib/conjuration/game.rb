@@ -2,6 +2,7 @@ module Conjuration
   class Game < Node
     include AttrGTK
     include SceneManagement
+    include CanvasHost
 
     attr_accessor :debug
 

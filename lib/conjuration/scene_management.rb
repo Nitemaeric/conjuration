@@ -24,6 +24,7 @@ module Conjuration
 
   module SceneManagement
     SNAPSHOT_KEY = "transition_snapshot".freeze
+    CANVAS_KEY = "conjuration_canvas".freeze
 
     def current_scene
       scene_stack.last
@@ -306,9 +307,37 @@ module Conjuration
       end
     end
 
+    # With a canvas in force, the whole stack composes into a canvas-sized target
+    # which is then blitted to the window, centred and letterboxed (the bars are
+    # just the cleared window background). The blit goes through render_output,
+    # so a transition snapshot captures the composed WINDOW frame — which is why
+    # the snapshot stays grid-sized and transitions never learn about canvases.
+    # Without a canvas this is a straight pass-through: the primitive stream is
+    # byte-identical to the pre-canvas framework.
+    def render_stack
+      canvas = active_canvas
+      return render_scenes unless canvas
+
+      target = outputs[CANVAS_KEY]
+      if target.respond_to?(:width=)
+        target.width = canvas.w
+        target.height = canvas.h
+      end
+
+      previous = @render_output
+      @render_output = ScreenRedirect.new(outputs, target)
+      begin
+        render_scenes
+      ensure
+        @render_output = previous
+      end
+
+      render_output.primitives << canvas.blit(grid.w, grid.h, CANVAS_KEY)
+    end
+
     # Render bottom-up so overlays composite over what they pause. Start at the
     # highest opaque scene (covers_below?) — everything beneath it is skipped.
-    def render_stack
+    def render_scenes
       index = render_floor
       while index < scene_stack.length
         scene_stack[index].perform_render

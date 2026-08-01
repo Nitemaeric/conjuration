@@ -21,6 +21,7 @@ module Conjuration
       PADDING_FILL = { r: 130, g: 200, b: 120, a: 80 }.freeze
       GAP_FILL     = { r: 175, g: 120, b: 220, a: 80 }.freeze
 
+      # Fallback window size for the readout clamp when there is no game to ask.
       SCREEN_W = 1280
       SCREEN_H = 720
 
@@ -54,7 +55,12 @@ module Conjuration
       # Entry point (gated on game.debug? at the call site). Only what must sit
       # ABOVE the whole frame goes here: the red unresolved-geometry flags and the
       # hover readout. The bounds layer rides the primitive stream via #decorator.
-      def render(root, outputs, mouse = nil)
+      #
+      # Two pointers, because outputs.debug bypasses any canvas: `mouse` is in
+      # scene space (where the nodes live, so it resolves the hover) and
+      # `window_mouse` is the raw device pointer (where the readout is drawn).
+      # They are the same object when no canvas is in force.
+      def render(root, outputs, mouse = nil, window_mouse = nil)
         # Guarded here as well as at the call site (render_ui) so the overlay
         # builds nothing when debug is off — the whole walk is a no-op then.
         return unless root.debug?
@@ -66,7 +72,7 @@ module Conjuration
         return unless mouse
 
         hovered = node_at_point(root, mouse.x, mouse.y)
-        emit_hover(hovered, outputs, mouse) if hovered && hovered.id != :root
+        emit_hover(hovered, outputs, window_mouse || mouse) if hovered && hovered.id != :root
       end
 
       # The read-only annotation for a single node: its resolved rect, identity,
@@ -316,8 +322,9 @@ module Conjuration
         w = 220
         h = lines.length * line_h + pad * 2
 
-        x = clamp(mouse.x + 16, 0, SCREEN_W - w)
-        y = clamp(mouse.y - 16, h, SCREEN_H)
+        screen_w, screen_h = screen_bounds
+        x = clamp(mouse.x + 16, 0, screen_w - w)
+        y = clamp(mouse.y - 16, h, screen_h)
 
         outputs.debug << { x: x, y: y, w: w, h: h, anchor_x: 0, anchor_y: 1, r: 15, g: 15, b: 22, a: 225, primitive_marker: :solid }
 
@@ -395,6 +402,13 @@ module Conjuration
         ax = obj.anchor_x || 0
         ay = obj.anchor_y || 0
         { x: obj.x - ax * obj.w, y: obj.y - ay * obj.h, w: obj.w, h: obj.h }
+      end
+
+      # The readout is window chrome, so it clamps to the window — never to the
+      # canvas the nodes were laid out in.
+      def screen_bounds
+        grid = $game && $game.grid
+        grid ? [grid.w, grid.h] : [SCREEN_W, SCREEN_H]
       end
 
       def clamp(value, low, high)

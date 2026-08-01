@@ -281,4 +281,5 @@ present. `tools/analyze_draw_order.rb` reads the dump back.
 
 - [scenes.md](scenes.md) — `draw_world`, world bounds, the scene stack.
 - [tile_layer.md](tile_layer.md) — caching static world content into chunks.
+- [canvas.md](canvas.md) — virtual resolution; a camera defaults to the canvas viewport.
 - [time.md](time.md) — tweening focal points and zoom on the scene clock.

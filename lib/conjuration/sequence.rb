@@ -254,7 +254,7 @@ module Conjuration
     def sequence_confirm?
       source = game.input_source
       confirmed = source.just_pressed?(game.ui_pad, :ui_confirm)
-      mouse = inputs.mouse
+      mouse = game.mouse
       confirmed || (mouse && mouse.click ? true : false)
     end
 
