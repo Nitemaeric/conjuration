@@ -225,7 +225,7 @@ def test_render_target_container_clips_hit_testing_to_its_box(args, assert)
   # (y[300,400]) — so without clipping it would wrongly resolve the child that is
   # in fact clipped away. It falls through to the root instead, which draws no readout.
   assert.true!(second.object.bottom <= 250 && 250 <= second.object.top, "the point lies inside the clipped child's laid-out box")
-  assert.false!(Inspector.contains?(pane, 40, 250), "but outside the pane's own box")
+  assert.false!(pane.point_hit?(40, 250), "but outside the pane's own box")
 
   hit = Inspector.node_at_point(ui, 40, 250)
   assert.equal!(hit.id, :root, "a point outside the pane never resolves its overflowing children")
