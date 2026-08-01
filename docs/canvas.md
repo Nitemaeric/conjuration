@@ -116,12 +116,14 @@ window regardless. DragonRuby's own lowrez samples set both.
 ## Text
 
 A canvas cannot fix fonts — DragonRuby's default font has no legible size at
-64x64. DragonRuby ships `tiny.ttf` at the engine root: a pixel font whose
-native size is 10px, crisp only at multiples of 10 (its `lowrez_labels` sample
+64x64. Recent DragonRuby builds ship `tiny.ttf`, a pixel font whose native
+size is 10px, crisp only at multiples of 10 (the `lowrez_labels` sample
 demonstrates 10/20/30/40; anything off-multiple rasterizes as antialiased
-mush). At 64x64 that means text is chunky — 10px glyphs are a sixth of the
-screen, the authentic lowrez look. For smaller text, ship a 3x5/4x6 bitmap
-font or draw glyphs as sprites.
+mush). Copy it into your game (`mygame/fonts/`) and reference it by game path
+— a missing font path falls back to the default font SILENTLY, which looks
+like "the pixel font is blurry" and wastes an afternoon. At 64x64, 10px glyphs
+are a sixth of the screen: the authentic lowrez look. For smaller text, ship a
+3x5/4x6 bitmap font or draw glyphs as sprites.
 
 ## See also
 

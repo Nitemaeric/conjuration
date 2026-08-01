@@ -55,7 +55,7 @@ class LowrezScene < Conjuration::Scene
   end
 
   def view
-    node({ x: 2, y: 62, anchor_y: 1, text: position_label, size_px: HUD_TEXT, font: "tiny.ttf", r: 226, g: 226, b: 236 }, id: :hud_label)
+    node({ x: 2, y: 62, anchor_y: 1, text: position_label, size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 226, g: 226, b: 236 }, id: :hud_label)
 
     back_button
   end
@@ -74,7 +74,7 @@ class LowrezScene < Conjuration::Scene
     node({ x: 2, y: 2, w: 30, h: 12, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
          id: :back, group: :hud, justify: :center, align: :center,
          shortcut: { keyboard: :escape, controller: :b }) do
-      node({ text: "Back", size_px: HUD_TEXT, font: "tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
+      node({ text: "Back", size_px: HUD_TEXT, font: "fonts/tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
     end
   end
 
