@@ -99,6 +99,20 @@ blit — so a transition from a native-resolution menu into a 64x64 scene works
 like any other: the outgoing frame is blitted at window size while the incoming
 canvas composes and blits underneath it.
 
+## Crisp pixels
+
+The canvas blit is scaled by the engine, so the engine's sprite filtering
+decides whether pixels stay square. In `metadata/game_metadata.txt`:
+
+```
+scale_quality=3
+highdpi=true
+```
+
+Without `scale_quality` the upscale can smear single-pixel detail into
+gradients, and without `highdpi` a retina display lets the OS blur the whole
+window regardless. DragonRuby's own lowrez samples set both.
+
 ## Text
 
 A canvas cannot fix fonts — DragonRuby's default font has no legible size at
