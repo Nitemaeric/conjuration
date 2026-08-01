@@ -101,9 +101,11 @@ canvas composes and blits underneath it.
 
 ## Text
 
-A canvas cannot fix fonts. DragonRuby's default font has no legible size at
-64x64, so a real lowrez game ships a bitmap font (or draws glyphs as sprites).
-Font choice is user-land; the demo settles for `size_px: 6`.
+A canvas cannot fix fonts — DragonRuby's default font has no legible size at
+64x64. DragonRuby ships `tiny.ttf` at the engine root for exactly this: a pixel
+font that stays legible at canvas scale. Use `font: "tiny.ttf"` on labels (DR's
+own lowrez samples pair it with `size_px: 10`); the demo does the same. Games
+wanting a specific look still ship their own bitmap font.
 
 ## See also
 

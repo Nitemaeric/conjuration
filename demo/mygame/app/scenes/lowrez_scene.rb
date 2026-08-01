@@ -4,16 +4,15 @@
 # The rest of the demo stays at native resolution, so opening this scene is also
 # a cross-resolution transition.
 #
-# Text is the one thing a canvas can't fix: DragonRuby's default font has no
-# legible size at 6px, so a real lowrez game ships a bitmap font. Font choice is
-# user-land; the HUD here settles for a size_px that fits.
+# DragonRuby ships tiny.ttf at the engine root for exactly this — a pixel font
+# legible at canvas scale (DR's own lowrez samples pair it with size_px 10).
 class LowrezScene < Conjuration::Scene
   canvas w: 64, h: 64
 
   WORLD = 128
   TILE = 16
   PLAYER = 4
-  HUD_TEXT = 6
+  HUD_TEXT = 10
 
   FLOOR = [{ r: 38, g: 42, b: 58 }, { r: 30, g: 34, b: 48 }].freeze
 
@@ -56,7 +55,7 @@ class LowrezScene < Conjuration::Scene
   end
 
   def view
-    node({ x: 2, y: 62, anchor_y: 1, text: position_label, size_px: HUD_TEXT, r: 226, g: 226, b: 236 }, id: :hud_label)
+    node({ x: 2, y: 62, anchor_y: 1, text: position_label, size_px: HUD_TEXT, font: "tiny.ttf", r: 226, g: 226, b: 236 }, id: :hud_label)
 
     back_button
   end
@@ -75,7 +74,7 @@ class LowrezScene < Conjuration::Scene
     node({ x: 2, y: 2, w: 24, h: 9, path: :pixel, action: -> { change_scene(to: MenuScene.new(:main), transition: FadeTransition.new) }, **tint },
          id: :back, group: :hud, justify: :center, align: :center,
          shortcut: { keyboard: :escape, controller: :b }) do
-      node({ text: "Back", size_px: HUD_TEXT, r: 24, g: 22, b: 30 }, id: :back_label)
+      node({ text: "Back", size_px: HUD_TEXT, font: "tiny.ttf", r: 24, g: 22, b: 30 }, id: :back_label)
     end
   end
 
