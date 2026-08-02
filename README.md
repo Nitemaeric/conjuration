@@ -9,53 +9,53 @@ without adding constraints or limiting access to the underlying DR APIs. Think w
 
 ## Features
 
-- [x] Gameloop conventions
-  - [x] Order of operations
-    - [x] Setup (Run once when a scene is loaded)
-    - [x] Input (Handle user input logic)
-    - [x] Update (Handle game logic)
-    - [x] Render (Draw things to a scene / camera (HUD, UI))
-- [x] Scene Management
-  - [x] Scene transitions (duck-typed, snapshot-based)
-  - [x] Scene stack (state-preserving overlays)
-  - [x] Cooperative loading (`load_tick` + a loading view)
-  - [x] Per-scene clocks (pause / hit-stop correctness)
-- [x] Camera Management
-  - [x] Look at
-  - [x] Zooming
-  - [x] Panning
-  - [x] Following
-  - [x] Multiple cameras
-  - [ ] Minimaps
-  - [x] Camera shake
-  - [x] Impact frames (Hit stops)
-- [x] Rendering
-  - [x] Virtual resolution (fixed canvas, letterboxed — 64x64 LOWREZJAM and up)
-  - [x] Virtual scenes (worlds beyond the GPU texture limit)
-  - [x] Viewport culling
-  - [x] Chunked tile caching
-  - [x] Parallax scrolling layers
-  - [x] Deferred z-ordering (y-sort / depth)
-  - [x] Grid projections (isometric & top-down)
-- [x] Time & motion
-  - [x] Timers and tweens on scene clocks
-  - [x] Frame animation with frame events
-  - [x] Sequences (the cutscene primitive)
-- [x] UI & HUD Management
-  - [x] [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
-  - [x] Reactive views with reconciliation
-  - [x] Interactive node management (hover/focus/press, spatial navigation, shortcuts)
-  - [x] Scrolling panes
-- [x] Input Management — via [dragon_input](https://github.com/Nitemaeric/dragon_input), bundled as a dependency
-  - [x] Action-based bindings (keyboard, mouse, controller; pure-Ruby backend, optional native Steam Input)
-  - [x] Default key mapping (reserved `:ui_*` actions injected automatically — see [Menu input](#menu-input--works-out-of-the-box))
-  - [x] User remapping (in-game rebind UI, or the Steam overlay when available)
-  - [x] Device-following input glyphs (prompts swap art with the last-used device)
-- [x] Debugging tools
-  - [x] Game state panel (scene, clocks, focus)
-  - [x] Camera overlay (view rect, focal points, follow, world bounds)
-  - [x] UI tree inspector (bounds, box model, size provenance)
-  - [x] Draw-order dump + analyzer
+- Gameloop conventions
+  - Order of operations
+    - Setup (Run once when a scene is loaded)
+    - Input (Handle user input logic)
+    - Update (Handle game logic)
+    - Render (Draw things to a scene / camera (HUD, UI))
+- Scene Management
+  - Scene transitions (duck-typed, snapshot-based)
+  - Scene stack (state-preserving overlays)
+  - Cooperative loading (`load_tick` + a loading view)
+  - Per-scene clocks (pause / hit-stop correctness)
+- Camera Management
+  - Look at
+  - Zooming
+  - Panning
+  - Following
+  - Multiple cameras
+  - Minimaps (secondary cameras — see the multiple-cameras demo)
+  - Camera shake
+  - Impact frames (Hit stops)
+- Rendering
+  - Virtual resolution (fixed canvas, letterboxed — 64x64 LOWREZJAM and up)
+  - Virtual scenes (worlds beyond the GPU texture limit)
+  - Viewport culling
+  - Chunked tile caching
+  - Parallax scrolling layers
+  - Deferred z-ordering (y-sort / depth)
+  - Grid projections (isometric & top-down)
+- Time & motion
+  - Timers and tweens on scene clocks
+  - Frame animation with frame events
+  - Sequences (the cutscene primitive)
+- UI & HUD Management
+  - [Flexbox Layout](https://github.com/Nitemaeric/conjuration/issues/1)
+  - Reactive views with reconciliation
+  - Interactive node management (hover/focus/press, spatial navigation, shortcuts)
+  - Scrolling panes
+- Input Management — via [dragon_input](https://github.com/Nitemaeric/dragon_input), bundled as a dependency
+  - Action-based bindings (keyboard, mouse, controller; pure-Ruby backend, optional native Steam Input)
+  - Default key mapping (reserved `:ui_*` actions injected automatically — see [Menu input](#menu-input--works-out-of-the-box))
+  - User remapping (in-game rebind UI, or the Steam overlay when available)
+  - Device-following input glyphs (prompts swap art with the last-used device)
+- Debugging tools
+  - Game state panel (scene, clocks, focus)
+  - Camera overlay (view rect, focal points, follow, world bounds)
+  - UI tree inspector (bounds, box model, size provenance)
+  - Draw-order dump + analyzer
 
 ## Installation
 
