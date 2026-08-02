@@ -44,6 +44,19 @@ Three coordinate spaces, and it pays to be exact about which one you're in.
 - **Screen** — the 1280×720 grid. The scene's `render` and `scene.ui` draw here,
   and each camera's viewport is blitted onto its rect.
 
+### Why world content draws through a camera
+
+A scene could push sprites straight to `outputs` — but that is screen space, so
+nothing would scroll, z-order against the world, or cull. `camera.draw` is
+where a world-space rect picks up everything positional at once: the camera's
+transform (position and zoom), anchor-aware culling to the view rect, deferred
+z-ordering with stable emission order, and parallax factors. It also keeps the
+world re-viewable: a second camera (a minimap, a split screen) renders the same
+`draw_world` calls through its own viewport with zero changes to the scene.
+The rule of thumb: if it has a world position, hand it to the camera; if it's
+pinned to the glass (HUD, letterboxing, menus), draw it from `render` or the
+scene's UI.
+
 Conversions:
 
 ```ruby
