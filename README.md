@@ -1,7 +1,5 @@
 # Conjuration - DragonRuby GTK Framework
 
-**v1.0** — stable and ready for building games.
-
 Conjuration provides foundations for building a game in DragonRuby GTK.
 
 The motivation behind Conjuration is to provide structure and convention to DragonRuby GTK projects,
