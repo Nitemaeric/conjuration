@@ -44,6 +44,7 @@ preload=(
   lib/conjuration/camera.rb
   lib/conjuration/camera_management.rb
   lib/conjuration/tile_layer.rb
+  lib/conjuration/autotile_layer.rb
   lib/conjuration/projection.rb
   lib/conjuration/scheduler.rb
   lib/conjuration/animation.rb
