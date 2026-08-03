@@ -12,6 +12,7 @@ class Game < Conjuration::Game
         s.analog :pan, controller: :left_analog, keyboard: :wasd
         s.digital :move_left, controller: :dpad_left, keyboard: :a
         s.digital :move_right, controller: :dpad_right, keyboard: :d
+        s.digital :jump, controller: :a, keyboard: :space
       end
     end
 

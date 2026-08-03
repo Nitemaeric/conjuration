@@ -11,6 +11,7 @@ def demo_hud_ui(scene_class, style: nil)
       s.analog :pan, controller: :left_analog, keyboard: :wasd
       s.digital :move_left, controller: :dpad_left, keyboard: :a
       s.digital :move_right, controller: :dpad_right, keyboard: :d
+      s.digital :jump, controller: :a, keyboard: :space
     end
   end
   DragonInput.glyph_style = style
@@ -124,11 +125,18 @@ def test_parallax_hud_layout(args, assert)
 
   panel = ui.find(:panel)
   walk = ui.find(:walk)
+  jump = ui.find(:jump)
 
   assert.true!(!ui.find(:walk_g0).nil?, "keyboard style: a cap for :move_left")
   assert.true!(!ui.find(:walk_g1).nil?, "keyboard style: a cap for :move_right")
-  assert.true!(walk.object.left >= panel.object.left + 16, "prompt starts inside the panel padding")
-  assert.true!(walk.object.right <= panel.object.right - 16, "no overflow past the panel's right edge")
+  assert.equal!(ui.find(:jump_g0).object.w, 41, "the jump prompt shows the wide space keycap (24 * 1.7)")
+  assert.nil!(ui.find(:jump_g1), "action: is one glyph, not a list")
+
+  [walk, jump].each do |prompt|
+    assert.true!(prompt.object.left >= panel.object.left + 16, "#{prompt.id}: starts inside the panel padding")
+    assert.true!(prompt.object.right <= panel.object.right - 16, "#{prompt.id}: no overflow past the panel's right edge")
+  end
+  assert.true!(jump.object.top <= walk.object.bottom, "the jump prompt stacks under the walk row")
 ensure
   DragonInput.reset!
 end
