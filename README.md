@@ -40,7 +40,7 @@ View the following files to get started:
 - [UI & HUD](docs/ui.md) — reactive views, layout, overflow, navigation, the inspector.
 - [Time & motion](docs/time.md) — timers, tweens, animation clips, sequences.
 - [Input](docs/input.md) — actions, the reserved `:ui_*` set, glyphs.
-- [TileLayer](docs/tile_layer.md) — chunked caching of static world content.
+- [TileLayer](docs/tile_layer.md) — chunked caching of static world content; `AutotileLayer` for [dragon_autotile](https://github.com/Nitemaeric/dragon_autotile) grids.
 - [ECS integration](docs/ecs.md) — draco conventions.
 - [Roadmap](docs/roadmap.md) and [scene-lifecycle design](docs/design/scene-lifecycle.md).
 

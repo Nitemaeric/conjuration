@@ -85,7 +85,10 @@ camera.draw(sprite, z: -sprite[:y])    # y-sort: lower on screen draws in front
   and isometric ordering (`z: col + row`).
 
 Only interleaving entities pay for the sort. Static world content belongs in a
-`Conjuration::TileLayer`, not in per-frame `camera.draw` calls.
+`Conjuration::TileLayer`, not in per-frame `camera.draw` calls. Auto-tiled
+terrain (a vendored dragon_autotile grid) goes through
+`Conjuration::AutotileLayer` — same chunk caching, built from the grid, edits
+sync locally via the grid's dirty tracking, optional block tints each draw.
 
 ## Parallax
 

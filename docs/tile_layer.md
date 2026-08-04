@@ -132,3 +132,31 @@ on the next `#draw`. See [Invalidation](#invalidation) for the full semantics.
 Emits each visible, populated chunk as a single sprite into `camera`, baking any
 chunk whose texture is not cached yet. Call once per camera per frame from the
 scene's world-draw hook.
+
+## Auto-tiled layers
+
+`Conjuration::AutotileLayer` bridges an auto-tiling grid — 
+[dragon_autotile](https://github.com/Nitemaeric/dragon_autotile)'s `Grid`, or
+anything with the same contract (`each_dual_cell`, `dual_mask`, `draw_cell`,
+`dirty?`, `drain_dirty`) — into a chunk-cached `TileLayer`. Conjuration does
+not depend on the library; the class is duck-typed and works the moment a game
+vendors it.
+
+```ruby
+tiles = DragonAutotile::Tileset.new(path: "sprites/autotile/walls_8.png", tile_size: 8, gutter: 1)
+@walls = Conjuration::AutotileLayer.new(name: :walls, grid: map, tileset: tiles) do |draw, dcol, drow|
+  draw.merge(region_tint(dcol, drow))   # optional: shape each stored draw
+end
+
+def draw_world(camera)
+  @floors.draw(camera)
+  @walls.draw(camera)
+end
+```
+
+The layer builds once from the grid at construction. Afterwards, edits go to
+the grid (`map.set(col, row, :wall)`); on the next `#draw` the dirtied dual
+cells — exactly four per edited structure cell — are evicted by exact rect and
+re-resolved, invalidating only the chunks they touch. The decorate block runs
+at store time, so tints are baked into chunk textures: right for static region
+colours, not for animated ones.
