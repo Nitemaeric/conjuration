@@ -160,3 +160,24 @@ cells — exactly four per edited structure cell — are evicted by exact rect a
 re-resolved, invalidating only the chunks they touch. The decorate block runs
 at store time, so tints are baked into chunk textures: right for static region
 colours, not for animated ones.
+
+### Multi-terrain layering
+
+Terrain boundaries (grass against ice) are stacked layers over **one** grid of
+terrain ids, one per terrain in priority order. Each layer takes a `solid:`
+predicate; a lower terrain counts higher ones as solid so it extends beneath,
+and the higher terrain's own edge tiles skirt over it — each terrain's edge
+art is drawn once and works against every neighbour:
+
+```ruby
+ice   = Conjuration::AutotileLayer.new(name: :ice,   grid: map, tileset: ice_tiles,
+                                       solid: ->(v) { v == :ice || v == :grass })
+grass = Conjuration::AutotileLayer.new(name: :grass, grid: map, tileset: grass_tiles,
+                                       solid: ->(v) { v == :grass })
+# draw ice, then grass
+```
+
+When the grid provides `dirty_feed` (dragon_autotile's does), each layer takes
+its own edit stream, so one `map.set` live-syncs every layer. A grid offering
+only the single-consumer `drain_dirty` supports live edits on one layer at
+most.

@@ -25,27 +25,36 @@ module Conjuration
   class AutotileLayer
     attr_reader :grid, :tileset, :layer
 
-    def initialize(name:, grid:, tileset:, chunk_size: 512, &decorate)
+    # solid: overrides the grid's predicate for this layer — the multi-terrain
+    # pattern: several layers over ONE grid of terrain ids, one per terrain in
+    # priority order, each with its own predicate (lower terrains count higher
+    # ones as solid so their edges tuck beneath). When the grid provides
+    # dirty_feed (dragon_autotile >= 0.1 with feeds), each layer takes its own
+    # edit stream; the single-consumer drain_dirty remains the fallback, where
+    # only one layer per grid can live-sync.
+    def initialize(name:, grid:, tileset:, chunk_size: 512, solid: nil, &decorate)
       @grid = grid
       @tileset = tileset
+      @solid = solid
       @decorate = decorate
+      @feed = grid.respond_to?(:dirty_feed) ? grid.dirty_feed : grid
       @layer = TileLayer.new(name: name, chunk_size: chunk_size)
 
-      @grid.each_dual_cell do |dcol, drow, mask|
+      @grid.each_dual_cell(solid: @solid) do |dcol, drow, mask|
         add_cell(dcol, drow, mask)
       end
-      @grid.drain_dirty
+      @feed.drain_dirty
     end
 
     def sync
-      return unless @grid.dirty?
+      return unless @feed.dirty?
 
-      @grid.drain_dirty.each do |cell|
+      @feed.drain_dirty.each do |cell|
         dcol = cell[0]
         drow = cell[1]
-        rect = @grid.draw_cell(dcol, drow, @tileset)
+        rect = @grid.draw_cell(dcol, drow, @tileset, solid: @solid)
         @layer.remove(x: rect[:x], y: rect[:y], w: rect[:w], h: rect[:h])
-        add_cell(dcol, drow, @grid.dual_mask(dcol, drow))
+        add_cell(dcol, drow, @grid.dual_mask(dcol, drow, solid: @solid))
       end
     end
 
@@ -59,7 +68,7 @@ module Conjuration
     def add_cell(dcol, drow, mask)
       return if mask == 0
 
-      draw = @grid.draw_cell(dcol, drow, @tileset)
+      draw = @grid.draw_cell(dcol, drow, @tileset, solid: @solid)
       draw = @decorate.call(draw, dcol, drow) || draw if @decorate
       @layer.add(draw)
     end
