@@ -1,5 +1,19 @@
 module Conjuration
+  # Coordinate transformation between grid/tile space and world space.
+  #
+  # Projections define how a grid cell (col, row, height) maps to world
+  # coordinates (x, y) for rendering and picking.
   module Projection
+    # Isometric projection (dimetric pseudo-3D).
+    #
+    # Tiles are arranged in a diamond grid; a tile's screen position combines
+    # column and row into (col - row) * half_w, -(col + row) * half_h. Height
+    # is a separate axis: each level raises the sprite by elevation_step pixels.
+    #
+    # @example Creating an isometric projection
+    #   iso = Projection::Isometric.new(tile_w: 116, tile_h: 61, elevation_step: 50)
+    #   world_pos = iso.to_world(5, 3, height: 2)  # {x: 348, y: -427}
+    #   grid_pos = iso.to_grid(348, -427, height: 2)  # {col: 5, row: 3}
     class Isometric
       attr_reader :tile_w, :tile_h, :elevation_step
 
@@ -43,6 +57,16 @@ module Conjuration
       end
     end
 
+    # Top-down orthographic projection (no depth effect).
+    #
+    # Tiles are arranged in a rectangular grid; a tile at (col, row) renders at
+    # (col * tile_w + half_w, row * tile_h + half_h). The height parameter is
+    # accepted for signature uniformity but is a no-op.
+    #
+    # @example Creating a top-down projection
+    #   td = Projection::TopDown.new(tile_w: 32, tile_h: 32)
+    #   world_pos = td.to_world(5, 3)  # {x: 176, y: 112}
+    #   grid_pos = td.to_grid(176, 112)  # {col: 5, row: 3}
     class TopDown
       attr_reader :tile_w, :tile_h
 
