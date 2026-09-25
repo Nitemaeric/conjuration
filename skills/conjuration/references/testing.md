@@ -105,9 +105,11 @@ much as in the suite.
 answering `grid`, `gtk`, `outputs`, `render_output`, `events`, `state`, `audio`,
 `debug?`, `inputs`, `input_source`, `ui_pad` is the whole seam.
 
-- **`GtkDouble#calcstringbox(text, *)`** must be deterministic and
-  font-independent — `[text.to_s.length * 8, 22]` — or text layout isn't
-  reproducible. `read_file` returning nil makes every art probe miss, which
+- **`GtkDouble#calcstringbox(text, *, size_px: nil, font: nil, **)`** must be
+  deterministic — `[text.to_s.length * 8, 22]`, or
+  `[text.to_s.length * size_px / 2, size_px]` when a label sets `size_px` —
+  or text layout isn't reproducible. It records the `font` it was asked for
+  (`last_measured_font`) so tests can check labels measure in their own font. `read_file` returning nil makes every art probe miss, which
   exercises the fallback paths; return a string to exercise the hit paths.
 - **`OutputsDouble#[](name)`** vends `RenderTargetDouble`s so scroll panes and
   camera viewports have somewhere to render.

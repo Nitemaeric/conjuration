@@ -226,7 +226,8 @@ divide; without one it degrades to `:start` and says so.
 A container with no declared size on an axis, and children to measure, derives
 it: the main axis is the sum of in-flow children plus gaps, the cross axis is the
 largest in-flow child, each plus that container's padding. Out-of-flow children
-count for neither. Text nodes size from their string, and the root and `wrap:`
+count for neither. Text nodes size from their string, measured in the label's
+own `font`, `size_px`, or `size_enum`, and the root and `wrap:`
 containers are excluded (a wrap container's width comes from its parent, and its
 children then wrap to it — the opposite resolution order).
 

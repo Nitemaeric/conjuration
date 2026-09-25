@@ -747,6 +747,46 @@ def test_wrapped_text_emits_one_label_per_line(args, assert)
   assert.equal!(labels.map { |p| p[:text] }, ["aa bb", "cc dd"], "one label primitive per wrapped line")
 end
 
+def test_text_measures_at_its_own_size_px(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ text: "abcd", size_px: 32 }, id: :label)
+  end
+  label = ui.find(:label)
+
+  # The double measures size_px text as length * size_px / 2 wide, size_px tall.
+  assert.equal!([label.object.w, label.object.h], [64, 32], "sized with the label's size_px, not the default")
+end
+
+def test_text_measures_with_its_own_font(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ text: "abcd", font: "fonts/pixel.ttf" }, id: :label)
+  end
+  ui.find(:label).measure_text
+
+  assert.equal!($game.gtk.last_measured_font, "fonts/pixel.ttf", "measured with the font it renders in")
+end
+
+def test_text_remeasures_when_its_size_changes(args, assert)
+  label = Conjuration::UI::Node.new({ text: "abcd", size_px: 32 }, id: :label)
+  first = label.measure_text
+  label.object.size_px = 16
+
+  assert.equal!([first, label.measure_text], [[64, 32], [32, 16]], "the memo is keyed on size, not just the string")
+end
+
+def test_wrapped_text_breaks_at_its_own_size_px(args, assert)
+  ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
+    node({ x: 0, y: 0, w: 96, h: 100 }, id: :box, wrap: true) do
+      node({ text: "aa bb cc dd", size_px: 32 }, id: :para)
+    end
+  end
+  para = ui.find(:para)
+
+  # 16px per char at size_px 32: "aa bb" = 80 <= 96 fits, "aa bb cc" = 128 does not.
+  assert.equal!(para.wrap_lines, ["aa bb", "cc dd"], "breaks using the label's size")
+  assert.equal!(para.object.h, 64, "line height is the label's size")
+end
+
 def test_letter_break_splits_mid_word(args, assert)
   ui = Conjuration::UI.build({ x: 0, y: 0, w: 400, h: 400 }, id: :root) do
     node({ x: 0, y: 0, w: 40, h: 100 }, id: :box, wrap: true) do

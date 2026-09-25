@@ -15,11 +15,17 @@ class GridDouble
 end
 
 class GtkDouble
-  # Deterministic, font-independent measurement so text layout is reproducible
-  # without real font metrics.
-  def calcstringbox(text, *)
-    [text.to_s.length * 8, 22]
+  # Deterministic measurement so text layout is reproducible without real font
+  # metrics: 8px per character at the default 22px line, scaled by size_px when
+  # given. The font asked for is recorded so tests can check it was passed.
+  def calcstringbox(text, *, size_px: nil, font: nil, **)
+    @last_measured_font = font
+    return [text.to_s.length * 8, 22] unless size_px
+
+    [text.to_s.length * size_px / 2, size_px]
   end
+
+  attr_reader :last_measured_font
 
   def set_cursor(*)
     nil

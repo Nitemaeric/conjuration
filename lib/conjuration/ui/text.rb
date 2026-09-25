@@ -1,17 +1,35 @@
 module Conjuration
   module UI
     # Text measurement and wrapping. Mixed into Node — the memo caches
-    # (@measured_text, @wrapped_lines) live on the node, keyed off its text.
+    # (@measured_size, @wrapped_lines) live on the node, keyed off its text and
+    # font metrics.
     module Text
-      # Memoized text measurement: re-measure only when the string changes, so a
-      # relayout that merely repositions a label doesn't re-run calcstringbox.
+      # Memoized text measurement: re-measure only when the string or its font
+      # metrics change, so a relayout that merely repositions a label doesn't
+      # re-run calcstringbox.
       def measure_text
-        if @measured_text != object.text
-          @measured_text = object.text
-          @measured_size = gtk.calcstringbox(object.text)
+        key = [object.text, font_metrics]
+        if @measured_key != key
+          @measured_key = key
+          @measured_size = calc_text_box(object.text)
         end
 
         @measured_size
+      end
+
+      # The label's own font, size_px and size_enum — whichever it sets — so it
+      # is measured with the same metrics it renders with.
+      def font_metrics
+        metrics = {}
+        metrics[:font] = object[:font] if object[:font]
+        metrics[:size_px] = object[:size_px] if object[:size_px]
+        metrics[:size_enum] = object[:size_enum] if object[:size_enum]
+        metrics
+      end
+
+      def calc_text_box(text)
+        metrics = font_metrics
+        metrics.empty? ? gtk.calcstringbox(text) : gtk.calcstringbox(text, **metrics)
       end
 
       def wrapped?
@@ -28,12 +46,13 @@ module Conjuration
         parent.inner_width
       end
 
-      # The text wrapped to width, per text_break. Memoized per [text, width, mode].
+      # The text wrapped to width, per text_break. Memoized per [text, width, mode,
+      # font metrics].
       def wrap_lines
         width = wrap_width
         return [] unless width
 
-        key = [object.text, width, text_break]
+        key = [object.text, width, text_break, font_metrics]
         return @wrapped_lines if @wrapped_key == key
 
         @wrapped_key = key
@@ -59,7 +78,7 @@ module Conjuration
 
         tokens.each do |token|
           candidate = yield(line, token)
-          if line.empty? || gtk.calcstringbox(candidate)[0] <= width
+          if line.empty? || calc_text_box(candidate)[0] <= width
             line = candidate
           else
             lines << line
